@@ -115,7 +115,7 @@ Licensed under the **MIT License**—see [`LICENSE`](LICENSE) for details.
 
 ## 🙌 Acknowledgements
 - UI icons from [Material Icons](https://fonts.google.com/icons).
-- Built with <3 by [Your Name](https://github.com/your‑username).
+- Built with <3 by [Omar Khaled](https://github.com/omar-hanafy).
 
 ------
 
