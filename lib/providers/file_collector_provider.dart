@@ -6,12 +6,14 @@ import 'package:flutter/services.dart';
 
 import '../config/file_extensions.dart';
 import '../models/file_item.dart';
+import 'settings_provider.dart';
 
 class FileCollectorProvider with ChangeNotifier {
   final List<FileItem> _files = [];
   bool _isProcessing = false;
   String? _error;
   String _combinedContent = '';
+  SettingsProvider? _settingsProvider;
 
   List<FileItem> get files => List.unmodifiable(_files);
   bool get isProcessing => _isProcessing;
@@ -26,6 +28,13 @@ class FileCollectorProvider with ChangeNotifier {
 
   bool get hasFiles => _files.isNotEmpty;
   bool get hasSelectedFiles => selectedFiles.isNotEmpty;
+
+  set settingsProvider(SettingsProvider settingsProvider) {
+    _settingsProvider = settingsProvider;
+  }
+
+  Map<String, FileCategory>? get _activeExtensions =>
+      _settingsProvider?.activeExtensions;
 
   void addFiles(List<String> filePaths) {
     _error = null;
@@ -62,14 +71,15 @@ class FileCollectorProvider with ChangeNotifier {
         return;
       }
 
-      final supportedExtensions = FileExtensionConfig.supportedExtensions;
+      final activeExtensions =
+          _activeExtensions ?? FileExtensionConfig.extensionCategories;
       final foundFilePaths = <String>[];
 
       await for (final entity
           in directory.list(recursive: true, followLinks: false)) {
         if (entity is File) {
           final extension = entity.path.split('.').last.toLowerCase();
-          if (supportedExtensions.contains('.$extension')) {
+          if (activeExtensions.containsKey('.$extension')) {
             foundFilePaths.add(entity.path);
           }
         }
@@ -165,7 +175,9 @@ class FileCollectorProvider with ChangeNotifier {
           _files[index] = _files[index].copyWith(isLoading: true);
           // No need to notify here, will notify after each load or batch at end
 
-          final updatedFile = await _files[index].loadContent();
+          final updatedFile = await _files[index].loadContent(
+            activeExtensions: _activeExtensions,
+          );
           _files[index] = updatedFile;
           if (updatedFile.content != null || updatedFile.error != null) {
             contentChanged = true;
@@ -204,7 +216,7 @@ class FileCollectorProvider with ChangeNotifier {
         buffer.writeln(file.content);
       } else if (file.error != null) {
         buffer.writeln('ERROR: ${file.error}');
-      } else if (!file.isTextFile) {
+      } else if (!file.isTextFileWithSettings(_activeExtensions)) {
         buffer.writeln('SKIPPED: Binary file');
       } else {
         buffer.writeln('PENDING: Content not loaded (or file is empty)');

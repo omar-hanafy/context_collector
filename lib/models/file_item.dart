@@ -52,9 +52,21 @@ class FileItem {
   bool get isTextFile => FileExtensionConfig.isTextFile(extension);
 
   FileCategory? get category => FileExtensionConfig.getCategory(extension);
+  
+  bool isTextFileWithSettings(Map<String, FileCategory>? activeExtensions) {
+    return FileExtensionConfig.isTextFileWithSettings(extension, activeExtensions);
+  }
+  
+  FileCategory? getCategoryWithSettings(Map<String, FileCategory>? activeExtensions) {
+    return FileExtensionConfig.getCategoryWithSettings(extension, activeExtensions);
+  }
 
-  Future<FileItem> loadContent() async {
-    if (!isTextFile) {
+  Future<FileItem> loadContent({Map<String, FileCategory>? activeExtensions}) async {
+    final isSupported = activeExtensions != null 
+        ? isTextFileWithSettings(activeExtensions)
+        : isTextFile;
+        
+    if (!isSupported) {
       return copyWith(
         error: 'File type not supported for text extraction',
         isLoading: false,

@@ -171,6 +171,23 @@ class FileExtensionConfig {
   static FileCategory? getCategory(String extension) {
     return extensionCategories[extension.toLowerCase()];
   }
+  
+  // These will be used as fallbacks when settings provider is not available
+  static bool isTextFileWithSettings(String extension, Map<String, FileCategory>? activeExtensions) {
+    final ext = extension.toLowerCase();
+    if (activeExtensions != null) {
+      return activeExtensions.containsKey(ext);
+    }
+    return isTextFile(ext);
+  }
+  
+  static FileCategory? getCategoryWithSettings(String extension, Map<String, FileCategory>? activeExtensions) {
+    final ext = extension.toLowerCase();
+    if (activeExtensions != null) {
+      return activeExtensions[ext];
+    }
+    return getCategory(ext);
+  }
 
   static List<String> getExtensionsByCategory(FileCategory category) {
     return extensionCategories.entries

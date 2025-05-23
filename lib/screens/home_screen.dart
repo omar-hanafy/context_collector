@@ -6,10 +6,12 @@ import 'package:provider/provider.dart';
 
 import '../extensions/theme_extensions.dart';
 import '../providers/file_collector_provider.dart';
+import '../providers/settings_provider.dart';
 import '../widgets/action_buttons_widget.dart';
 import '../widgets/combined_content_widget.dart';
 import '../widgets/drop_zone_widget.dart';
 import '../widgets/file_list_widget.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,6 +22,17 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _isDragging = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Connect the settings provider to file collector provider
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final fileProvider = context.read<FileCollectorProvider>();
+      final settingsProvider = context.read<SettingsProvider>();
+      fileProvider.settingsProvider = settingsProvider;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -114,6 +127,19 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             },
           ),
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (context) => const SettingsScreen(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.settings_rounded),
+            tooltip: 'Settings',
+          ),
+          const SizedBox(width: 8),
         ],
       ),
       body: DropTarget(

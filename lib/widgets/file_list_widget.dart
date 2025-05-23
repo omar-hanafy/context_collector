@@ -1,31 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../config/file_extensions.dart';
 import '../extensions/theme_extensions.dart';
 import '../models/file_item.dart';
 import '../providers/file_collector_provider.dart';
+import '../providers/settings_provider.dart';
 
 class FileListWidget extends StatelessWidget {
   const FileListWidget({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<FileCollectorProvider>(
-      builder: (context, provider, child) {
-        if (provider.files.isEmpty) {
+    return Consumer2<FileCollectorProvider, SettingsProvider>(
+      builder: (context, fileProvider, settingsProvider, child) {
+        if (fileProvider.files.isEmpty) {
           return const Center(
             child: Text('No files added yet'),
           );
         }
 
         return ListView.builder(
-          itemCount: provider.files.length,
+          itemCount: fileProvider.files.length,
           itemBuilder: (context, index) {
-            final file = provider.files[index];
+            final file = fileProvider.files[index];
             return _FileListItem(
               file: file,
-              onToggle: () => provider.toggleFileSelection(file),
-              onRemove: () => provider.removeFile(file),
+              activeExtensions: settingsProvider.activeExtensions,
+              onToggle: () => fileProvider.toggleFileSelection(file),
+              onRemove: () => fileProvider.removeFile(file),
             );
           },
         );
@@ -37,11 +40,13 @@ class FileListWidget extends StatelessWidget {
 class _FileListItem extends StatelessWidget {
   const _FileListItem({
     required this.file,
+    required this.activeExtensions,
     required this.onToggle,
     required this.onRemove,
   });
 
   final FileItem file;
+  final Map<String, FileCategory> activeExtensions;
   final VoidCallback onToggle;
   final VoidCallback onRemove;
 
@@ -170,7 +175,7 @@ class _FileListItem extends StatelessWidget {
                   ),
                 ),
               ),
-              if (file.category != null) ...[
+              if (file.getCategoryWithSettings(activeExtensions) != null) ...[
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsetsDirectional.symmetric(
@@ -253,9 +258,10 @@ class _FileListItem extends StatelessWidget {
   }
 
   Widget _buildFileIcon(BuildContext context) {
-    final category = file.category;
+    final category = file.getCategoryWithSettings(activeExtensions);
+    final isSupported = file.isTextFileWithSettings(activeExtensions);
 
-    if (!file.isTextFile || category == null) {
+    if (!isSupported || category == null) {
       return Container(
         width: 40,
         height: 40,
@@ -363,9 +369,9 @@ class _FileListItem extends StatelessWidget {
       );
     }
 
-    if (!file.isTextFile) {
+    if (!file.isTextFileWithSettings(activeExtensions)) {
       return Chip(
-        label: const Text('Binary'),
+        label: const Text('Not Supported'),
         labelStyle: context.labelSmall?.copyWith(
           color: context.onSurface.addOpacity(0.6),
         ),
