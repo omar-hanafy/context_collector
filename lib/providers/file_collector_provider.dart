@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as path;
 
 import '../config/file_extensions.dart';
 import '../models/file_item.dart';
@@ -78,8 +79,8 @@ class FileCollectorProvider with ChangeNotifier {
       await for (final entity
           in directory.list(recursive: true, followLinks: false)) {
         if (entity is File) {
-          final extension = entity.path.split('.').last.toLowerCase();
-          if (activeExtensions.containsKey('.$extension')) {
+          final extension = path.extension(entity.path).toLowerCase();
+          if (activeExtensions.containsKey(extension)) {
             foundFilePaths.add(entity.path);
           }
         }

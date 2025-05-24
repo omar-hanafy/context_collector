@@ -1,3 +1,4 @@
+import 'package:context_collector/extensions/theme_extensions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -69,7 +70,7 @@ class SettingsProvider with ChangeNotifier {
   Future<void> _saveSettings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_prefsKey, _settings.toJsonString());
+      await prefs.setString(_prefsKey, _settings.encode());
     } catch (e) {
       debugPrint('Error saving settings: $e');
     }

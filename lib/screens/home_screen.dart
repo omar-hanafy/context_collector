@@ -11,6 +11,7 @@ import '../widgets/action_buttons_widget.dart';
 import '../widgets/combined_content_widget.dart';
 import '../widgets/drop_zone_widget.dart';
 import '../widgets/file_list_widget.dart';
+import '../widgets/resizable_splitter.dart';
 import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -213,30 +214,19 @@ class _HomeScreenState extends State<HomeScreen> {
                 return const DropZoneWidget();
               }
 
-              return Row(
-                children: [
-                  // Left panel - File list
-                  Expanded(
-                    flex: 2,
-                    child: Column(
-                      children: [
-                        const ActionButtonsWidget(),
-                        const Expanded(child: FileListWidget()),
-                        if (provider.isProcessing)
-                          const LinearProgressIndicator(),
-                      ],
-                    ),
-                  ),
-
-                  // Divider
-                  const VerticalDivider(width: 1),
-
-                  // Right panel - Combined content
-                  const Expanded(
-                    flex: 3,
-                    child: CombinedContentWidget(),
-                  ),
-                ],
+              return ResizableSplitter(
+                initialRatio: 0.35,
+                minRatio: 0.2,
+                maxRatio: 0.6,
+                startPanel: Column(
+                  children: [
+                    const ActionButtonsWidget(),
+                    const Expanded(child: FileListWidget()),
+                    if (provider.isProcessing)
+                      const LinearProgressIndicator(),
+                  ],
+                ),
+                endPanel: const CombinedContentWidget(),
               );
             },
           ),

@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:dart_helper_utils/dart_helper_utils.dart';
 import 'package:flutter/cupertino.dart';
 
@@ -68,8 +66,6 @@ class ExtensionSettings {
       'disabledExtensions': disabledExtensions.toList(),
     };
   }
-
-  String toJsonString() => jsonEncode(toJson());
 
   ExtensionSettings copyWith({
     Map<String, FileCategory>? customExtensions,

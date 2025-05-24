@@ -21,6 +21,7 @@ dependencies:
   shared_preferences: ^2.5.3
   desktop_webview_window: ^0.2.3
   webview_flutter: ^4.13.0
+  synchronized: ^3.3.1
 
 dev_dependencies:
   flutter_test:
@@ -28,33 +29,127 @@ dev_dependencies:
   very_good_analysis: ^7.0.0
 flutter:
   uses-material-design: true
-  
   assets:
+    # top-level bundles you were already exposing
     - assets/
     - assets/editor/
+
+    # everything that lives directly under assets/monaco
     - assets/monaco/
-    # Include monaco-editor directory with all subfolders
+
+    # ─── monaco-editor root & its top-level files ───
     - assets/monaco/monaco-editor/
+
+    # ─── min tree (first level) ───
     - assets/monaco/monaco-editor/min/
+
+    # ── vs root (includes loader.js + nls translations) ──
     - assets/monaco/monaco-editor/min/vs/
+
+    # ── base workers & UI bits ──
+    - assets/monaco/monaco-editor/min/vs/base/
+    - assets/monaco/monaco-editor/min/vs/base/worker/
+    - assets/monaco/monaco-editor/min/vs/base/browser/
+    - assets/monaco/monaco-editor/min/vs/base/browser/ui/
+    - assets/monaco/monaco-editor/min/vs/base/browser/ui/codicons/
+    - assets/monaco/monaco-editor/min/vs/base/browser/ui/codicons/codicon/
+
+    # ── editor core (CSS + JS bundles) ──
     - assets/monaco/monaco-editor/min/vs/editor/
-    - assets/monaco/monaco-editor/min/vs/basic-languages/
+
+    # ── language service workers ──
     - assets/monaco/monaco-editor/min/vs/language/
-    # Add nested subdirectories for each language
-    - assets/monaco/monaco-editor/min/vs/basic-languages/dart/
-    - assets/monaco/monaco-editor/min/vs/basic-languages/javascript/
-    - assets/monaco/monaco-editor/min/vs/basic-languages/typescript/
-    - assets/monaco/monaco-editor/min/vs/basic-languages/html/
-    - assets/monaco/monaco-editor/min/vs/basic-languages/css/
-    - assets/monaco/monaco-editor/min/vs/basic-languages/json/
-    - assets/monaco/monaco-editor/min/vs/basic-languages/yaml/
-    - assets/monaco/monaco-editor/min/vs/basic-languages/markdown/
-    - assets/monaco/monaco-editor/min/vs/basic-languages/python/
-    - assets/monaco/monaco-editor/min/vs/basic-languages/shell/
-    - assets/monaco/monaco-editor/min/vs/basic-languages/xml/
     - assets/monaco/monaco-editor/min/vs/language/css/
     - assets/monaco/monaco-editor/min/vs/language/html/
     - assets/monaco/monaco-editor/min/vs/language/json/
     - assets/monaco/monaco-editor/min/vs/language/typescript/
-    - assets/monaco/themes/
 
+    # ── syntax-highlighting grammars ──
+    - assets/monaco/monaco-editor/min/vs/basic-languages/
+
+    # every single sub-grammar folder under basic-languages
+    # (101 dirs in your tree – listed explicitly below ↓)
+    - assets/monaco/monaco-editor/min/vs/basic-languages/abap/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/apex/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/azcli/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/bat/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/bicep/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/cameligo/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/clojure/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/coffee/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/cpp/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/csharp/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/csp/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/css/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/cypher/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/dart/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/dockerfile/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/ecl/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/elixir/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/flow9/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/freemarker2/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/fsharp/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/go/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/graphql/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/handlebars/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/hcl/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/html/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/ini/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/java/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/javascript/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/julia/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/kotlin/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/less/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/lexon/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/liquid/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/lua/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/m3/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/markdown/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/mdx/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/mips/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/msdax/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/mysql/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/objective-c/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/pascal/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/pascaligo/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/perl/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/pgsql/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/php/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/pla/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/postiats/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/powerquery/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/powershell/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/protobuf/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/pug/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/python/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/qsharp/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/r/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/razor/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/redis/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/redshift/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/restructuredtext/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/ruby/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/rust/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/sb/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/scala/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/scheme/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/scss/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/shell/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/solidity/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/sophia/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/sparql/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/sql/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/st/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/swift/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/systemverilog/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/tcl/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/twig/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/typescript/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/typespec/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/vb/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/wgsl/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/xml/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/yaml/
+
+    # ─── optional: your custom themes & helpers in assets/monaco/themes ───
+    - assets/monaco/themes/

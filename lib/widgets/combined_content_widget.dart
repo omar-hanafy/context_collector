@@ -1,12 +1,13 @@
+import 'package:context_collector/widgets/monaco_editor_embedded.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:provider/provider.dart';
 
+import '../controllers/monaco_controller.dart';
 import '../extensions/theme_extensions.dart';
 import '../providers/file_collector_provider.dart';
 import 'editor_settings_dialog.dart';
-import 'monaco_editor_embedded.dart';
+import 'monaco_editor_info_bar.dart';
 
 class CombinedContentWidget extends StatefulWidget {
   const CombinedContentWidget({super.key});
@@ -19,6 +20,7 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
     with SingleTickerProviderStateMixin {
   late AnimationController _collapseController;
   late Animation<double> _collapseAnimation;
+  late MonacoController _monacoController;
   bool _isCollapsed = false;
   EditorSettings _editorSettings = const EditorSettings();
 
@@ -34,6 +36,10 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
       curve: Curves.easeInOut,
     );
     _collapseController.value = 1.0; // Start expanded
+
+    // Initialize Monaco controller
+    _monacoController = MonacoController();
+
     _loadEditorSettings();
   }
 
@@ -43,12 +49,20 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
       setState(() {
         _editorSettings = settings;
       });
+
+      // Apply settings to Monaco controller
+      await _monacoController.updateOptions(
+        fontSize: settings.fontSize,
+        wordWrap: settings.wordWrap,
+        showLineNumbers: settings.showLineNumbers,
+      );
     }
   }
 
   @override
   void dispose() {
     _collapseController.dispose();
+    _monacoController.dispose();
     super.dispose();
   }
 
@@ -217,8 +231,8 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
     );
   }
 
-  Widget _buildCollapsedSidebar(BuildContext context,
-      FileCollectorProvider provider) {
+  Widget _buildCollapsedSidebar(
+      BuildContext context, FileCollectorProvider provider) {
     return Container(
       decoration: BoxDecoration(
         color: context.isDark
@@ -267,13 +281,32 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
       return _buildEmptyState(context);
     }
 
-    return MonacoEditorEmbedded(
-      content: provider.combinedContent,
-      onCopy: () => _copyToClipboard(context, provider.combinedContent),
-      showLineNumbers: _editorSettings.showLineNumbers,
-      fontSize: _editorSettings.fontSize,
-      wordWrap: _editorSettings.wordWrap,
-      readOnly: true,
+    // Update controller content when provider changes
+    if (_monacoController.content != provider.combinedContent) {
+      _monacoController.setContent(provider.combinedContent);
+    }
+
+    return Column(
+      children: [
+        // Editor
+        Expanded(
+          child: MonacoEditorEmbedded(
+            controller: _monacoController,
+            onReady: () async {
+              // Editor is ready, ensure content is set after a small delay
+              await 100.millisecondsDelay();
+              await _monacoController.setContent(provider.combinedContent);
+            },
+          ),
+        ),
+
+        // Info bar with controls
+        MonacoEditorInfoBar(
+          controller: _monacoController,
+          onCopy: () => _copyToClipboard(context, provider.combinedContent),
+          onSettings: () => _showEditorSettings(context),
+        ),
+      ],
     );
   }
 
@@ -420,7 +453,7 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
     });
   }
 
-  void _showEditorSettings(BuildContext context) async {
+  Future<void> _showEditorSettings(BuildContext context) async {
     final newSettings = await EditorSettingsDialog.show(
       context,
       _editorSettings,
@@ -430,6 +463,13 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
       setState(() {
         _editorSettings = newSettings;
       });
+
+      // Apply new settings to Monaco controller
+      await _monacoController.updateOptions(
+        fontSize: newSettings.fontSize,
+        wordWrap: newSettings.wordWrap,
+        showLineNumbers: newSettings.showLineNumbers,
+      );
     }
   }
 }

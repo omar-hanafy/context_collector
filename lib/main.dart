@@ -36,7 +36,6 @@ class ContextCollectorApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    print('HELLO CLAUDE: NOT THAT THE HIGHLIGHTS ITS STILL NOT SHOWED IN THE EDITOR .. ITS NOT ABOUT LANGUAGE SELECTION, ITS ABOUT THE EDITOR IT SELF NOT LOADING THE HIGHLIGHTS');
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (context) => SettingsProvider()),

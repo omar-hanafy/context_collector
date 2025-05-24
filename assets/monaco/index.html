@@ -249,7 +249,7 @@
                         };
                         
                         // Simple language detection based on content
-                        function detectLanguage() {
+                        window.detectLanguage = function detectLanguage() {
                             const content = window.editor.getValue();
                             let language = 'plaintext';
                             

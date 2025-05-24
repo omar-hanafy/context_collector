@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'dart:developer';
 import 'dart:io';
 
 import 'package:desktop_webview_window/desktop_webview_window.dart';
@@ -112,9 +112,8 @@ class _MonacoEditorWidgetState extends State<MonacoEditorWidget> {
       // Listen for messages from JavaScript
       _webview!.addOnWebMessageReceivedCallback((message) {
         try {
-          final data = (jsonDecode(message) as Map<String, dynamic>?) ?? {};
+          final data = ConvertObject.toMap(message, defaultValue: {});
           final event = data['event']?.toString() ?? '';
-          final payload = data['payload'];
 
           switch (event) {
             case 'onEditorReady':
@@ -123,8 +122,9 @@ class _MonacoEditorWidgetState extends State<MonacoEditorWidget> {
               // Since we're in read-only mode, this shouldn't happen
               break;
           }
-        } catch (e) {
-          print('Error processing WebView message: $e');
+        } catch (e, s) {
+          log('Error processing message from WebView: $e',
+              error: e, stackTrace: s);
         }
       });
 
@@ -173,13 +173,13 @@ class _MonacoEditorWidgetState extends State<MonacoEditorWidget> {
     try {
       // Create the target directory if it doesn't exist
       final targetDirFile = Directory(targetDir);
-      if (!await targetDirFile.exists()) {
+      if (!targetDirFile.existsSync()) {
         await targetDirFile.create(recursive: true);
       }
 
       // Create editor directory
       final editorDir = Directory(p.join(targetDir, 'editor'));
-      if (!await editorDir.exists()) {
+      if (!editorDir.existsSync()) {
         await editorDir.create(recursive: true);
       }
 
@@ -201,11 +201,11 @@ class _MonacoEditorWidgetState extends State<MonacoEditorWidget> {
             await rootBundle.load('$corePath/editor/editor.main.css');
         await File(p.join(targetDir, 'editor', 'editor.main.css'))
             .writeAsBytes(editorCssBytes.buffer.asUint8List());
-      } catch (e) {
-        print('Failed to copy core Monaco files: $e');
+      } catch (e, s) {
+        log('Error copying core Monaco files: $e', error: e, stackTrace: s);
       }
-    } catch (e) {
-      print('Error preparing Monaco assets directory: $e');
+    } catch (e, s) {
+      log('Error copying Monaco asset directory: $e', error: e, stackTrace: s);
     }
   }
 
@@ -225,7 +225,7 @@ class _MonacoEditorWidgetState extends State<MonacoEditorWidget> {
   void _updateContent() {
     if (!_isReady || _webview == null) return;
 
-    final escapedContent = jsonEncode(widget.content);
+    final escapedContent = widget.encode();
     _webview!.evaluateJavaScript('window.setEditorContent($escapedContent);');
   }
 
@@ -245,7 +245,7 @@ class _MonacoEditorWidgetState extends State<MonacoEditorWidget> {
       'lightbulb': {'enabled': false},
     };
 
-    final optionsJson = jsonEncode(options);
+    final optionsJson = options.encode();
     _webview!.evaluateJavaScript('window.setEditorOptions($optionsJson);');
   }
 
@@ -254,9 +254,9 @@ class _MonacoEditorWidgetState extends State<MonacoEditorWidget> {
     // Close the WebView window
     _webview?.close();
 
-    // Clean up temp directory if it exists
-    _tempDir?.delete(recursive: true).catchError((e) {
-      print('Error cleaning up temp files: $e');
+    _tempDir?.delete(recursive: true).catchError((dynamic e) {
+      log('Error deleting temp directory: $e');
+      return _tempDir ?? Directory.systemTemp;
     });
 
     super.dispose();
