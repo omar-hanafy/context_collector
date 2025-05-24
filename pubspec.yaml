@@ -30,18 +30,35 @@ flutter:
   uses-material-design: true
   
   assets:
-    - assets/editor/editor.html
-    - assets/monaco/index.html
-    - assets/monaco/editor.js
-    - assets/monaco/languages.js
+    - assets/
+    - assets/editor/
+    - assets/monaco/
     - assets/monaco/vs/
-    - assets/monaco/vs/loader.js
     - assets/monaco/vs/editor/
-    - assets/monaco/vs/editor/editor.main.js
-    - assets/monaco/vs/editor/editor.main.css
+    - assets/monaco/vs/basic-languages/
+    - assets/monaco/vs/language/
+    # Include monaco-editor directory with all subfolders
+    - assets/monaco/monaco-editor/
+    - assets/monaco/monaco-editor/min/
     - assets/monaco/monaco-editor/min/vs/
-    - assets/monaco/monaco-editor/min/vs/loader.js
     - assets/monaco/monaco-editor/min/vs/editor/
-    - assets/monaco/monaco-editor/min/vs/editor/editor.main.js
-    - assets/monaco/monaco-editor/min/vs/editor/editor.main.css
+    - assets/monaco/monaco-editor/min/vs/basic-languages/
+    - assets/monaco/monaco-editor/min/vs/language/
+    # Add nested subdirectories for each language
+    - assets/monaco/monaco-editor/min/vs/basic-languages/dart/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/javascript/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/typescript/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/html/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/css/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/json/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/yaml/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/markdown/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/python/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/shell/
+    - assets/monaco/monaco-editor/min/vs/basic-languages/xml/
+    - assets/monaco/monaco-editor/min/vs/language/css/
+    - assets/monaco/monaco-editor/min/vs/language/html/
+    - assets/monaco/monaco-editor/min/vs/language/json/
+    - assets/monaco/monaco-editor/min/vs/language/typescript/
+    - assets/monaco/themes/
 

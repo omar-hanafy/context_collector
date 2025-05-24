@@ -8,6 +8,13 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../extensions/theme_extensions.dart';
 
+// Helper class to track copy operations
+class _CopyResult {
+  _CopyResult(this.success, this.failures);
+  final int success;
+  final int failures;
+}
+
 class MonacoEditorEmbedded extends StatefulWidget {
   const MonacoEditorEmbedded({
     super.key,
@@ -17,8 +24,7 @@ class MonacoEditorEmbedded extends StatefulWidget {
     this.showLineNumbers = true,
     this.fontSize = 13,
     this.wordWrap = false,
-    this.readOnly = false,
-    this.showControls = true,
+    this.readOnly = true,
   });
 
   final String content;
@@ -28,7 +34,6 @@ class MonacoEditorEmbedded extends StatefulWidget {
   final double fontSize;
   final bool wordWrap;
   final bool readOnly;
-  final bool showControls;
 
   @override
   State<MonacoEditorEmbedded> createState() => _MonacoEditorEmbeddedState();
@@ -39,49 +44,35 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
   bool _isReady = false;
   bool _isLoading = true;
   String? _error;
-  bool _readOnly = false; // Track read-only state internally
 
   // Metrics
   int _totalLines = 0;
   int _totalCharacters = 0;
 
-  // Editor settings
+  // Add language options
+  final List<String> _supportedLanguages = [
+    'plaintext',
+    'dart',
+    'html',
+    'css',
+    'javascript',
+    'typescript',
+    'json',
+    'yaml',
+    'markdown',
+    'python',
+    'shell',
+    'xml',
+    'sql',
+  ];
+
+  String _currentLanguage = 'plaintext';
   String _currentTheme = 'vs-dark';
-  String _currentLanguage = 'javascript';
-
-  // Available languages and themes
-  final List<Map<String, String>> _languages = [
-    {'value': 'plaintext', 'text': 'Plain Text'},
-    {'value': 'javascript', 'text': 'JavaScript'},
-    {'value': 'typescript', 'text': 'TypeScript'},
-    {'value': 'html', 'text': 'HTML'},
-    {'value': 'css', 'text': 'CSS'},
-    {'value': 'json', 'text': 'JSON'},
-    {'value': 'markdown', 'text': 'Markdown'},
-    {'value': 'dart', 'text': 'Dart'},
-    {'value': 'python', 'text': 'Python'},
-    {'value': 'java', 'text': 'Java'},
-    {'value': 'csharp', 'text': 'C#'},
-    {'value': 'cpp', 'text': 'C++'},
-    {'value': 'go', 'text': 'Go'},
-    {'value': 'ruby', 'text': 'Ruby'},
-    {'value': 'swift', 'text': 'Swift'},
-    {'value': 'php', 'text': 'PHP'},
-    {'value': 'sql', 'text': 'SQL'},
-    {'value': 'yaml', 'text': 'YAML'},
-    {'value': 'shell', 'text': 'Shell'},
-  ];
-
-  final List<Map<String, String>> _themes = [
-    {'value': 'vs', 'text': 'Visual Studio'},
-    {'value': 'vs-dark', 'text': 'Visual Studio Dark'},
-    {'value': 'hc-black', 'text': 'High Contrast Dark'},
-  ];
+  bool _isEditMode = false;
 
   @override
   void initState() {
     super.initState();
-    _readOnly = widget.readOnly;
     _updateMetrics();
     _initWebView();
   }
@@ -93,11 +84,6 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
     if (oldWidget.content != widget.content) {
       _updateContent();
       _updateMetrics();
-    }
-
-    if (oldWidget.readOnly != widget.readOnly) {
-      _readOnly = widget.readOnly;
-      _updateOptions();
     }
 
     if (oldWidget.fontSize != widget.fontSize ||
@@ -322,74 +308,138 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
 
   Future<void> _copyAssetDirectory(String assetDir, String targetDir) async {
     try {
+      print('Monaco: Starting asset copying to target directory: $targetDir');
+
       // Create target directory if it doesn't exist
       final targetDirFile = Directory(targetDir);
       if (!await targetDirFile.exists()) {
         await targetDirFile.create(recursive: true);
       }
 
-      // Create editor directory
+      // Create subdirectories
       final editorDir = Directory(p.join(targetDir, 'editor'));
       if (!await editorDir.exists()) {
         await editorDir.create(recursive: true);
       }
 
-      // We know we have two possible paths:
-      // 1. assets/monaco/vs/editor/editor.main.js
-      // 2. assets/monaco/monaco-editor/min/vs/editor/editor.main.js
-
-      final List<String> pathsToTry = [
-        // First try the direct path
-        'assets/monaco/vs/loader.js',
-        'assets/monaco/vs/editor/editor.main.js',
-        'assets/monaco/vs/editor/editor.main.css',
-
-        // Then try the min path
-        'assets/monaco/monaco-editor/min/vs/loader.js',
-        'assets/monaco/monaco-editor/min/vs/editor/editor.main.js',
-        'assets/monaco/monaco-editor/min/vs/editor/editor.main.css',
-      ];
-
-      // Try loading from various paths
-      bool loaderJsFound = false;
-      bool editorMainJsFound = false;
-      bool editorMainCssFound = false;
-
-      for (final path in pathsToTry) {
-        try {
-          if (path.endsWith('/loader.js') && !loaderJsFound) {
-            final bytes = await rootBundle.load(path);
-            await File(p.join(targetDir, 'loader.js'))
-                .writeAsBytes(bytes.buffer.asUint8List());
-            loaderJsFound = true;
-            print('Successfully copied loader.js from $path');
-          } else if (path.endsWith('/editor.main.js') && !editorMainJsFound) {
-            final bytes = await rootBundle.load(path);
-            await File(p.join(targetDir, 'editor', 'editor.main.js'))
-                .writeAsBytes(bytes.buffer.asUint8List());
-            editorMainJsFound = true;
-            print('Successfully copied editor.main.js from $path');
-          } else if (path.endsWith('/editor.main.css') && !editorMainCssFound) {
-            final bytes = await rootBundle.load(path);
-            await File(p.join(targetDir, 'editor', 'editor.main.css'))
-                .writeAsBytes(bytes.buffer.asUint8List());
-            editorMainCssFound = true;
-            print('Successfully copied editor.main.css from $path');
-          }
-        } catch (e) {
-          print('Failed to load from $path: $e');
-        }
+      final basicLangDir = Directory(p.join(targetDir, 'basic-languages'));
+      if (!await basicLangDir.exists()) {
+        await basicLangDir.create(recursive: true);
       }
 
-      // Basic error reporting
-      if (!loaderJsFound)
-        print('CRITICAL ERROR: Failed to find loader.js in any location');
-      if (!editorMainJsFound)
-        print('CRITICAL ERROR: Failed to find editor.main.js in any location');
-      if (!editorMainCssFound)
-        print('CRITICAL ERROR: Failed to find editor.main.css in any location');
+      final languageDir = Directory(p.join(targetDir, 'language'));
+      if (!await languageDir.exists()) {
+        await languageDir.create(recursive: true);
+      }
+
+      // We'll standardize on a single path structure. Based on the tree output from the user,
+      // we'll use the direct vs/ path structure without nesting under monaco-editor/min/.
+
+      // First, copy the core files
+      await _copyAssetFile('assets/monaco/monaco-editor/min/vs/loader.js',
+          p.join(targetDir, 'loader.js'));
+      await _copyAssetFile(
+          'assets/monaco/monaco-editor/min/vs/editor/editor.main.js',
+          p.join(targetDir, 'editor', 'editor.main.js'));
+      await _copyAssetFile(
+          'assets/monaco/monaco-editor/min/vs/editor/editor.main.css',
+          p.join(targetDir, 'editor', 'editor.main.css'));
+
+      // Now copy the language directories
+      // First try copying from monaco-editor/min/vs
+      final copyResults = await _copyLanguageFiles(
+          'assets/monaco/monaco-editor/min/vs', targetDir);
+
+      // Log what was copied
+      print(
+          'Monaco: Successfully copied ${copyResults.success} files and failed on ${copyResults.failures} files');
+
+      if (copyResults.success == 0) {
+        print(
+            'Monaco: Warning: No language files were copied. Syntax highlighting might not work.');
+      }
     } catch (e) {
-      print('Error preparing Monaco assets directory: $e');
+      print('Monaco: Error preparing Monaco assets directory: $e');
+    }
+  }
+
+  Future<_CopyResult> _copyLanguageFiles(
+      String sourcePath, String targetPath) async {
+    int success = 0;
+    int failures = 0;
+
+    // List of important language directories to copy
+    final languageDirs = [
+      'basic-languages/dart',
+      'basic-languages/typescript',
+      'basic-languages/javascript',
+      'basic-languages/html',
+      'basic-languages/css',
+      'basic-languages/json',
+      'basic-languages/python',
+      'basic-languages/yaml',
+      'basic-languages/xml',
+      'basic-languages/markdown',
+      'basic-languages/shell',
+      'language/typescript',
+      'language/json',
+      'language/html',
+      'language/css',
+    ];
+
+    for (final langDir in languageDirs) {
+      try {
+        final sourceDir = p.join(sourcePath, langDir);
+        final targetLangDir = p.join(targetPath, langDir);
+
+        // Create the target language directory
+        final targetLangDirFile = Directory(targetLangDir);
+        if (!await targetLangDirFile.exists()) {
+          await targetLangDirFile.create(recursive: true);
+        }
+
+        // Get list of files from asset bundle
+        final manifest = await rootBundle.loadString('AssetManifest.json');
+        final Map<String, dynamic> manifestMap =
+            json.decode(manifest) as Map<String, dynamic>;
+
+        // Find all files in this language directory
+        final langFiles = manifestMap.keys
+            .where((String key) =>
+                key.startsWith('$sourceDir/') && key.endsWith('.js'))
+            .toList();
+
+        print('Monaco: Found ${langFiles.length} files for language $langDir');
+
+        for (final file in langFiles) {
+          try {
+            final fileName = p.basename(file);
+            final targetFile = p.join(targetLangDir, fileName);
+
+            await _copyAssetFile(file, targetFile);
+            success++;
+          } catch (e) {
+            print('Monaco: Failed to copy language file: $e');
+            failures++;
+          }
+        }
+      } catch (e) {
+        print('Monaco: Error copying language directory $langDir: $e');
+        failures++;
+      }
+    }
+
+    return _CopyResult(success, failures);
+  }
+
+  Future<void> _copyAssetFile(String assetPath, String targetPath) async {
+    try {
+      final bytes = await rootBundle.load(assetPath);
+      await File(targetPath).writeAsBytes(bytes.buffer.asUint8List());
+      print('Monaco: Successfully copied $assetPath to $targetPath');
+    } catch (e) {
+      print('Monaco: Failed to copy $assetPath: $e');
+      rethrow;
     }
   }
 
@@ -405,7 +455,6 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
       });
       _updateContent();
       _updateOptions();
-      _detectLanguage();
       print('Monaco: Content and options updated');
     } else {
       print('Monaco: ERROR - Component not mounted in _onEditorReady');
@@ -424,73 +473,38 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
       'fontSize': widget.fontSize,
       'lineNumbers': widget.showLineNumbers ? 'on' : 'off',
       'wordWrap': widget.wordWrap ? 'on' : 'off',
-      'readOnly': _readOnly,
+      'readOnly': !_isEditMode && widget.readOnly,
       'theme': _currentTheme,
     };
     final optionsJson = jsonEncode(options);
-    print('Monaco: Updating options: $optionsJson');
     _controller.runJavaScript('window.setEditorOptions($optionsJson);');
   }
 
-  void _updateLanguage(String language) {
-    if (!_isReady) return;
+  void _setLanguage(String language) {
     setState(() {
       _currentLanguage = language;
     });
-    _controller.runJavaScript('window.setEditorLanguage("$language");');
+    if (_isReady) {
+      _controller.runJavaScript('window.setEditorLanguage("$language");');
+    }
   }
 
-  void _updateTheme(String theme) {
-    if (!_isReady) return;
+  void _setTheme(String theme) {
     setState(() {
       _currentTheme = theme;
     });
-    _controller.runJavaScript('window.setEditorTheme("$theme");');
-  }
-
-  void _detectLanguage() {
-    if (!_isReady) return;
-
-    // Try to detect language from content
-    String detectedLanguage = 'plaintext';
-
-    final content = widget.content.toLowerCase();
-
-    if (content.contains('<!doctype html>') || content.contains('<html')) {
-      detectedLanguage = 'html';
-    } else if (content.contains("import 'package:flutter") ||
-        content.contains('extends stateless') ||
-        content.contains('extends state<')) {
-      detectedLanguage = 'dart';
-    } else if (content.contains('function') ||
-        content.contains('const ') ||
-        content.contains('let ')) {
-      detectedLanguage = 'javascript';
-    } else if (content.contains('import react') ||
-        content.contains("from 'react'")) {
-      detectedLanguage = 'javascript';
-    } else if (content.contains('def ') ||
-        content.contains('import ') && content.contains('from ')) {
-      detectedLanguage = 'python';
-    } else if (content.startsWith('{') && content.endsWith('}')) {
-      try {
-        jsonDecode(content);
-        detectedLanguage = 'json';
-      } catch (_) {}
+    if (_isReady) {
+      _controller.runJavaScript('window.setEditorTheme("$theme");');
     }
-
-    setState(() {
-      _currentLanguage = detectedLanguage;
-    });
-
-    _controller.runJavaScript('window.setEditorLanguage("$detectedLanguage");');
   }
 
-  void _toggleReadOnly() {
+  void _toggleEditMode() {
     setState(() {
-      _readOnly = !_readOnly;
+      _isEditMode = !_isEditMode;
     });
-    _updateOptions();
+    if (_isReady) {
+      _updateOptions();
+    }
   }
 
   @override
@@ -534,98 +548,6 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
                             Text(
                               'Loading Monaco Editor...',
                               style: context.bodyMedium,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  if (widget.showControls && _isReady)
-                    Positioned(
-                      bottom: 10,
-                      right: 10,
-                      child: Container(
-                        padding: const EdgeInsetsDirectional.all(8),
-                        decoration: BoxDecoration(
-                          color: context.isDark
-                              ? Colors.black.addOpacity(0.7)
-                              : Colors.white.addOpacity(0.8),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: context.onSurface.addOpacity(0.1),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Read-only toggle
-                            IconButton(
-                              onPressed: _toggleReadOnly,
-                              icon: Icon(
-                                _readOnly
-                                    ? Icons.lock_outline
-                                    : Icons.edit_outlined,
-                                size: 18,
-                              ),
-                              tooltip: _readOnly
-                                  ? 'Enable editing'
-                                  : 'Read-only mode',
-                              style: IconButton.styleFrom(
-                                backgroundColor: _readOnly
-                                    ? Colors.red.withOpacity(0.2)
-                                    : Colors.green.withOpacity(0.2),
-                                padding: const EdgeInsetsDirectional.all(6),
-                                minimumSize: const Size(36, 36),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            // Theme selector
-                            DropdownButton<String>(
-                              value: _currentTheme,
-                              onChanged: (value) {
-                                if (value != null) _updateTheme(value);
-                              },
-                              style: context.bodySmall,
-                              dropdownColor: context.isDark
-                                  ? Colors.black.addOpacity(0.9)
-                                  : Colors.white,
-                              items: _themes.map((theme) {
-                                return DropdownMenuItem<String>(
-                                  value: theme['value'],
-                                  child: Text(theme['text']!),
-                                );
-                              }).toList(),
-                              underline: const SizedBox.shrink(),
-                              borderRadius: BorderRadius.circular(8),
-                              icon: Icon(
-                                Icons.palette_outlined,
-                                size: 16,
-                                color: context.onSurface.addOpacity(0.7),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            // Language selector
-                            DropdownButton<String>(
-                              value: _currentLanguage,
-                              onChanged: (value) {
-                                if (value != null) _updateLanguage(value);
-                              },
-                              style: context.bodySmall,
-                              dropdownColor: context.isDark
-                                  ? Colors.black.addOpacity(0.9)
-                                  : Colors.white,
-                              items: _languages.map((language) {
-                                return DropdownMenuItem<String>(
-                                  value: language['value'],
-                                  child: Text(language['text']!),
-                                );
-                              }).toList(),
-                              underline: const SizedBox.shrink(),
-                              borderRadius: BorderRadius.circular(8),
-                              icon: Icon(
-                                Icons.code,
-                                size: 16,
-                                color: context.onSurface.addOpacity(0.7),
-                              ),
                             ),
                           ],
                         ),
@@ -704,75 +626,138 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
           color: context.onSurface.addOpacity(0.1),
         ),
       ),
-      child: Row(
+      child: Column(
         children: [
-          _buildInfoItem(
-            context,
-            icon: Icons.format_list_numbered,
-            label: 'Lines',
-            value: _totalLines.toString(),
-          ),
-          const SizedBox(width: 24),
-          _buildInfoItem(
-            context,
-            icon: Icons.text_fields,
-            label: 'Characters',
-            value: _formatNumber(_totalCharacters),
-          ),
-          const Spacer(),
-          // Monaco indicator
-          Container(
-            padding: const EdgeInsetsDirectional.symmetric(
-              horizontal: 12,
-              vertical: 4,
-            ),
-            decoration: BoxDecoration(
-              color: context.primary.addOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: context.primary.addOpacity(0.3),
+          Row(
+            children: [
+              _buildInfoItem(
+                context,
+                icon: Icons.format_list_numbered,
+                label: 'Lines',
+                value: _totalLines.toString(),
               ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.code,
-                  size: 14,
-                  color: context.primary,
+              const SizedBox(width: 24),
+              _buildInfoItem(
+                context,
+                icon: Icons.text_fields,
+                label: 'Characters',
+                value: _formatNumber(_totalCharacters),
+              ),
+              const Spacer(),
+              // Monaco indicator
+              Container(
+                padding: const EdgeInsetsDirectional.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
                 ),
-                const SizedBox(width: 6),
-                Text(
-                  'Monaco Editor',
-                  style: context.labelSmall?.copyWith(
-                    color: context.primary,
-                    fontWeight: FontWeight.w600,
+                decoration: BoxDecoration(
+                  color: context.primary.addOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: context.primary.addOpacity(0.3),
                   ),
                 ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.code,
+                      size: 14,
+                      color: context.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Monaco Editor',
+                      style: context.labelSmall?.copyWith(
+                        color: context.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              // Action buttons
+              if (widget.content.isNotEmpty) ...[
+                _buildActionButton(
+                  context,
+                  icon: Icons.vertical_align_top,
+                  tooltip: 'Scroll to top',
+                  onPressed: () {
+                    _controller.runJavaScript(
+                        'window.editor.setScrollPosition({scrollTop: 0, scrollLeft: 0});');
+                    widget.onScrollToTop?.call();
+                  },
+                ),
+                const SizedBox(width: 8),
+                _buildActionButton(
+                  context,
+                  icon: Icons.copy,
+                  tooltip: 'Copy to clipboard',
+                  onPressed: widget.onCopy,
+                ),
               ],
-            ),
+            ],
           ),
-          const SizedBox(width: 16),
-          // Action buttons
-          if (widget.content.isNotEmpty) ...[
-            _buildActionButton(
-              context,
-              icon: Icons.vertical_align_top,
-              tooltip: 'Scroll to top',
-              onPressed: () {
-                _controller.runJavaScript(
-                    'window.editor.setScrollPosition({scrollTop: 0, scrollLeft: 0});');
-                widget.onScrollToTop?.call();
-              },
-            ),
-            const SizedBox(width: 8),
-            _buildActionButton(
-              context,
-              icon: Icons.copy,
-              tooltip: 'Copy to clipboard',
-              onPressed: widget.onCopy,
-            ),
-          ],
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              // Language selector
+              _buildDropdownSelector(
+                context,
+                icon: Icons.code,
+                label: 'Language',
+                value: _currentLanguage,
+                items: _supportedLanguages
+                    .map((lang) => DropdownMenuItem(
+                          value: lang,
+                          child: Text(lang.capitalize()),
+                        ))
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    _setLanguage(value);
+                  }
+                },
+              ),
+              const SizedBox(width: 16),
+              // Theme selector
+              _buildDropdownSelector(
+                context,
+                icon: Icons.palette,
+                label: 'Theme',
+                value: _currentTheme,
+                items: const [
+                  DropdownMenuItem(
+                    value: 'vs',
+                    child: Text('Light'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'vs-dark',
+                    child: Text('Dark'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'hc-black',
+                    child: Text('High Contrast'),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    _setTheme(value);
+                  }
+                },
+              ),
+              const Spacer(),
+              // Edit mode toggle
+              _buildSwitchToggle(
+                context,
+                icon: Icons.edit,
+                label: 'Edit Mode',
+                value: _isEditMode,
+                onChanged: (_) => _toggleEditMode(),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -830,11 +815,120 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
     );
   }
 
+  Widget _buildDropdownSelector<T>(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required T value,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T?> onChanged,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.isDark
+            ? Colors.black.addOpacity(0.2)
+            : Colors.white.addOpacity(0.9),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: context.onSurface.addOpacity(0.1),
+        ),
+      ),
+      padding: const EdgeInsetsDirectional.symmetric(
+        horizontal: 12,
+        vertical: 4,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: context.onSurface.addOpacity(0.7),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '$label:',
+            style: context.labelSmall?.copyWith(
+              color: context.onSurface.addOpacity(0.7),
+            ),
+          ),
+          const SizedBox(width: 8),
+          DropdownButton<T>(
+            value: value,
+            items: items,
+            onChanged: onChanged,
+            underline: const SizedBox(),
+            borderRadius: BorderRadius.circular(8),
+            isDense: true,
+            style: context.bodySmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSwitchToggle(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.isDark
+            ? Colors.black.addOpacity(0.2)
+            : Colors.white.addOpacity(0.9),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: context.onSurface.addOpacity(0.1),
+        ),
+      ),
+      padding: const EdgeInsetsDirectional.symmetric(
+        horizontal: 12,
+        vertical: 4,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: context.onSurface.addOpacity(0.7),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: context.labelSmall?.copyWith(
+              color: context.onSurface.addOpacity(0.7),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Switch.adaptive(
+            value: value,
+            onChanged: onChanged,
+            activeColor: context.primary,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ],
+      ),
+    );
+  }
+
   String _formatNumber(int number) {
     if (number < 1000) return number.toString();
     if (number < 1000000) {
       return '${(number / 1000).toStringAsFixed(1)}K';
     }
     return '${(number / 1000000).toStringAsFixed(1)}M';
+  }
+}
+
+// String extension to capitalize first letter
+extension StringExtension on String {
+  String capitalize() {
+    return "${this[0].toUpperCase()}${substring(1)}";
   }
 }
