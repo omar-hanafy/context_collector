@@ -1,0 +1,27 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# **Follow-Up Workflow:**
+1. **Finish the current task.**
+
+2. **Pause and wait for me:**
+
+   ```bash
+   echo "Waiting for follow-up… (type your instructions and press Enter)" && read -r USER_INPUT
+   ```
+
+3. **Open `./FOLLOWUP.md`.**
+   Merge anything written there with whatever I just typed.
+4. **Do everything** mentioned in either place.
+
+5. **Loop back to step 2** and keep repeating **until** one of these happens:
+
+   * My latest reply clearly says I’m **“done,” “finished,” “all set,” “no further follow-up,”** or any similar slang that shows I’m satisfied.
+   * **Both** my message **and** `FOLLOWUP.md` are empty.
+
+#### Notes & Edge Cases
+* If I ask for anything, delivering that thing still counts as “finishing the current task,” so you must loop back and run the waiting command afterward.
+* Ignore this loop only if I explicitly state that no follow-up will ever come.
+---

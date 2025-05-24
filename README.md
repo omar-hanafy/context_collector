@@ -1,122 +1,53 @@
 # Context Collector
 
-**Context Collector** is a lightweight Flutter‑desktop application that lets you drag‑and‑drop any mix of source‑code,
-config, or text files and instantly generate a clean, concatenated text bundle—perfect for pasting into ChatGPT or
-committing as project context.
+_Combine a bunch of files & folders into one neat, AI-ready text bundle._
 
-------
+Context Collector is a lightweight Flutter desktop app (macOS • Windows • Linux) that lets you drag-and-drop any mix of source files, logs, configs—even whole directories—then outputs a single, annotated document.  
+Every chunk includes its full path and basic metadata so large-language models know exactly where things live in your codebase.
 
-## ✨ Key features
+<p align="center">
+  <img src="docs/screenshot_dark.png" width="70%" alt="Context Collector main window (dark theme)">
+</p>
 
-|                         |                                                                                                         |
-|-------------------------|---------------------------------------------------------------------------------------------------------|
-| 🖱️ **Drag‑and‑drop**   | Drop individual files *or* whole folders; nested directories are scanned recursively.                   |
-| 📂 **300+ file‑types**  | Recognises every common programming, markup, and config extension—from `.dart`to `.yaml` to `.sql`.     |
-| 📝 **Reference header** | Each file is prefixed with a comment block (`// File: …`, size, modified date) so LLMs know the source. |
-| 🧩 **Live preview**     | Read‑only pane shows the combined output with monospace styling and smooth scrolling.                   |
-| 📋 **One‑click copy**   | Copy the entire bundle to your clipboard or save it as a single `.txt`.                                 |
-| 🎨 **Modern UI**        | Material 3, dark‑mode aware, themed with custom colors and subtle animations.                           |
-| 🪟 **Cross‑platform**   | Compiles to native Windows, macOS, and Linux executables (*web build consciously skipped*).             |
+---
 
-------
+## ✨  Why you might care
 
-## 🚀 Getting started
+| Problem                                                  | How Context Collector helps                                                      |
+|----------------------------------------------------------|----------------------------------------------------------------------------------|
+| _“ChatGPT keeps asking ‘where’s that widget defined?’”_  | Bundles related Dart/Swift/HTML/etc. files into one prompt-friendly blob.        |
+| _“Sharing repro steps means pasting half a dozen logs.”_ | Drag the whole `logs` folder—binary files are skipped, text is merged & labeled. |
+| _“I lose track of which files I already copied.”_        | Path headers + file-size badges keep things obvious.                             |
+| _“Long prompts blow up my token budget.”_                | Quickly toggle files on/off, or collapse content before copy.                    |
 
-### Prerequisites
+---
 
-- Flutter ≥ 3.16 with desktop support enabled (`flutter config --enable-macos-desktop` etc.)
-- Dart 3.x SDK (bundled with Flutter)
+##  Core features
 
-\### Clone & run
+* **Drag & Drop** files _or_ directories (recursive scan).
+* **250+ extensions supported**, plus custom ones in _Settings → Extensions_.
+* **Live Monaco Editor** preview with syntax highlighting, themes, word-wrap, and font-size controls.
+* **Smart clipboard / save** – one click to copy the combined doc or save it as a `.txt`.
+* **OS-native window** (built with [`window_manager`](https://pub.dev/packages/window_manager)) – resizable splitter, animations, dark/light theming.
+* **Keyboard shortcuts**  
+  `⌘/Ctrl  + F`  Find · `⌘/Ctrl  + Shift + P`  Command Palette · `⌘/Ctrl  + S`  Save file
+
+---
+
+##  Install it
+
+**▶ Download a pre-built release**
+
+1. Head to **Releases** on the [GitHub page](https://github.com/your-handle/context-collector/releases).
+2. Grab the latest ZIP/DMG/EXE for your OS.
+3. Run it – no extra setup.
+
+**🛠️Build from source (Flutter 3.22+)**
 
 ```bash
-git clone https://github.com/your‑org/context_collector.git
-cd context_collector
+git clone https://github.com/your-handle/context-collector.git
+cd context-collector
 flutter pub get
-flutter run  # chooses your current desktop platform automatically
+flutter config --enable-macos-desktop --enable-windows-desktop --enable-linux-desktop
+flutter run  # or flutter build macos / windows / linux
 ```
-
-\### Build a production bundle
-
-```bash
-# macOS (Universal)
-flutter build macos
-
-# Windows (x64)
-flutter build windows --release
-
-# Linux (deb package)
-flutter build linux --release
-```
-
-The binaries are placed under `build/<platform>/` and can be zipped or notarised as usual.
-
-------
-
-## 🖼️ Screenshots
-
-| Home / empty state                                     | After dropping files                                     |
-|--------------------------------------------------------|----------------------------------------------------------|
-| ![Empty‑state screenshot](docs/images/empty_state.png) | ![Loaded‑state screenshot](docs/images/loaded_state.png) |
-
-> *Tip:* record an 8‑second GIF with `gifox` or `peek` and drop it into `docs/images`—GitHub renders it inline.
-
-------
-
-## 🔍 Under the hood
-
-- **State management:** `provider` (simple `ChangeNotifier`).
-- **File & directory picking:** `desktop_drop` + `file_selector`.
-- **Theming:** custom `AppTheme` with M3 `ColorScheme` + smooth animations.
-- **No SQL/Prefs:** everything is kept in memory; nothing touches disk unless you explicitly press **Save**.
-
-The architecture is deliberately thin—`lib/providers/file_collector_provider.dart` does all the heavy lifting, while
-widgets under `lib/widgets/` stay dumb and composable.
-
-------
-
-## 🛠️ Configuration & extension
-
-| What                                 | How                                                                                                  |
-|--------------------------------------|------------------------------------------------------------------------------------------------------|
-| **Add/remove recognised extensions** | Edit `lib/config/file_extensions.dart`; each entry maps *extension → human category icon*.           |
-| **Change reference header style**    | Tweak `FileItem.generateReference()` if you prefer Markdown comments (`<!-- … -->`) instead of `//`. |
-| **Disable directory recursion**      | Flip the `recursive` flag in `FileCollectorProvider.addDirectory()`.                                 |
-
-------
-
-## 🗺️ Roadmap
-
-- Toggle *include hidden files*
-- Search & filter inside the preview pane
-- Syntax‑highlight each file block
-- Unit tests for the provider layer
-
-Contributions & feature requests are welcome—just open an issue!
-
-------
-
-## 🤝 Contributing
-
-1. Fork the repo and create your feature branch (`git checkout -b feature/amazing-thing`).
-2. Commit your changes with conventional commits.
-3. Push to the branch (`git push origin feature/amazing-thing`).
-4. Open a Pull Request describing what you changed and *why*.
-
-For larger ideas, please start with a discussion thread first so we can agree on scope.
-
-------
-
-## 📄 License
-
-Licensed under the **MIT License**—see [`LICENSE`](LICENSE) for details.
-
-------
-
-## 🙌 Acknowledgements
-- UI icons from [Material Icons](https://fonts.google.com/icons).
-- Built with <3 by [Omar Khaled](https://github.com/omar-hanafy).
-
-------
-
-Made with 🍵 & Flutter 3.21—happy context‑collecting! 🥳
