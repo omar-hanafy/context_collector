@@ -547,6 +547,10 @@ JSON.stringify({
     }
   }
 
+  Future<void> setMarkers(List<Map<String, dynamic>> markers) async {
+    // Implementation of setMarkers method
+  }
+
   @override
   void dispose() {
     _webViewController = null;

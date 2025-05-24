@@ -30,6 +30,9 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
   final List<KeybindingPreset> _customKeybindingPresets = [];
   bool _isEditorReady = false;
 
+  // Store the width of the sidebar for animation and layout
+  final double _sidebarWidth = 250;
+
   @override
   void initState() {
     super.initState();
@@ -41,11 +44,12 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
       parent: _collapseController,
       curve: Curves.easeInOut,
     );
-    _collapseController.value = 1.0; // Start expanded
+    // Start collapsed, so controller value is 0.0
+    // The button will allow it to expand to 1.0
+    _collapseController.value = 0.0;
+    _isCollapsed = true; // Reflects initial state
 
-    // Initialize Monaco bridge
     _monacoBridge = MonacoBridge();
-
     _loadEditorSettings();
   }
 
@@ -55,8 +59,6 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
       setState(() {
         _editorSettings = settings;
       });
-
-      // Apply settings to Monaco bridge when ready
       if (_isEditorReady) {
         await _applySettingsToEditor();
       }
@@ -65,16 +67,10 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
 
   Future<void> _applySettingsToEditor() async {
     if (!_isEditorReady) return;
-
     try {
-      // Apply all settings to the editor
       await _monacoBridge.updateSettings(_editorSettings);
-
-      // Apply keybinding preset
       await _monacoBridge
           .applyKeybindingPreset(_editorSettings.keybindingPreset);
-
-      // Setup custom keybindings
       if (_editorSettings.customKeybindings.isNotEmpty) {
         await _monacoBridge.setupKeybindings(_editorSettings.customKeybindings);
       }
@@ -101,452 +97,20 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<SelectionCubit>(
-      builder: (context, cubit, child) {
-        return Column(
-          children: [
-            // Enhanced header with more controls
-            _buildEnhancedHeader(context, cubit),
-
-            // Content area
-            Expanded(
-              child: AnimatedBuilder(
-                animation: _collapseAnimation,
-                builder: (context, child) {
-                  return Row(
-                    children: [
-                      // Collapsed sidebar
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        width: _isCollapsed ? 56 : 0,
-                        child: _isCollapsed
-                            ? _buildCollapsedSidebar(context, cubit)
-                            : const SizedBox.shrink(),
-                      ),
-
-                      // Main content
-                      Expanded(
-                        child: SizeTransition(
-                          sizeFactor: _collapseAnimation,
-                          axis: Axis.horizontal,
-                          child: Container(
-                            margin: const EdgeInsetsDirectional.all(16),
-                            child: _buildContent(context, cubit),
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildEnhancedHeader(BuildContext context, SelectionCubit cubit) {
-    return Container(
-      padding: const EdgeInsetsDirectional.symmetric(
-        horizontal: 16,
-        vertical: 12,
-      ),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            context.primary.addOpacity(0.08),
-            context.primary.addOpacity(0.04),
-          ],
-          begin: AlignmentDirectional.topStart,
-          end: AlignmentDirectional.bottomEnd,
-        ),
-        border: BorderDirectional(
-          bottom: BorderSide(
-            color: context.onSurface.addOpacity(0.1),
-          ),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: context.onSurface.addOpacity(0.05),
-            offset: const Offset(0, 2),
-            blurRadius: 4,
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // Collapse/Expand button
-          _buildCollapseButton(context),
-          const SizedBox(width: 12),
-
-          // Title with icon and animated indicator
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsetsDirectional.symmetric(
-              horizontal: 12,
-              vertical: 6,
-            ),
-            decoration: BoxDecoration(
-              color: _isEditorReady
-                  ? context.primary.addOpacity(0.1)
-                  : context.onSurface.addOpacity(0.05),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: _isEditorReady
-                    ? context.primary.addOpacity(0.3)
-                    : context.onSurface.addOpacity(0.1),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Stack(
-                  children: [
-                    Icon(
-                      Icons.merge_type_rounded,
-                      size: 20,
-                      color: _isEditorReady
-                          ? context.primary
-                          : context.onSurface.addOpacity(0.6),
-                    ),
-                    if (!_isEditorReady)
-                      Positioned.fill(
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: context.primary.addOpacity(0.6),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Monaco Editor',
-                  style: context.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: _isEditorReady
-                        ? context.primary
-                        : context.onSurface.addOpacity(0.8),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // File count and stats
-          if (cubit.selectedFilesCount > 0) ...[
-            const SizedBox(width: 16),
-            _buildStatsChips(context, cubit),
-          ],
-
-          const Spacer(),
-
-          // Quick actions
-          _buildQuickActions(context, cubit),
-
-          const SizedBox(width: 8),
-
-          // Settings button with enhanced tooltip
-          Tooltip(
-            message: 'Editor Settings\n'
-                '• ${_editorSettings.theme} theme\n'
-                '• ${_editorSettings.fontSize}px font size\n'
-                '• ${_editorSettings.keybindingPreset.name} keybindings',
-            child: IconButton(
-              onPressed: () => _showEnhancedEditorSettings(context),
-              icon: Stack(
-                children: [
-                  const Icon(Icons.tune),
-                  if (_hasCustomSettings())
-                    PositionedDirectional(
-                      top: 2,
-                      end: 2,
-                      child: Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: context.primary,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              iconSize: 20,
-              tooltip: '',
-              style: IconButton.styleFrom(
-                foregroundColor: context.primary,
-                backgroundColor: context.primary.addOpacity(0.1),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatsChips(BuildContext context, SelectionCubit cubit) {
-    return Row(
-      children: [
-        // File count chip
-        Container(
-          padding: const EdgeInsetsDirectional.symmetric(
-            horizontal: 10,
-            vertical: 4,
-          ),
-          decoration: BoxDecoration(
-            color: context.primary.addOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: context.primary.addOpacity(0.3),
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.description,
-                size: 14,
-                color: context.primary,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '${cubit.selectedFilesCount}',
-                style: context.labelSmall?.copyWith(
-                  color: context.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Character count chip (if content available)
-        if (cubit.combinedContent.isNotEmpty) ...[
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsetsDirectional.symmetric(
-              horizontal: 10,
-              vertical: 4,
-            ),
-            decoration: BoxDecoration(
-              color: context.onSurface.addOpacity(0.05),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: context.onSurface.addOpacity(0.1),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.text_fields,
-                  size: 14,
-                  color: context.onSurface.addOpacity(0.6),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  _formatByteSize(cubit.combinedContent.length),
-                  style: context.labelSmall?.copyWith(
-                    color: context.onSurface.addOpacity(0.6),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildQuickActions(BuildContext context, SelectionCubit cubit) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Theme toggle
-        Tooltip(
-          message: 'Toggle theme',
-          child: IconButton(
-            onPressed: _toggleTheme,
-            icon: Icon(
-              _editorSettings.theme.contains('dark')
-                  ? Icons.light_mode_outlined
-                  : Icons.dark_mode_outlined,
-            ),
-            iconSize: 18,
-            style: IconButton.styleFrom(
-              foregroundColor: context.onSurface.addOpacity(0.7),
-            ),
-          ),
-        ),
-
-        // Font size controls
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Tooltip(
-              message: 'Decrease font size',
-              child: IconButton(
-                onPressed:
-                    _editorSettings.fontSize > 8 ? _decreaseFontSize : null,
-                icon: const Icon(Icons.text_decrease),
-                iconSize: 16,
-                style: IconButton.styleFrom(
-                  foregroundColor: context.onSurface.addOpacity(0.7),
-                ),
-              ),
-            ),
-            Container(
-              width: 28,
-              alignment: Alignment.center,
-              child: Text(
-                '${_editorSettings.fontSize.round()}',
-                style: context.labelSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: context.onSurface.addOpacity(0.8),
-                ),
-              ),
-            ),
-            Tooltip(
-              message: 'Increase font size',
-              child: IconButton(
-                onPressed:
-                    _editorSettings.fontSize < 32 ? _increaseFontSize : null,
-                icon: const Icon(Icons.text_increase),
-                iconSize: 16,
-                style: IconButton.styleFrom(
-                  foregroundColor: context.onSurface.addOpacity(0.7),
-                ),
-              ),
-            ),
-          ],
-        ),
-
-        // Word wrap toggle
-        Tooltip(
-          message: 'Toggle word wrap',
-          child: IconButton(
-            onPressed: _toggleWordWrap,
-            icon: Icon(
-              _editorSettings.wordWrap != WordWrap.off
-                  ? Icons.wrap_text
-                  : Icons.notes,
-            ),
-            iconSize: 18,
-            style: IconButton.styleFrom(
-              foregroundColor: _editorSettings.wordWrap != WordWrap.off
-                  ? context.primary
-                  : context.onSurface.addOpacity(0.7),
-              backgroundColor: _editorSettings.wordWrap != WordWrap.off
-                  ? context.primary.addOpacity(0.1)
-                  : null,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCollapseButton(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: _toggleCollapse,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsetsDirectional.all(8),
-          decoration: BoxDecoration(
-            color: context.surface,
-            border: Border.all(
-              color: context.onSurface.addOpacity(0.2),
-            ),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: AnimatedRotation(
-            turns: _isCollapsed ? 0.5 : 0,
-            duration: const Duration(milliseconds: 300),
-            child: Icon(
-              Icons.chevron_left,
-              size: 18,
-              color: context.onSurface.addOpacity(0.7),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  // _buildEnhancedHeader is REMOVED
+  // _buildCollapseButton (old top bar button) is REMOVED or will be repurposed/replaced by edge toggle logic
 
   Widget _buildCollapsedSidebar(BuildContext context, SelectionCubit cubit) {
+    // Original content restored
     return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            context.surface,
-            if (context.isDark)
-              Colors.black.addOpacity(0.2)
-            else
-              Colors.grey.shade50,
-          ],
-          begin: AlignmentDirectional.topCenter,
-          end: AlignmentDirectional.bottomCenter,
-        ),
-        border: BorderDirectional(
-          end: BorderSide(
-            color: context.onSurface.addOpacity(0.1),
-          ),
-        ),
-      ),
+      width: _sidebarWidth, // It takes full width when animation allows
+      padding: const EdgeInsetsDirectional.symmetric(vertical: 16),
+      alignment: AlignmentDirectional.topCenter, // Align content to top
       child: Column(
+        mainAxisAlignment:
+            MainAxisAlignment.center, // Center the content vertically
         children: [
-          const SizedBox(height: 16),
-          IconButton(
-            onPressed: _toggleCollapse,
-            icon: const Icon(Icons.chevron_right),
-            tooltip: 'Expand editor',
-            style: IconButton.styleFrom(
-              backgroundColor: context.primary.addOpacity(0.1),
-              foregroundColor: context.primary,
-            ),
-          ),
-          const SizedBox(height: 24),
-          if (cubit.combinedContent.isNotEmpty) ...[
-            // Copy button
-            IconButton(
-              onPressed: () => _copyToClipboard(context, cubit.combinedContent),
-              icon: const Icon(Icons.copy),
-              tooltip: 'Copy content',
-              style: IconButton.styleFrom(
-                foregroundColor: context.onSurface.addOpacity(0.7),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // Format button
-            IconButton(
-              onPressed: _formatContent,
-              icon: const Icon(Icons.auto_fix_high),
-              tooltip: 'Format content',
-              style: IconButton.styleFrom(
-                foregroundColor: context.onSurface.addOpacity(0.7),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // Go to top
-            IconButton(
-              onPressed: _scrollToTop,
-              icon: const Icon(Icons.keyboard_arrow_up),
-              tooltip: 'Scroll to top',
-              style: IconButton.styleFrom(
-                foregroundColor: context.onSurface.addOpacity(0.7),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // File count indicator
+          if (cubit.selectedFilesCount > 0)
             RotatedBox(
               quarterTurns: -1,
               child: Container(
@@ -567,9 +131,197 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
                 ),
               ),
             ),
-          ],
         ],
       ),
+    );
+  }
+
+  Widget _buildExpandedSidebarContent(BuildContext context) {
+    // Original content restored
+    return SingleChildScrollView(
+      padding: const EdgeInsetsDirectional.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Font Size', style: context.titleSmall),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                onPressed:
+                    _editorSettings.fontSize > 8 ? _decreaseFontSize : null,
+                icon: const Icon(Icons.text_decrease),
+                iconSize: 20,
+                tooltip: 'Decrease font size',
+              ),
+              Container(
+                width: 36,
+                alignment: Alignment.center,
+                child: Text(
+                  '${_editorSettings.fontSize.round()}',
+                  style: context.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed:
+                    _editorSettings.fontSize < 32 ? _increaseFontSize : null,
+                icon: const Icon(Icons.text_increase),
+                iconSize: 20,
+                tooltip: 'Increase font size',
+              ),
+            ],
+          ),
+          const Divider(height: 24),
+          ListTile(
+            contentPadding: EdgeInsetsDirectional.zero,
+            leading: Icon(
+              _editorSettings.wordWrap != WordWrap.off
+                  ? Icons.wrap_text
+                  : Icons.notes,
+              color: _editorSettings.wordWrap != WordWrap.off
+                  ? context.primary
+                  : context.onSurface.addOpacity(0.7),
+            ),
+            title: const Text('Word Wrap'),
+            trailing: Switch(
+              value: _editorSettings.wordWrap != WordWrap.off,
+              onChanged: (_) => _toggleWordWrap(),
+            ),
+            onTap: _toggleWordWrap,
+          ),
+          const Divider(height: 24),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.tune),
+            label: const Text('Editor Settings'),
+            onPressed: () => _showEnhancedEditorSettings(context),
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 40),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSidebarToggleButton(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _toggleCollapse,
+        borderRadius: BorderRadius.circular(30), // Make it roundish
+        child: Container(
+          padding: const EdgeInsetsDirectional.all(8),
+          decoration: BoxDecoration(
+            color: context.surface.addOpacity(0.8),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.addOpacity(0.2),
+                blurRadius: 4,
+                offset: const Offset(1, 1),
+              )
+            ],
+            border: Border.all(color: context.onSurface.addOpacity(0.2)),
+          ),
+          child: AnimatedRotation(
+            turns: _isCollapsed
+                ? 0
+                : 0.5, // Point right when collapsed, left when expanded
+            duration: const Duration(milliseconds: 300),
+            child: Icon(
+              Icons
+                  .chevron_left, // Icon always points left, rotation handles direction
+              size: 20,
+              color: context.onSurface.addOpacity(0.7),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<SelectionCubit>(
+      builder: (context, cubit, child) {
+        return Column(
+          children: [
+            // _buildEnhancedHeader is REMOVED
+            Expanded(
+              child: Stack(
+                children: [
+                  Row(
+                    children: [
+                      // Collapsed or Expanded sidebar content
+                      SizeTransition(
+                        sizeFactor: _collapseAnimation,
+                        axis: Axis.horizontal,
+                        child: Container(
+                          // This container defines the full expanded width
+                          width: _sidebarWidth,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest,
+                            border: BorderDirectional(
+                              end: BorderSide(
+                                color: context.onSurface.addOpacity(0.1),
+                              ),
+                            ),
+                          ),
+                          // Key added here to ensure the Container and its child are swapped correctly
+                          key: ValueKey<String>(
+                              _isCollapsed ? 'collapsed' : 'expanded'),
+                          child: _isCollapsed
+                              ? _buildCollapsedSidebar(context, cubit) // Green
+                              : _buildExpandedSidebarContent(context), // Blue
+                          // Removed Opacity widget here
+                        ),
+                      ),
+                      Expanded(
+                        child: Container(
+                          margin: const EdgeInsetsDirectional.all(16),
+                          child: _buildContent(context, cubit),
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Positioned Sidebar Toggle Button
+                  AnimatedBuilder(
+                    animation: _collapseAnimation,
+                    builder: (context, child) {
+                      const double buttonRadius =
+                          18; // Approximate half-width of the button
+                      double startPosition;
+                      if (_collapseAnimation.value < 0.1) {
+                        // Mostly or fully collapsed
+                        startPosition =
+                            4.0; // Keep button slightly inset from screen edge
+                      } else {
+                        // Expanding or fully expanded
+                        startPosition =
+                            (_sidebarWidth * _collapseAnimation.value) -
+                                buttonRadius;
+                      }
+
+                      return PositionedDirectional(
+                        top: 0,
+                        bottom: 0,
+                        start: startPosition,
+                        child: Center(
+                          child: _buildSidebarToggleButton(context),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -577,15 +329,11 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
     if (cubit.combinedContent.isEmpty) {
       return _buildEmptyState(context);
     }
-
-    // Update bridge content when cubit changes
     if (_monacoBridge.content != cubit.combinedContent) {
       _monacoBridge.setContent(cubit.combinedContent);
     }
-
     return Column(
       children: [
-        // Editor
         Expanded(
           child: Container(
             decoration: BoxDecoration(
@@ -608,25 +356,18 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
                 setState(() {
                   _isEditorReady = true;
                 });
-
-                // Apply settings after editor is ready
                 await _applySettingsToEditor();
-
-                // Set content after a small delay
                 await 100.millisecondsDelay();
                 await _monacoBridge.setContent(cubit.combinedContent);
               },
             ),
           ),
         ),
-
         const SizedBox(height: 16),
-
-        // Enhanced info bar with more controls
         MonacoEditorInfoBar(
           bridge: _monacoBridge,
           onCopy: () => _copyToClipboard(context, cubit.combinedContent),
-          onSettings: () => _showEnhancedEditorSettings(context),
+          // onSettings is removed as per previous refactor
         ),
       ],
     );
@@ -675,8 +416,6 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
             ),
           ),
           const SizedBox(height: 40),
-
-          // Enhanced quick tips with better styling
           Container(
             constraints: const BoxConstraints(maxWidth: 500),
             padding: const EdgeInsetsDirectional.all(24),
@@ -767,7 +506,6 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
     );
   }
 
-  // Helper methods
   bool _hasCustomSettings() {
     const defaultSettings = EditorSettings();
     return _editorSettings.theme != defaultSettings.theme ||
@@ -823,13 +561,18 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
     }
   }
 
+  Future<void> _scrollToBottom() async {
+    // Added for completeness, if called from somewhere
+    if (_isEditorReady) {
+      await _monacoBridge.scrollToBottom();
+    }
+  }
+
   Future<void> _saveAndApplySettings(EditorSettings newSettings) async {
     setState(() {
       _editorSettings = newSettings;
     });
-
     await newSettings.save();
-
     if (_isEditorReady) {
       await _applySettingsToEditor();
     }
@@ -875,7 +618,6 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
       customThemes: _customThemes,
       customKeybindingPresets: _customKeybindingPresets,
     );
-
     if (newSettings != null && mounted) {
       await _saveAndApplySettings(newSettings);
     }
