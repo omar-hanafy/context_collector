@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:provider/provider.dart';
 
 import '../extensions/theme_extensions.dart';
 import '../providers/file_collector_provider.dart';
+import 'editor_settings_dialog.dart';
+import 'monaco_editor_embedded.dart';
 
 class CombinedContentWidget extends StatefulWidget {
   const CombinedContentWidget({super.key});
@@ -12,29 +15,52 @@ class CombinedContentWidget extends StatefulWidget {
   State<CombinedContentWidget> createState() => _CombinedContentWidgetState();
 }
 
-class _CombinedContentWidgetState extends State<CombinedContentWidget> {
-  final ScrollController _scrollController = ScrollController();
-  bool _isAtTop = true;
+class _CombinedContentWidgetState extends State<CombinedContentWidget>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _collapseController;
+  late Animation<double> _collapseAnimation;
+  bool _isCollapsed = false;
+  EditorSettings _editorSettings = const EditorSettings();
 
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_onScroll);
+    _collapseController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _collapseAnimation = CurvedAnimation(
+      parent: _collapseController,
+      curve: Curves.easeInOut,
+    );
+    _collapseController.value = 1.0; // Start expanded
+    _loadEditorSettings();
+  }
+
+  Future<void> _loadEditorSettings() async {
+    final settings = await EditorSettings.load();
+    if (mounted) {
+      setState(() {
+        _editorSettings = settings;
+      });
+    }
   }
 
   @override
   void dispose() {
-    _scrollController
-      ..removeListener(_onScroll)
-      ..dispose();
+    _collapseController.dispose();
     super.dispose();
   }
 
-  void _onScroll() {
-    final isAtTop = _scrollController.offset <= 0;
-    if (_isAtTop != isAtTop) {
-      setState(() => _isAtTop = isAtTop);
-    }
+  void _toggleCollapse() {
+    setState(() {
+      _isCollapsed = !_isCollapsed;
+      if (_isCollapsed) {
+        _collapseController.reverse();
+      } else {
+        _collapseController.forward();
+      }
+    });
   }
 
   @override
@@ -43,9 +69,12 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget> {
       builder: (context, provider, child) {
         return Column(
           children: [
-            // Header
+            // Header with collapse button
             Container(
-              padding: const EdgeInsetsDirectional.all(16),
+              padding: const EdgeInsetsDirectional.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
               decoration: BoxDecoration(
                 color: context.surface,
                 border: BorderDirectional(
@@ -53,51 +82,183 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget> {
                     color: context.onSurface.addOpacity(0.1),
                   ),
                 ),
-                boxShadow: _isAtTop
-                    ? null
-                    : [
-                        BoxShadow(
-                          color: context.onSurface.addOpacity(0.1),
-                          offset: const Offset(0, 2),
-                          blurRadius: 4,
-                        ),
-                      ],
+                boxShadow: [
+                  BoxShadow(
+                    color: context.onSurface.addOpacity(0.05),
+                    offset: const Offset(0, 1),
+                    blurRadius: 3,
+                  ),
+                ],
               ),
               child: Row(
                 children: [
+                  // Collapse/Expand button
+                  _buildCollapseButton(context),
+                  const SizedBox(width: 12),
+
+                  // Title with icon
+                  Icon(
+                    Icons.merge_type_rounded,
+                    size: 20,
+                    color: context.primary,
+                  ),
+                  const SizedBox(width: 8),
                   Text(
                     'Combined Content',
                     style: context.titleMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const Spacer(),
-                  if (provider.combinedContent.isNotEmpty) ...[
-                    IconButton(
-                      onPressed: () =>
-                          _copyToClipboard(context, provider.combinedContent),
-                      icon: Icon(Icons.copy,
-                          color: context.onSurface.addOpacity(0.8)),
-                      tooltip: 'Copy to clipboard',
-                    ),
-                    IconButton(
-                      onPressed: _scrollToTop,
-                      icon: Icon(Icons.keyboard_arrow_up,
-                          color: context.onSurface.addOpacity(0.8)),
-                      tooltip: 'Scroll to top',
+
+                  // File count badge
+                  if (provider.selectedFilesCount > 0) ...[
+                    const SizedBox(width: 12),
+                    Container(
+                      padding: const EdgeInsetsDirectional.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: context.primary.addOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: context.primary.addOpacity(0.3),
+                        ),
+                      ),
+                      child: Text(
+                        '${provider.selectedFilesCount} files',
+                        style: context.labelSmall?.copyWith(
+                          color: context.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ],
+
+                  const Spacer(),
+
+                  // Settings button (for font size, theme, etc.)
+                  IconButton(
+                    onPressed: () => _showEditorSettings(context),
+                    icon: const Icon(Icons.settings_outlined),
+                    iconSize: 20,
+                    tooltip: 'Editor settings',
+                    style: IconButton.styleFrom(
+                      foregroundColor: context.onSurface.addOpacity(0.7),
+                    ),
+                  ),
                 ],
               ),
             ),
 
-            // Content
+            // Content area
             Expanded(
-              child: _buildContent(context, provider),
+              child: AnimatedBuilder(
+                animation: _collapseAnimation,
+                builder: (context, child) {
+                  return Row(
+                    children: [
+                      // Collapsed sidebar
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        width: _isCollapsed ? 48 : 0,
+                        child: _isCollapsed
+                            ? _buildCollapsedSidebar(context, provider)
+                            : const SizedBox.shrink(),
+                      ),
+
+                      // Main content
+                      Expanded(
+                        child: SizeTransition(
+                          sizeFactor: _collapseAnimation,
+                          axis: Axis.horizontal,
+                          child: Container(
+                            margin: const EdgeInsetsDirectional.all(16),
+                            child: _buildContent(context, provider),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
           ],
         );
       },
+    );
+  }
+
+  Widget _buildCollapseButton(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _toggleCollapse,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsetsDirectional.all(6),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: context.onSurface.addOpacity(0.2),
+            ),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: AnimatedRotation(
+            turns: _isCollapsed ? 0.5 : 0,
+            duration: const Duration(milliseconds: 300),
+            child: Icon(
+              Icons.chevron_left,
+              size: 18,
+              color: context.onSurface.addOpacity(0.7),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCollapsedSidebar(BuildContext context,
+      FileCollectorProvider provider) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.isDark
+            ? Colors.black.addOpacity(0.3)
+            : Colors.grey.shade100,
+        border: BorderDirectional(
+          end: BorderSide(
+            color: context.onSurface.addOpacity(0.1),
+          ),
+        ),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 16),
+          IconButton(
+            onPressed: _toggleCollapse,
+            icon: const Icon(Icons.chevron_right),
+            tooltip: 'Expand editor',
+          ),
+          const SizedBox(height: 24),
+          if (provider.combinedContent.isNotEmpty) ...[
+            IconButton(
+              onPressed: () =>
+                  _copyToClipboard(context, provider.combinedContent),
+              icon: const Icon(Icons.copy),
+              tooltip: 'Copy content',
+            ),
+            const SizedBox(height: 16),
+            RotatedBox(
+              quarterTurns: -1,
+              child: Text(
+                '${provider.selectedFilesCount} files',
+                style: context.labelSmall?.copyWith(
+                  color: context.onSurface.addOpacity(0.6),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -106,19 +267,13 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget> {
       return _buildEmptyState(context);
     }
 
-    return SingleChildScrollView(
-      controller: _scrollController,
-      padding: const EdgeInsetsDirectional.all(16),
-      child: SelectableText(
-        provider.combinedContent,
-        style: TextStyle(
-          fontFamily: 'monospace',
-          fontSize: 13,
-          height: 1.4,
-          color: context.onBackground,
-        ),
-        textAlign: TextAlign.start,
-      ),
+    return MonacoEditorEmbedded(
+      content: provider.combinedContent,
+      onCopy: () => _copyToClipboard(context, provider.combinedContent),
+      showLineNumbers: _editorSettings.showLineNumbers,
+      fontSize: _editorSettings.fontSize,
+      wordWrap: _editorSettings.wordWrap,
+      readOnly: true,
     );
   }
 
@@ -127,16 +282,24 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.preview_outlined,
-            size: 64,
-            color: context.onSurface.addOpacity(0.4),
+          Container(
+            padding: const EdgeInsetsDirectional.all(24),
+            decoration: BoxDecoration(
+              color: context.primary.addOpacity(0.05),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.merge_type_rounded,
+              size: 64,
+              color: context.primary.addOpacity(0.3),
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
           Text(
             'Combined Content Preview',
             style: context.titleLarge?.copyWith(
-              color: context.onSurface.addOpacity(0.6),
+              color: context.onSurface.addOpacity(0.8),
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 8),
@@ -144,46 +307,64 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget> {
             'Select files and load their content to see the combined result here',
             textAlign: TextAlign.center,
             style: context.bodyMedium?.copyWith(
-              color: context.onSurface.addOpacity(0.5),
+              color: context.onSurface.addOpacity(0.6),
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
+
+          // Quick tips
           Container(
-            padding: const EdgeInsetsDirectional.all(16),
+            padding: const EdgeInsetsDirectional.all(20),
             decoration: BoxDecoration(
-              color: context.primary.addOpacity(0.05),
-              borderRadius: BorderRadius.circular(8),
+              gradient: LinearGradient(
+                colors: [
+                  context.primary.addOpacity(0.05),
+                  context.primary.addOpacity(0.02),
+                ],
+                begin: AlignmentDirectional.topStart,
+                end: AlignmentDirectional.bottomEnd,
+              ),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: context.primary.addOpacity(0.2),
               ),
             ),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Quick Actions:',
-                  style: context.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: context.primary,
-                  ),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.lightbulb_outline,
+                      size: 20,
+                      color: context.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Quick Tips',
+                      style: context.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: context.primary,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                _buildQuickAction(
+                const SizedBox(height: 12),
+                _buildTip(
                   context,
-                  Icons.refresh,
-                  'Load Content',
-                  'Load content from selected files',
+                  '• Drag and drop files or folders directly onto the app',
                 ),
-                _buildQuickAction(
+                _buildTip(
                   context,
-                  Icons.copy,
-                  'Copy All',
-                  'Load and copy all content to clipboard',
+                  '• Use the action buttons to load, copy, or save content',
                 ),
-                _buildQuickAction(
+                _buildTip(
                   context,
-                  Icons.save,
-                  'Save File',
-                  'Load and save combined content to a file',
+                  '• Toggle file selection to customize your collection',
+                ),
+                _buildTip(
+                  context,
+                  '• Line numbers help navigate large combined files',
                 ),
               ],
             ),
@@ -193,39 +374,15 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget> {
     );
   }
 
-  Widget _buildQuickAction(
-      BuildContext context, IconData icon, String title, String description) {
+  Widget _buildTip(BuildContext context, String text) {
     return Padding(
       padding: const EdgeInsetsDirectional.only(bottom: 4),
-      child: Row(
-        children: [
-          Icon(
-            icon,
-            size: 16,
-            color: context.primary.addOpacity(0.7),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: context.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: context.onSurface,
-                  ),
-                ),
-                Text(
-                  description,
-                  style: context.labelSmall?.copyWith(
-                    color: context.onSurface.addOpacity(0.7),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+      child: Text(
+        text,
+        style: context.bodySmall?.copyWith(
+          color: context.onSurface.addOpacity(0.7),
+          height: 1.5,
+        ),
       ),
     );
   }
@@ -234,16 +391,23 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget> {
     Clipboard.setData(ClipboardData(text: content)).then((_) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Row(
+          content: Row(
             children: [
-              Icon(Icons.check_circle, color: Colors.white),
-              SizedBox(width: 8),
-              Text('Content copied to clipboard!'),
+              Icon(
+                Icons.check_circle,
+                color: context.onPrimary,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              const Text('Content copied to clipboard!'),
             ],
           ),
           backgroundColor: context.primary,
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
         ),
       );
     }).catchError((dynamic error) {
@@ -256,11 +420,16 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget> {
     });
   }
 
-  void _scrollToTop() {
-    _scrollController.animateTo(
-      0,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
+  void _showEditorSettings(BuildContext context) async {
+    final newSettings = await EditorSettingsDialog.show(
+      context,
+      _editorSettings,
     );
+
+    if (newSettings != null && mounted) {
+      setState(() {
+        _editorSettings = newSettings;
+      });
+    }
   }
 }

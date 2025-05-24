@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' file: data: https://cdnjs.cloudflare.com;">
+    <title>Monaco Editor Integration</title>
+    <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        #editor-container {
+            width: 100%;
+            height: 100%;
+        }
+        .error-container {
+            padding: 20px;
+            color: #e74c3c;
+            font-family: sans-serif;
+        }
+    </style>
+    <script>
+        // This will be replaced by Dart code with an absolute file:// path
+        const VS_PATH = "__VS_PATH__";
+        
+        // Configure require with absolute path
+        var require = { paths: { 'vs': VS_PATH } };
+
+        // Debug info to help with troubleshooting
+        console.log("Monaco VS_PATH set to:", VS_PATH);
+        
+        // Track editor status
+        window.monacoStatus = {
+            editorInitialized: false,
+            readyEventSent: false
+        };
+        
+        // Event tracking
+        function trackEvent(event) {
+            console.log("MONACO_EVENT: " + event);
+        }
+        
+        document.addEventListener("DOMContentLoaded", function() {
+            trackEvent("DOMContentLoaded");
+        });
+    </script>
+</head>
+<body>
+    <div id="editor-container"></div>
+    <script>
+        // Cross-platform communication with Flutter
+        function notifyFlutter(event, payload) {
+            trackEvent("notifyFlutter called with event: " + event);
+            
+            // Try using flutterChannel (added by Dart)
+            if (window.flutterChannel) {
+                try {
+                    window.flutterChannel.postMessage(JSON.stringify({
+                        event: event,
+                        payload: payload
+                    }));
+                    trackEvent("Sent message via flutterChannel");
+                    return;
+                } catch (e) {
+                    console.error("Error using flutterChannel:", e);
+                }
+            }
+            
+            // Fallback to other methods
+            if (window.chrome && window.chrome.webview) {
+                // Windows WebView2
+                window.chrome.webview.postMessage({event, payload});
+                trackEvent("Sent message via chrome.webview");
+            } else if (window.flutter_inappwebview) {
+                // macOS / Linux with JavaScriptChannel
+                window.flutter_inappwebview.callHandler(event, payload);
+                trackEvent("Sent message via flutter_inappwebview");
+            } else {
+                // URL scheme fallback
+                const urlMessage = 'flutter://' + encodeURIComponent(event + 
+                  (payload !== undefined ? ':' + JSON.stringify(payload) : ''));
+                trackEvent("Sending message via URL scheme");
+                window.location.href = urlMessage;
+            }
+        }
+
+        // Load the loader.js script with proper error handling
+        function loadScript(src, onLoad, onError) {
+            trackEvent("Attempting to load script: " + src);
+            const script = document.createElement('script');
+            script.src = src;
+            script.onload = function() {
+                trackEvent("Successfully loaded: " + src);
+                onLoad();
+            };
+            script.onerror = function(e) {
+                console.error('Failed to load script:', src, e);
+                trackEvent("Failed to load script: " + src);
+                if (onError) onError(e);
+            };
+            document.head.appendChild(script);
+        }
+        
+        // Try loading from CDN as a fallback
+        function loadFromCDN() {
+            trackEvent("Loading Monaco from CDN");
+            // Reset require config to use CDN
+            window.require = { paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' } };
+            
+            // Load from CDN
+            loadScript('https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.js', 
+                initEditor, 
+                function(e) {
+                    trackEvent("Failed to load Monaco from CDN");
+                    document.getElementById('editor-container').innerHTML = 
+                        '<div class="error-container">' +
+                        '<h3>Failed to load Monaco Editor</h3>' +
+                        '<p>The editor could not be loaded from either local resources or CDN.</p>' +
+                        '<p>Error: ' + (e && e.message || 'Unknown error') + '</p>' +
+                        '</div>';
+                }
+            );
+        }
+        
+        // Initialize the editor once Monaco is loaded
+        function initEditor() {
+            trackEvent("Initializing Monaco editor");
+            // Verify loader.js is properly loaded
+            if (typeof require === 'undefined') {
+                trackEvent("require is undefined, falling back to CDN");
+                loadFromCDN();
+                return;
+            }
+            
+            try {
+                // This will load editor.main.js
+                trackEvent("Loading editor.main module");
+                require(['vs/editor/editor.main'], function() {
+                    trackEvent("Monaco editor main module loaded successfully");
+                    
+                    // Verify monaco is loaded correctly
+                    if (typeof monaco === 'undefined') {
+                        trackEvent("monaco is undefined, falling back to CDN");
+                        loadFromCDN();
+                        return;
+                    }
+                    
+                    try {
+                        trackEvent("Creating editor instance");
+                        // Create the editor
+                        window.editor = monaco.editor.create(document.getElementById('editor-container'), {
+                            value: '// Loading content...',
+                            language: 'javascript',
+                            theme: window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches 
+                                ? 'vs-dark' : 'vs',
+                            fontSize: 14,
+                            fontFamily: 'JetBrains Mono, SF Mono, Menlo, Consolas, monospace',
+                            minimap: { enabled: false },
+                            wordWrap: 'on',
+                            automaticLayout: true,
+                            lineNumbers: 'on',
+                            renderWhitespace: 'selection',
+                            scrollBeyondLastLine: false,
+                            padding: { top: 10 }
+                        });
+                        
+                        trackEvent("Monaco editor instance created successfully");
+                        window.monacoStatus.editorInitialized = true;
+                        
+                        // API methods for Flutter to call
+                        window.setEditorContent = function(content) {
+                            window.editor.setValue(content);
+                        };
+                        
+                        window.setEditorLanguage = function(lang) {
+                            monaco.editor.setModelLanguage(window.editor.getModel(), lang);
+                        };
+                        
+                        window.getEditorContent = function() {
+                            return window.editor.getValue();
+                        };
+                        
+                        window.setEditorTheme = function(theme) {
+                            monaco.editor.setTheme(theme);
+                        };
+                        
+                        window.setEditorOptions = function(options) {
+                            window.editor.updateOptions(options);
+                        };
+                        
+                        // Send ready event in multiple ways to ensure it gets through
+                        function sendReadyEvent() {
+                            if (window.monacoStatus.readyEventSent) {
+                                trackEvent("Ready event already sent, skipping");
+                                return;
+                            }
+                            
+                            trackEvent("SENDING_EDITOR_READY_EVENT");
+                            window.monacoStatus.readyEventSent = true;
+                            
+                            // 1. Direct call to flutterChannel
+                            if (window.flutterChannel) {
+                                trackEvent("Sending ready event via flutterChannel");
+                                window.flutterChannel.postMessage(JSON.stringify({event: 'onEditorReady'}));
+                            }
+                            
+                            // 2. URL scheme
+                            trackEvent("Sending ready event via URL scheme");
+                            window.location.href = 'flutter://onEditorReady';
+                            
+                            // 3. Log a special message for the console interceptor
+                            console.log("EDITOR_READY_EVENT_FIRED");
+                        }
+                        
+                        // Send ready event immediately
+                        sendReadyEvent();
+                        
+                        // Also send after a short delay to ensure reception
+                        setTimeout(sendReadyEvent, 500);
+                        setTimeout(sendReadyEvent, 1000);
+                        
+                    } catch (err) {
+                        trackEvent("Error creating Monaco editor: " + err.message);
+                        document.getElementById('editor-container').innerHTML = 
+                            '<div class="error-container">' +
+                            '<h3>Error Creating Monaco Editor</h3>' +
+                            '<p>' + err.message + '</p>' +
+                            '</div>';
+                    }
+                }, function(err) {
+                    trackEvent("Could not load vs/editor/editor.main: " + (err && err.message || "Unknown error"));
+                    loadFromCDN();
+                });
+            } catch (err) {
+                trackEvent("Error in require call: " + err.message);
+                loadFromCDN();
+            }
+        }
+        
+        // Setup status polling for debugging
+        function pollStatus() {
+            const status = {
+                editorExists: typeof window.editor !== 'undefined',
+                editorInitialized: window.monacoStatus.editorInitialized,
+                readyEventSent: window.monacoStatus.readyEventSent,
+                documentReadyState: document.readyState,
+                containerExists: document.getElementById('editor-container') !== null
+            };
+            
+            console.log("MONACO_STATUS:", JSON.stringify(status));
+            
+            if (!window.monacoStatus.readyEventSent && status.editorExists) {
+                trackEvent("Editor exists but ready event not sent, sending now");
+                notifyFlutter('onEditorReady');
+            }
+        }
+        
+        // Start polling
+        setInterval(pollStatus, 1000);
+        
+        // First try loading from local path
+        trackEvent("Starting Monaco editor initialization");
+        loadScript(VS_PATH + '/loader.js', initEditor, loadFromCDN);
+    </script>
+</body>
+</html>

@@ -17,7 +17,10 @@ dependencies:
   flutter_helper_utils: ^8.0.2
   dart_helper_utils: ^5.1.0
   path: ^1.9.1
+  path_provider: ^2.1.5
   shared_preferences: ^2.5.3
+  desktop_webview_window: ^0.2.3
+  webview_flutter: ^4.13.0
 
 dev_dependencies:
   flutter_test:
@@ -25,4 +28,20 @@ dev_dependencies:
   very_good_analysis: ^7.0.0
 flutter:
   uses-material-design: true
+  
+  assets:
+    - assets/editor/editor.html
+    - assets/monaco/index.html
+    - assets/monaco/editor.js
+    - assets/monaco/languages.js
+    - assets/monaco/vs/
+    - assets/monaco/vs/loader.js
+    - assets/monaco/vs/editor/
+    - assets/monaco/vs/editor/editor.main.js
+    - assets/monaco/vs/editor/editor.main.css
+    - assets/monaco/monaco-editor/min/vs/
+    - assets/monaco/monaco-editor/min/vs/loader.js
+    - assets/monaco/monaco-editor/min/vs/editor/
+    - assets/monaco/monaco-editor/min/vs/editor/editor.main.js
+    - assets/monaco/monaco-editor/min/vs/editor/editor.main.css
 
