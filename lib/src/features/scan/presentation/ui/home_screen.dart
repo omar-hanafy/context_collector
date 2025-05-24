@@ -38,6 +38,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.surface,
+      
+      // Minimal global app bar - only unified settings
       appBar: AppBar(
         title: Row(
           children: [
@@ -63,85 +65,20 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
-          Consumer<SelectionCubit>(
-            builder: (context, cubit, child) {
-              return Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    padding: cubit.hasFiles
-                        ? const EdgeInsetsDirectional.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          )
-                        : EdgeInsetsDirectional.zero,
-                    decoration: BoxDecoration(
-                      color: cubit.hasFiles
-                          ? context.primary.addOpacity(0.1)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: cubit.hasFiles
-                        ? Row(
-                            children: [
-                              Icon(
-                                Icons.check_circle_rounded,
-                                size: 16,
-                                color: context.primary,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                '${cubit.selectedFilesCount}',
-                                style: context.titleSmall?.copyWith(
-                                  color: context.primary,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              Text(
-                                ' / ${cubit.totalFilesCount}',
-                                style: context.titleSmall?.copyWith(
-                                  color: context.onSurface.addOpacity(0.6),
-                                ),
-                              ),
-                            ],
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                  if (cubit.hasFiles) const SizedBox(width: 8),
-                  AnimatedScale(
-                    scale: cubit.hasFiles ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 200),
-                    child: IconButton(
-                      onPressed: cubit.hasFiles ? cubit.clearFiles : null,
-                      icon: const Icon(Icons.clear_all_rounded),
-                      tooltip: 'Clear all files',
-                      style: IconButton.styleFrom(
-                        backgroundColor: context.error.addOpacity(0.1),
-                        foregroundColor: context.error,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-              );
-            },
-          ),
+          // ONLY unified settings button in global bar
           IconButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute<void>(
-                  builder: (context) => const SettingsScreen(),
-                ),
-              );
-            },
-            icon: const Icon(Icons.settings_rounded),
+            onPressed: () => _showUnifiedSettings(context),
+            icon: const Icon(Icons.tune),
             tooltip: 'Settings',
+            style: IconButton.styleFrom(
+              backgroundColor: context.primary.addOpacity(0.1),
+              foregroundColor: context.primary,
+            ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 16),
         ],
       ),
+
       body: DropTarget(
         onDragEntered: (details) {
           setState(() => _isDragging = true);
@@ -213,22 +150,241 @@ class _HomeScreenState extends State<HomeScreen> {
                 return const DropZoneWidget();
               }
 
-              return ResizableSplitter(
-                initialRatio: 0.35,
-                minRatio: 0.2,
-                maxRatio: 0.6,
-                startPanel: Column(
-                  children: [
-                    const ActionButtonsWidget(),
-                    const Expanded(child: FileListWidget()),
-                    if (cubit.isProcessing) const LinearProgressIndicator(),
-                  ],
-                ),
-                endPanel: const CombinedContentWidget(),
-              );
+              // NEW: Simplified two-panel layout
+              return _buildMainContent(context, cubit);
             },
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildMainContent(BuildContext context, SelectionCubit cubit) {
+    return ResizableSplitter(
+      initialRatio: 0.35,
+      minRatio: 0.25,
+      maxRatio: 0.6,
+      startPanel: _buildFileSection(context, cubit),
+      endPanel: _buildEditorSection(context, cubit),
+    );
+  }
+
+  Widget _buildFileSection(BuildContext context, SelectionCubit cubit) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.surface,
+        border: BorderDirectional(
+          end: BorderSide(
+            color: context.onSurface.addOpacity(0.1),
+            width: 1,
+          ),
+        ),
+      ),
+      child: Column(
+        children: [
+          // NEW: File controls header - moved from global bar
+          _buildFileControlsHeader(context, cubit),
+          
+          // File list
+          const Expanded(child: FileListWidget()),
+          
+          // Processing indicator
+          if (cubit.isProcessing)
+            Container(
+              height: 3,
+              child: const LinearProgressIndicator(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFileControlsHeader(BuildContext context, SelectionCubit cubit) {
+    return Container(
+      padding: const EdgeInsetsDirectional.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            context.primary.addOpacity(0.06),
+            context.primary.addOpacity(0.03),
+          ],
+          begin: AlignmentDirectional.topStart,
+          end: AlignmentDirectional.bottomEnd,
+        ),
+        border: BorderDirectional(
+          bottom: BorderSide(
+            color: context.onSurface.addOpacity(0.1),
+            width: 1,
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // File stats row
+          Row(
+            children: [
+              Icon(
+                Icons.folder_copy_rounded,
+                size: 20,
+                color: context.primary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Files',
+                style: context.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsetsDirectional.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: context.primary.addOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${cubit.selectedFilesCount} / ${cubit.totalFilesCount}',
+                  style: context.labelSmall?.copyWith(
+                    color: context.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              // Clear all files button - moved from global bar
+              IconButton(
+                onPressed: cubit.hasFiles ? cubit.clearFiles : null,
+                icon: const Icon(Icons.clear_all_rounded),
+                tooltip: 'Clear all files',
+                style: IconButton.styleFrom(
+                  backgroundColor: context.error.addOpacity(0.1),
+                  foregroundColor: context.error,
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 12),
+          
+          // File action buttons row
+          Row(
+            children: [
+              // Select all/none buttons
+              Container(
+                decoration: BoxDecoration(
+                  color: context.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    _buildSelectionButton(
+                      context,
+                      icon: Icons.done_all_rounded,
+                      label: 'All',
+                      onPressed: cubit.totalFilesCount > 0 ? cubit.selectAll : null,
+                      isEnabled: cubit.totalFilesCount > 0,
+                    ),
+                    Container(
+                      width: 1,
+                      height: 24,
+                      color: context.outline.addOpacity(0.2),
+                    ),
+                    _buildSelectionButton(
+                      context,
+                      icon: Icons.remove_done_rounded,
+                      label: 'None',
+                      onPressed: cubit.selectedFilesCount > 0 ? cubit.deselectAll : null,
+                      isEnabled: cubit.selectedFilesCount > 0,
+                    ),
+                  ],
+                ),
+              ),
+              
+              const SizedBox(width: 12),
+              
+              // Load content button
+              FilledButton.icon(
+                onPressed: cubit.hasSelectedFiles ? cubit.loadFileContents : null,
+                icon: const Icon(Icons.download_rounded, size: 16),
+                label: const Text('Load Content'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsetsDirectional.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectionButton(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required VoidCallback? onPressed,
+    required bool isEnabled,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsetsDirectional.symmetric(
+            horizontal: 12,
+            vertical: 6,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: isEnabled
+                    ? context.primary
+                    : context.onSurface.addOpacity(0.3),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: context.labelMedium?.copyWith(
+                  color: isEnabled
+                      ? context.primary
+                      : context.onSurface.addOpacity(0.3),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEditorSection(BuildContext context, SelectionCubit cubit) {
+    return Container(
+      color: context.surface,
+      child: const CombinedContentWidget(),
+    );
+  }
+
+  Future<void> _showUnifiedSettings(BuildContext context) async {
+    final preferencesCubit = context.read<PreferencesCubit>();
+    
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => EnhancedEditorSettingsDialog(
+        settings: const EditorSettings(), // Will be unified settings
+        customThemes: const [],
+        customKeybindingPresets: const [],
       ),
     );
   }
