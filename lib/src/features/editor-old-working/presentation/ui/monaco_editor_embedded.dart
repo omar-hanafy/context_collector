@@ -1,12 +1,13 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:dart_helper_utils/dart_helper_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
-import '../../../../shared/theme/extensions.dart';
 import '../../bridge/monaco_bridge.dart';
+import '../../../../shared/theme/extensions.dart';
 
 /// Optimized Monaco Editor widget using single WebView implementation
 class MonacoEditorEmbedded extends StatefulWidget {
@@ -308,9 +309,8 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
       await widget.bridge.setContent(widget.bridge.content);
     }
 
-    // calling here   Future<void> updateSettings(EditorSettings newSettings).
     // Apply initial options
-    await widget.bridge.updateSettings(widget.bridge.settings);
+    await widget.bridge.updateOptions();
 
     if (mounted) {
       setState(() {

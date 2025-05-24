@@ -150,8 +150,8 @@ class _EditorSettingsDialogState extends State<EditorSettingsDialog> {
                         height: 1.4,
                         color: context.onSurface,
                       ),
-                      softWrap: _settings.wordWrap.enabled,
-                      overflow: _settings.wordWrap.enabled
+                      softWrap: _settings.wordWrap,
+                      overflow: _settings.wordWrap
                           ? TextOverflow.visible
                           : TextOverflow.ellipsis,
                     ),
@@ -183,11 +183,10 @@ class _EditorSettingsDialogState extends State<EditorSettingsDialog> {
               context,
               title: 'Word Wrap',
               subtitle: 'Wrap long lines instead of horizontal scrolling',
-              value: _settings.wordWrap.enabled,
+              value: _settings.wordWrap,
               onChanged: (value) {
                 setState(() {
-                  _settings = _settings.copyWith(
-                      wordWrap: value ? WordWrap.on : WordWrap.off);
+                  _settings = _settings.copyWith(wordWrap: value);
                 });
               },
             ),

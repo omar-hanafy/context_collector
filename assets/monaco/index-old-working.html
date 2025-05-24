@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' file: data: https://cdnjs.cloudflare.com;">
+    <title>Monaco Editor Integration</title>
+    <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        #editor-container {
+            width: 100%;
+            height: 100%;
+        }
+        .error-container {
+            padding: 20px;
+            color: #e74c3c;
+            font-family: sans-serif;
+        }
+    </style>
+    <script>
+        // This will be replaced by Dart code with an absolute file:// path
+        const VS_PATH = "__VS_PATH__";
+        
+        // Configure require with absolute path
+        var require = { paths: { 'vs': VS_PATH } };
+
+        // Debug info to help with troubleshooting
+        console.log("Monaco VS_PATH set to:", VS_PATH);
+        
+        // Track editor status
+        window.monacoStatus = {
+            editorInitialized: false,
+            readyEventSent: false,
+            languagesLoaded: false
+        };
+        
+        // Event tracking
+        function trackEvent(event) {
+            console.log("MONACO_EVENT: " + event);
+        }
+        
+        document.addEventListener("DOMContentLoaded", function() {
+            trackEvent("DOMContentLoaded");
+        });
+    </script>
+</head>
+<body>
+    <div id="editor-container"></div>
+    <script>
+        // Cross-platform communication with Flutter
+        function notifyFlutter(event, payload) {
+            trackEvent("notifyFlutter called with event: " + event);
+            
+            // Try using flutterChannel (added by Dart)
+            if (window.flutterChannel) {
+                try {
+                    window.flutterChannel.postMessage(JSON.stringify({
+                        event: event,
+                        payload: payload
+                    }));
+                    trackEvent("Sent message via flutterChannel");
+                    return;
+                } catch (e) {
+                    console.error("Error using flutterChannel:", e);
+                }
+            }
+            
+            // Fallback to other methods
+            if (window.chrome && window.chrome.webview) {
+                // Windows WebView2
+                window.chrome.webview.postMessage({event, payload});
+                trackEvent("Sent message via chrome.webview");
+            } else if (window.flutter_inappwebview) {
+                // macOS / Linux with JavaScriptChannel
+                window.flutter_inappwebview.callHandler(event, payload);
+                trackEvent("Sent message via flutter_inappwebview");
+            } else {
+                // URL scheme fallback
+                const urlMessage = 'flutter://' + encodeURIComponent(event + 
+                  (payload !== undefined ? ':' + JSON.stringify(payload) : ''));
+                trackEvent("Sending message via URL scheme");
+                window.location.href = urlMessage;
+            }
+        }
+
+        // Load the loader.js script with proper error handling
+        function loadScript(src, onLoad, onError) {
+            trackEvent("Attempting to load script: " + src);
+            const script = document.createElement('script');
+            script.src = src;
+            script.onload = function() {
+                trackEvent("Successfully loaded: " + src);
+                onLoad();
+            };
+            script.onerror = function(e) {
+                console.error('Failed to load script:', src, e);
+                trackEvent("Failed to load script: " + src);
+                if (onError) onError(e);
+            };
+            document.head.appendChild(script);
+        }
+        
+        // Try loading from CDN as a fallback
+        function loadFromCDN() {
+            trackEvent("Loading Monaco from CDN");
+            // Reset require config to use CDN
+            window.require = { paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' } };
+            
+            // Load from CDN
+            loadScript('https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.js', 
+                initEditor, 
+                function(e) {
+                    trackEvent("Failed to load Monaco from CDN");
+                    document.getElementById('editor-container').innerHTML = 
+                        '<div class="error-container">' +
+                        '<h3>Failed to load Monaco Editor</h3>' +
+                        '<p>The editor could not be loaded from either local resources or CDN.</p>' +
+                        '<p>Error: ' + (e && e.message || 'Unknown error') + '</p>' +
+                        '</div>';
+                }
+            );
+        }
+
+        // Load language support explicitly
+        function loadLanguages() {
+            trackEvent("Loading language modules");
+            
+            // Common languages to preload
+            const languagesToLoad = [
+                'vs/basic-languages/dart/dart.contribution',
+                'vs/basic-languages/typescript/typescript.contribution',
+                'vs/basic-languages/javascript/javascript.contribution',
+                'vs/basic-languages/python/python.contribution',
+                'vs/basic-languages/html/html.contribution',
+                'vs/basic-languages/css/css.contribution',
+                'vs/basic-languages/json/json.contribution',
+                'vs/basic-languages/yaml/yaml.contribution',
+                'vs/basic-languages/xml/xml.contribution',
+                'vs/basic-languages/markdown/markdown.contribution',
+                'vs/basic-languages/sql/sql.contribution',
+                'vs/basic-languages/shell/shell.contribution',
+                'vs/language/typescript/tsMode',
+                'vs/language/css/cssMode',
+                'vs/language/json/jsonMode',
+                'vs/language/html/htmlMode'
+            ];
+
+            // Load each language module
+            Promise.all(languagesToLoad.map(lang => {
+                return new Promise((resolve) => {
+                    try {
+                        require([lang], () => {
+                            trackEvent(`Loaded language module: ${lang}`);
+                            resolve();
+                        }, (err) => {
+                            trackEvent(`Failed to load language: ${lang} - ${err}`);
+                            resolve(); // Still resolve so Promise.all continues
+                        });
+                    } catch (e) {
+                        trackEvent(`Error requiring language: ${lang} - ${e.message}`);
+                        resolve(); // Still resolve so Promise.all continues
+                    }
+                });
+            })).then(() => {
+                trackEvent("Finished loading language modules");
+                window.monacoStatus.languagesLoaded = true;
+                
+                // Detect language after languages are loaded
+                if (window.editor) {
+                    detectLanguage();
+                }
+            });
+        }
+        
+        // Initialize the editor once Monaco is loaded
+        function initEditor() {
+            trackEvent("Initializing Monaco editor");
+            // Verify loader.js is properly loaded
+            if (typeof require === 'undefined') {
+                trackEvent("require is undefined, falling back to CDN");
+                loadFromCDN();
+                return;
+            }
+            
+            try {
+                // This will load editor.main.js
+                trackEvent("Loading editor.main module");
+                require(['vs/editor/editor.main'], function() {
+                    trackEvent("Monaco editor main module loaded successfully");
+                    
+                    // Verify monaco is loaded correctly
+                    if (typeof monaco === 'undefined') {
+                        trackEvent("monaco is undefined, falling back to CDN");
+                        loadFromCDN();
+                        return;
+                    }
+                    
+                    try {
+                        trackEvent("Creating editor instance");
+                        // Create the editor
+                        window.editor = monaco.editor.create(document.getElementById('editor-container'), {
+                            value: '// Loading content...',
+                            language: 'plaintext',
+                            theme: window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches 
+                                ? 'vs-dark' : 'vs',
+                            fontSize: 14,
+                            fontFamily: 'JetBrains Mono, SF Mono, Menlo, Consolas, monospace',
+                            minimap: { enabled: false },
+                            wordWrap: 'on',
+                            automaticLayout: true,
+                            lineNumbers: 'on',
+                            renderWhitespace: 'selection',
+                            scrollBeyondLastLine: false,
+                            padding: { top: 10 }
+                        });
+                        
+                        // Load language support
+                        loadLanguages();
+                        
+                        trackEvent("Monaco editor instance created successfully");
+                        window.monacoStatus.editorInitialized = true;
+                        
+                        // API methods for Flutter to call
+                        window.setEditorContent = function(content) {
+                            window.editor.setValue(content);
+                            detectLanguage();
+                        };
+                        
+                        window.setEditorLanguage = function(lang) {
+                            trackEvent(`Manually setting language to: ${lang}`);
+                            monaco.editor.setModelLanguage(window.editor.getModel(), lang);
+                        };
+                        
+                        window.getEditorContent = function() {
+                            return window.editor.getValue();
+                        };
+                        
+                        window.setEditorTheme = function(theme) {
+                            monaco.editor.setTheme(theme);
+                        };
+                        
+                        window.setEditorOptions = function(options) {
+                            window.editor.updateOptions(options);
+                        };
+                        
+                        // Simple language detection based on content
+                        window.detectLanguage = function detectLanguage() {
+                            const content = window.editor.getValue();
+                            let language = 'plaintext';
+                            
+                            // Skip empty content
+                            if (!content || content.trim() === '' || content === '// Loading content...') {
+                                return;
+                            }
+                            
+                            trackEvent("Running language detection");
+                            
+                            // File extension patterns
+                            const extensionPatterns = {
+                                'dart': /\.dart$/i,
+                                'html': /\.html$/i,
+                                'css': /\.css$/i,
+                                'javascript': /\.js$/i,
+                                'typescript': /\.ts$/i,
+                                'json': /\.(json|jsonc)$/i,
+                                'yaml': /\.(yml|yaml)$/i,
+                                'python': /\.(py|python)$/i,
+                                'markdown': /\.(md|markdown)$/i,
+                                'xml': /\.xml$/i,
+                                'sql': /\.sql$/i,
+                                'shell': /\.(sh|bash)$/i
+                            };
+                            
+                            // Content patterns (more reliable)
+                            if (content.includes('import \'package:flutter') || content.includes('class ') && content.includes(' extends ') && content.includes(' void main()')) {
+                                language = 'dart';
+                            } else if (content.includes('<!DOCTYPE html>') || (content.includes('<html') && content.includes('<body'))) {
+                                language = 'html';
+                            } else if (content.includes('@import') || content.includes('@media') || (content.includes('{') && content.includes(':') && content.includes(';'))) {
+                                language = 'css';
+                            } else if (content.includes('import React') || content.includes('function ') && content.includes('return') && content.includes('const')) {
+                                language = 'javascript';
+                            } else if (content.includes('import {') && content.includes('from ') || content.includes('interface ') || content.includes('export type ')) {
+                                language = 'typescript';
+                            } else if (content.includes('def ') && content.includes(':') || content.includes('import ') && content.includes('from ')) {
+                                language = 'python';
+                            } else if (content.indexOf('{') === 0 && content.trim().lastIndexOf('}') === content.trim().length - 1) {
+                                try {
+                                    JSON.parse(content);
+                                    language = 'json';
+                                } catch(e) {}
+                            } else if (content.startsWith('---') || (content.includes(':') && !content.includes('{') && !content.includes(';'))) {
+                                language = 'yaml';
+                            } else if (content.includes('# ') && content.includes('## ') || content.includes('**') && content.includes('__')) {
+                                language = 'markdown';
+                            } else if ((content.includes('<') && content.includes('</') && content.includes('>')) && !content.includes('<!DOCTYPE html>')) {
+                                language = 'xml';
+                            } else if (content.includes('SELECT ') && content.includes(' FROM ') || content.includes('CREATE TABLE')) {
+                                language = 'sql';
+                            } else if (content.includes('#!/bin/') || content.includes('echo ') && content.includes('$')) {
+                                language = 'shell';
+                            }
+                            
+                            if (language !== 'plaintext') {
+                                trackEvent(`Detected language: ${language}`);
+                                monaco.editor.setModelLanguage(window.editor.getModel(), language);
+                            } else {
+                                trackEvent("Could not detect language, using plaintext");
+                            }
+                        }
+                        
+                        window.detectLanguage = detectLanguage;
+                        
+                        // Send ready event in multiple ways to ensure it gets through
+                        function sendReadyEvent() {
+                            if (window.monacoStatus.readyEventSent) {
+                                trackEvent("Ready event already sent, skipping");
+                                return;
+                            }
+                            
+                            trackEvent("SENDING_EDITOR_READY_EVENT");
+                            window.monacoStatus.readyEventSent = true;
+                            
+                            // 1. Direct call to flutterChannel
+                            if (window.flutterChannel) {
+                                trackEvent("Sending ready event via flutterChannel");
+                                window.flutterChannel.postMessage(JSON.stringify({event: 'onEditorReady'}));
+                            }
+                            
+                            // 2. URL scheme
+                            trackEvent("Sending ready event via URL scheme");
+                            window.location.href = 'flutter://onEditorReady';
+                            
+                            // 3. Log a special message for the console interceptor
+                            console.log("EDITOR_READY_EVENT_FIRED");
+                        }
+                        
+                        // Send ready event immediately
+                        sendReadyEvent();
+                        
+                        // Also send after a short delay to ensure reception
+                        setTimeout(sendReadyEvent, 500);
+                        setTimeout(sendReadyEvent, 1000);
+                        
+                    } catch (err) {
+                        trackEvent("Error creating Monaco editor: " + err.message);
+                        document.getElementById('editor-container').innerHTML = 
+                            '<div class="error-container">' +
+                            '<h3>Error Creating Monaco Editor</h3>' +
+                            '<p>' + err.message + '</p>' +
+                            '</div>';
+                    }
+                }, function(err) {
+                    trackEvent("Could not load vs/editor/editor.main: " + (err && err.message || "Unknown error"));
+                    loadFromCDN();
+                });
+            } catch (err) {
+                trackEvent("Error in require call: " + err.message);
+                loadFromCDN();
+            }
+        }
+        
+        // Setup status polling for debugging
+        function pollStatus() {
+            const status = {
+                editorExists: typeof window.editor !== 'undefined',
+                editorInitialized: window.monacoStatus.editorInitialized,
+                readyEventSent: window.monacoStatus.readyEventSent,
+                languagesLoaded: window.monacoStatus.languagesLoaded,
+                documentReadyState: document.readyState,
+                containerExists: document.getElementById('editor-container') !== null,
+                monacoLoaded: typeof monaco !== 'undefined'
+            };
+            
+            console.log("MONACO_STATUS:", JSON.stringify(status));
+            
+            if (!window.monacoStatus.readyEventSent && status.editorExists) {
+                trackEvent("Editor exists but ready event not sent, sending now");
+                notifyFlutter('onEditorReady');
+            }
+            
+            // Force language detection if needed
+            if (status.editorExists && status.languagesLoaded && window.editor.getValue() !== '// Loading content...') {
+                window.detectLanguage();
+            }
+        }
+        
+        // Start polling
+        setInterval(pollStatus, 1000);
+        
+        // First try loading from local path
+        trackEvent("Starting Monaco editor initialization");
+        loadScript(VS_PATH + '/loader.js', initEditor, loadFromCDN);
+    </script>
+</body>
+</html>
