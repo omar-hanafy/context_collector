@@ -33,10 +33,6 @@ flutter:
     - assets/
     - assets/editor/
     - assets/monaco/
-    - assets/monaco/vs/
-    - assets/monaco/vs/editor/
-    - assets/monaco/vs/basic-languages/
-    - assets/monaco/vs/language/
     # Include monaco-editor directory with all subfolders
     - assets/monaco/monaco-editor/
     - assets/monaco/monaco-editor/min/

@@ -183,60 +183,27 @@ class _MonacoEditorWidgetState extends State<MonacoEditorWidget> {
         await editorDir.create(recursive: true);
       }
 
-      // We know we have two possible paths:
-      // 1. assets/monaco/vs/editor/editor.main.js
-      // 2. assets/monaco/monaco-editor/min/vs/editor/editor.main.js
+      // Use the monaco-editor/min/vs path
+      const corePath = 'assets/monaco/monaco-editor/min/vs';
 
-      final List<String> pathsToTry = [
-        // First try the direct path
-        'assets/monaco/vs/loader.js',
-        'assets/monaco/vs/editor/editor.main.js',
-        'assets/monaco/vs/editor/editor.main.css',
+      try {
+        // Copy core files
+        final loaderBytes = await rootBundle.load('$corePath/loader.js');
+        await File(p.join(targetDir, 'loader.js'))
+            .writeAsBytes(loaderBytes.buffer.asUint8List());
 
-        // Then try the min path
-        'assets/monaco/monaco-editor/min/vs/loader.js',
-        'assets/monaco/monaco-editor/min/vs/editor/editor.main.js',
-        'assets/monaco/monaco-editor/min/vs/editor/editor.main.css',
-      ];
+        final editorJsBytes =
+            await rootBundle.load('$corePath/editor/editor.main.js');
+        await File(p.join(targetDir, 'editor', 'editor.main.js'))
+            .writeAsBytes(editorJsBytes.buffer.asUint8List());
 
-      // Try loading from various paths
-      bool loaderJsFound = false;
-      bool editorMainJsFound = false;
-      bool editorMainCssFound = false;
-
-      for (final path in pathsToTry) {
-        try {
-          if (path.endsWith('/loader.js') && !loaderJsFound) {
-            final bytes = await rootBundle.load(path);
-            await File(p.join(targetDir, 'loader.js'))
-                .writeAsBytes(bytes.buffer.asUint8List());
-            loaderJsFound = true;
-            print('Successfully copied loader.js from $path');
-          } else if (path.endsWith('/editor.main.js') && !editorMainJsFound) {
-            final bytes = await rootBundle.load(path);
-            await File(p.join(targetDir, 'editor', 'editor.main.js'))
-                .writeAsBytes(bytes.buffer.asUint8List());
-            editorMainJsFound = true;
-            print('Successfully copied editor.main.js from $path');
-          } else if (path.endsWith('/editor.main.css') && !editorMainCssFound) {
-            final bytes = await rootBundle.load(path);
-            await File(p.join(targetDir, 'editor', 'editor.main.css'))
-                .writeAsBytes(bytes.buffer.asUint8List());
-            editorMainCssFound = true;
-            print('Successfully copied editor.main.css from $path');
-          }
-        } catch (e) {
-          print('Failed to load from $path: $e');
-        }
+        final editorCssBytes =
+            await rootBundle.load('$corePath/editor/editor.main.css');
+        await File(p.join(targetDir, 'editor', 'editor.main.css'))
+            .writeAsBytes(editorCssBytes.buffer.asUint8List());
+      } catch (e) {
+        print('Failed to copy core Monaco files: $e');
       }
-
-      // Basic error reporting
-      if (!loaderJsFound)
-        print('CRITICAL ERROR: Failed to find loader.js in any location');
-      if (!editorMainJsFound)
-        print('CRITICAL ERROR: Failed to find editor.main.js in any location');
-      if (!editorMainCssFound)
-        print('CRITICAL ERROR: Failed to find editor.main.css in any location');
     } catch (e) {
       print('Error preparing Monaco assets directory: $e');
     }
@@ -271,6 +238,11 @@ class _MonacoEditorWidgetState extends State<MonacoEditorWidget> {
       'wordWrap': widget.wordWrap ? 'on' : 'off',
       'readOnly': widget.readOnly,
       'theme': context.isDark ? 'vs-dark' : 'vs',
+      // Disable linter
+      'diagnostics': false,
+      'formatOnType': false,
+      'formatOnPaste': false,
+      'lightbulb': {'enabled': false},
     };
 
     final optionsJson = jsonEncode(options);

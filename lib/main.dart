@@ -8,7 +8,6 @@ import 'screens/home_screen.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
-  print('Nice but u removed the dropdown selector for language and themes, also removed the enable edit lets return them in more beatufil UI.');
   WidgetsFlutterBinding.ensureInitialized();
 
   // Configure window for desktop

@@ -102,7 +102,6 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
 
   Future<void> _initWebView() async {
     try {
-      print('Monaco: Initializing WebView');
       // Initialize WebViewController
       _controller = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted);
@@ -112,16 +111,12 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
         _controller.setBackgroundColor(Colors.transparent);
       }
 
-      print('Monaco: Adding JavaScript channels');
       // Add JavaScript channels for communication
       _controller.addJavaScriptChannel(
         'flutterChannel',
         onMessageReceived: (JavaScriptMessage message) {
-          print(
-              'Monaco: Received message via flutterChannel: ${message.message}');
           try {
             if (message.message.startsWith('log:')) {
-              print('Monaco JS Log: ${message.message.substring(4)}');
               return;
             }
 
@@ -129,30 +124,21 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
             final event = data['event'] as String?;
 
             if (event == 'onEditorReady') {
-              print('Monaco: onEditorReady event received via JS channel!');
               _onEditorReady();
             }
           } catch (e) {
-            print('Monaco: Error parsing message: $e');
+            // Ignore parsing errors
           }
         },
       );
 
-      print('Monaco: Setting navigation delegate');
       // Set navigation delegate
       _controller.setNavigationDelegate(
         NavigationDelegate(
-          onPageStarted: (url) {
-            print('Monaco: Page started loading: $url');
-          },
           onProgress: (int progress) {
-            print('Monaco: Loading progress: $progress');
             if (progress == 100) {
-              print('Monaco: Page loaded 100%');
-
               // Inject JS bridge code
               _controller.runJavaScript('''
-                console.log("Monaco: Injecting console log interceptor");
                 console.originalLog = console.log;
                 console.log = function(...args) {
                   console.originalLog.apply(console, args);
@@ -164,56 +150,40 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
                     }
                   }
                   if (args[0] === "Monaco editor instance created successfully") {
-                    console.originalLog("Monaco: Detected editor creation success, sending ready event");
                     if (window.flutterChannel) {
                       window.flutterChannel.postMessage(JSON.stringify({event: 'onEditorReady'}));
                     }
                   }
                 };
-                console.log("Monaco: Console log interceptor injected");
                 
                 // Force immediate execution to check for editor
                 setTimeout(function() {
                   if (window.editor) {
-                    console.log("Monaco: Editor already exists, sending ready event");
                     if (window.flutterChannel) {
                       window.flutterChannel.postMessage(JSON.stringify({event: 'onEditorReady'}));
                     }
-                  } else {
-                    console.log("Monaco: Editor not yet initialized");
                   }
                 }, 1000);
               ''');
             }
           },
           onPageFinished: (String url) {
-            print('Monaco: Page finished loading: $url');
-            // Set loading to false after the page is fully loaded
             setState(() {
               _isLoading = false;
-              print('Monaco: _isLoading set to false in onPageFinished');
             });
           },
           onWebResourceError: (WebResourceError error) {
-            print(
-                'Monaco: Web resource error: ${error.description} (${error.errorCode}) - URL: ${error.url}');
             setState(() {
               _error =
                   'Failed to load editor: ${error.description} (URL: ${error.url})';
               _isLoading = false;
-              print(
-                  'Monaco: Set _error and _isLoading=false due to web resource error');
             });
           },
           onNavigationRequest: (NavigationRequest request) {
-            print('Monaco: Navigation request: ${request.url}');
             if (request.url.startsWith('flutter://log:')) {
-              final log = Uri.decodeFull(request.url.substring(13));
-              print('Monaco Log: $log');
               return NavigationDecision.prevent;
             } else if (request.url.startsWith('flutter://')) {
               final payload = Uri.decodeFull(request.url.substring(10));
-              print('Monaco: Received flutter:// URL message: $payload');
               _handleUrlMessage(payload);
               return NavigationDecision.prevent;
             }
@@ -223,24 +193,17 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
       );
 
       // Load the HTML content
-      print('Monaco: Starting to load HTML content');
       await _loadHtml();
     } catch (e, stackTrace) {
-      print('Monaco: Error initializing WebView: $e');
-      print('Monaco: Stack trace: $stackTrace');
       setState(() {
         _error = 'Failed to initialize editor: $e';
         _isLoading = false;
-        print(
-            'Monaco: Set _error and _isLoading=false due to initialization error');
       });
     }
   }
 
   void _handleUrlMessage(String payload) {
-    print('Monaco: _handleUrlMessage called with payload: $payload');
     if (payload.startsWith('onEditorReady')) {
-      print('Monaco: onEditorReady message received via URL message');
       _onEditorReady();
     }
   }
@@ -249,56 +212,41 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
     const asset = 'assets/monaco/index.html';
 
     try {
-      print('Monaco: Starting to load HTML content');
-
       if (Platform.isAndroid || Platform.isIOS) {
-        print('Monaco: Loading for mobile platform using loadFlutterAsset');
         await _controller.loadFlutterAsset(asset);
         return;
       }
 
-      print('Monaco: Loading for desktop platform - creating temp directory');
       // For desktop: Copy to temp dir, replace VS_PATH, then load via loadFile
       final tempDir = await Directory.systemTemp.createTemp('monaco_editor');
-      print('Monaco: Temp directory created at ${tempDir.path}');
 
+      // Use monaco-editor/min/vs path
       final vsPath = Uri.file(p.join(tempDir.path, 'vs')).toString();
-      print('Monaco: VS_PATH will be set to $vsPath');
 
       // Copy the vs directory to the temp dir (needed for offline operation)
-      print('Monaco: Starting asset copying to temp directory');
-      await _copyAssetDirectory('assets/monaco/vs', p.join(tempDir.path, 'vs'));
+      await _copyAssetDirectory(
+          'assets/monaco/monaco-editor/min/vs', p.join(tempDir.path, 'vs'));
 
-      print('Monaco: Loading HTML content from assets');
       // Load and modify the HTML content to include the absolute vs path
       final htmlContent = await rootBundle.loadString(asset);
-      print('Monaco: HTML content loaded, length: ${htmlContent.length}');
-
       final modifiedHtml = htmlContent.replaceAll('__VS_PATH__', vsPath);
-      print('Monaco: HTML content modified with VS_PATH');
 
       // Write the modified HTML to a temp file
       final htmlFile = File(p.join(tempDir.path, 'index.html'));
       await htmlFile.writeAsString(modifiedHtml);
-      print('Monaco: HTML written to ${htmlFile.path}');
 
-      // Explicitly force loading to be false at end of function
+      // Force loading to be false after a timeout
       Future.delayed(const Duration(seconds: 5), () {
         if (mounted) {
           setState(() {
             _isLoading = false;
-            print('Monaco: FORCE setting _isLoading to false after 5 seconds');
           });
         }
       });
 
       // Load the temp HTML file
-      print('Monaco: Loading HTML file into WebView');
       await _controller.loadFile(htmlFile.path);
-      print('Monaco: HTML file loaded into WebView');
-    } catch (e, stackTrace) {
-      print('Monaco: Error loading editor HTML: $e');
-      print('Monaco: Stack trace: $stackTrace');
+    } catch (e) {
       setState(() {
         _error = 'Failed to load editor HTML: $e';
         _isLoading = false;
@@ -308,8 +256,6 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
 
   Future<void> _copyAssetDirectory(String assetDir, String targetDir) async {
     try {
-      print('Monaco: Starting asset copying to target directory: $targetDir');
-
       // Create target directory if it doesn't exist
       final targetDirFile = Directory(targetDir);
       if (!await targetDirFile.exists()) {
@@ -332,10 +278,7 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
         await languageDir.create(recursive: true);
       }
 
-      // We'll standardize on a single path structure. Based on the tree output from the user,
-      // we'll use the direct vs/ path structure without nesting under monaco-editor/min/.
-
-      // First, copy the core files
+      // Copy the core files
       await _copyAssetFile('assets/monaco/monaco-editor/min/vs/loader.js',
           p.join(targetDir, 'loader.js'));
       await _copyAssetFile(
@@ -345,21 +288,15 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
           'assets/monaco/monaco-editor/min/vs/editor/editor.main.css',
           p.join(targetDir, 'editor', 'editor.main.css'));
 
-      // Now copy the language directories
-      // First try copying from monaco-editor/min/vs
+      // Copy language files
       final copyResults = await _copyLanguageFiles(
           'assets/monaco/monaco-editor/min/vs', targetDir);
 
-      // Log what was copied
-      print(
-          'Monaco: Successfully copied ${copyResults.success} files and failed on ${copyResults.failures} files');
-
       if (copyResults.success == 0) {
-        print(
-            'Monaco: Warning: No language files were copied. Syntax highlighting might not work.');
+        // Silent failure - fallback happens in the HTML
       }
     } catch (e) {
-      print('Monaco: Error preparing Monaco assets directory: $e');
+      // Silent failure - fallback happens in the HTML
     }
   }
 
@@ -409,8 +346,6 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
                 key.startsWith('$sourceDir/') && key.endsWith('.js'))
             .toList();
 
-        print('Monaco: Found ${langFiles.length} files for language $langDir');
-
         for (final file in langFiles) {
           try {
             final fileName = p.basename(file);
@@ -419,12 +354,10 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
             await _copyAssetFile(file, targetFile);
             success++;
           } catch (e) {
-            print('Monaco: Failed to copy language file: $e');
             failures++;
           }
         }
       } catch (e) {
-        print('Monaco: Error copying language directory $langDir: $e');
         failures++;
       }
     }
@@ -436,28 +369,19 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
     try {
       final bytes = await rootBundle.load(assetPath);
       await File(targetPath).writeAsBytes(bytes.buffer.asUint8List());
-      print('Monaco: Successfully copied $assetPath to $targetPath');
     } catch (e) {
-      print('Monaco: Failed to copy $assetPath: $e');
       rethrow;
     }
   }
 
   void _onEditorReady() {
-    print('Monaco: _onEditorReady called - editor is ready!');
     if (mounted) {
-      print('Monaco: Component is mounted, updating state...');
       setState(() {
         _isReady = true;
         _isLoading = false;
-        print(
-            'Monaco: State updated - _isReady=$_isReady, _isLoading=$_isLoading');
       });
       _updateContent();
       _updateOptions();
-      print('Monaco: Content and options updated');
-    } else {
-      print('Monaco: ERROR - Component not mounted in _onEditorReady');
     }
   }
 
@@ -475,6 +399,11 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
       'wordWrap': widget.wordWrap ? 'on' : 'off',
       'readOnly': !_isEditMode && widget.readOnly,
       'theme': _currentTheme,
+      // Disable linter
+      'diagnostics': false,
+      'formatOnType': false,
+      'formatOnPaste': false,
+      'lightbulb': {'enabled': false},
     };
     final optionsJson = jsonEncode(options);
     _controller.runJavaScript('window.setEditorOptions($optionsJson);');
@@ -509,11 +438,7 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
 
   @override
   Widget build(BuildContext context) {
-    print(
-        'Monaco: build called - _error=$_error, _isLoading=$_isLoading, _isReady=$_isReady');
-
     if (_error != null) {
-      print('Monaco: Rendering error view: $_error');
       return _buildErrorView(context);
     }
 
