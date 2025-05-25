@@ -24,7 +24,7 @@ Context Collector is a lightweight desktop app (macOS • Windows • Linux) tha
 Every chunk includes full file paths and metadata, making it ideal for working smoothly with large-language models (LLMs) without the hassle of manual copying and pasting.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/omar-hanafy/context_collector/refs/heads/main/readme-assets/home.png" width="90%" alt="Context Collector main window (dark theme)">
+  <img src="https://raw.githubusercontent.com/omar-hanafy/context_collector/refs/heads/main/readme-assets/home.png" width="100%" alt="Context Collector main window (dark theme)">
 </p>
 
 ---
@@ -32,7 +32,7 @@ Every chunk includes full file paths and metadata, making it ideal for working s
 ## 🖥️ Typical Workflow
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/omar-hanafy/context_collector/refs/heads/main/readme-assets/editor.png" width="90%" alt="Editor view with combined content">
+  <img src="https://raw.githubusercontent.com/omar-hanafy/context_collector/refs/heads/main/readme-assets/editor.png" width="100%" alt="Editor view with combined content">
 </p>
 
 1. **Drag & drop** files or directories onto the drop zone.
@@ -57,7 +57,7 @@ Every chunk includes full file paths and metadata, making it ideal for working s
 | **Extensible APIs**              | Integrate the toolkit into your Flutter apps or automate assembly using Dart scripts.                      |
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/omar-hanafy/context_collector/refs/heads/main/readme-assets/sidepanel-expanded.png" width="90%" alt="Sidepanel expanded with file details">
+  <img src="https://raw.githubusercontent.com/omar-hanafy/context_collector/refs/heads/main/readme-assets/sidepanel-expanded.png" width="100%" alt="Sidepanel expanded with file details">
 </p>
 
 ---
@@ -93,12 +93,12 @@ flutter run  # or flutter build macos / windows / linux
 * **Customizable extension catalog**: Quickly enable or disable formats or add custom file-to-category mappings.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/omar-hanafy/context_collector/refs/heads/main/readme-assets/settings.png" width="90%" alt="Context Collector Settings"><br>
+  <img src="https://raw.githubusercontent.com/omar-hanafy/context_collector/refs/heads/main/readme-assets/settings.png" width="100%" alt="Context Collector Settings"><br>
   <em>General application settings.</em>
 </p>
 <br>
 <p align="center">
-  <img src="https://raw.githubusercontent.com/omar-hanafy/context_collector/refs/heads/main/readme-assets/editor-settings.png" width="90%" alt="Context Collector Editor Settings"><br>
+  <img src="https://raw.githubusercontent.com/omar-hanafy/context_collector/refs/heads/main/readme-assets/editor-settings.png" width="100%" alt="Context Collector Editor Settings"><br>
   <em>Editor specific settings and theme selection.</em>
 </p>
 
