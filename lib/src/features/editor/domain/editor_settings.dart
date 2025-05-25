@@ -1451,8 +1451,9 @@ class EditorSettings {
               defaultMouseWheelScrollSensitivity,
       automaticLayout:
           prefs.getBool(keyAutomaticLayout) ?? defaultAutomaticLayout,
-      padding: prefs.getString(keyPadding)?.decode()
-              as Map<String, int>? ?? // Cast to Map<String, int>
+      padding: (prefs.getString(keyPadding)?.decode() as Map<String, dynamic>?)
+              ?.map(
+                  (key, value) => MapEntry(key, ConvertObject.toInt(value))) ??
           defaultPadding,
       roundedSelection:
           prefs.getBool(keyRoundedSelection) ?? defaultRoundedSelection,

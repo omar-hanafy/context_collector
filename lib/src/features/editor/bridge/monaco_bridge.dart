@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:dart_helper_utils/dart_helper_utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -16,10 +17,17 @@ class MonacoBridge extends ChangeNotifier {
   String _language = 'markdown';
   EditorSettings _settings = const EditorSettings();
   bool _isReady = false;
+  bool _forceSetLanguageNext = false;
+
+  // ValueNotifier for live editor stats as per FOLLOWUP.md
+  final ValueNotifier<Map<String, int>> liveStats =
+      ValueNotifier(<String, int>{});
 
   // State tracking
   Map<String, dynamic>? _lastState;
   String? _lastTheme;
+
+  static const String _statsChannelName = 'flutterChannel';
 
   // Available themes
   static const List<String> availableThemes = [
@@ -139,22 +147,134 @@ class MonacoBridge extends ChangeNotifier {
 
   bool get readOnly => _settings.readOnly;
 
+  void _handleJavaScriptMessage(JavaScriptMessage message) {
+    debugPrint(
+        '[MonacoBridge._handleJavaScriptMessage] Received raw message: ${message.message}');
+    final data = ConvertObject.tryToMap(message.message) ?? {};
+    if (data['event'] == 'stats') {
+      // The JS sends stats directly, not nested in 'payload' as per one version of the guide.
+      // Adapting to the simpler structure: data directly contains stat fields.
+      liveStats.value = {
+        'lines': ConvertObject.toInt(data['lineCount'], defaultValue: 0),
+        'chars': ConvertObject.toInt(data['charCount'], defaultValue: 0),
+        'selLn': ConvertObject.toInt(data['selLines'], defaultValue: 0),
+        'selCh': ConvertObject.toInt(data['selChars'], defaultValue: 0),
+        'carets': ConvertObject.toInt(data['caretCount'], defaultValue: 1),
+      };
+    } else {
+      // Handle other potential messages if any
+      debugPrint(
+          '[MonacoBridge] Received unhandled JS message: ${message.message}');
+    }
+  }
+
+  /// Public method for external components to forward JavaScript messages to the bridge
+  void handleJavaScriptMessage(JavaScriptMessage message) {
+    _handleJavaScriptMessage(message);
+  }
+
   void attachWebView(WebViewController controller) {
     _webViewController = controller;
+    // The channel 'flutterChannel' is added by MonacoEditorEmbedded to this controller.
+    // MonacoBridge just uses this controller.
+    // No need to add it again here. The bridge needs to know about it for _injectLiveStatsJavaScript.
   }
 
   void detachWebView() {
+    // Try to remove the channel from the controller this bridge was using.
+    // This assumes _statsChannelName is the correct name used by MonacoEditorEmbedded.
+    _webViewController
+        ?.removeJavaScriptChannel(_statsChannelName)
+        .catchError((e) {
+      debugPrint(
+          '[MonacoBridge] Error removing JS channel $_statsChannelName: $e. May already be gone.');
+    });
     _webViewController = null;
     _isReady = false;
   }
 
   void markReady() {
+    debugPrint(
+        '[MonacoBridge] markReady CALLED. Current _language: $_language. _isReady was: $_isReady');
     _isReady = true;
     if (_webViewController != null) {
       _pushContentToEditor();
       _pushSettingsToEditor();
+      debugPrint('[MonacoBridge] markReady: Forcing next setLanguage call.');
+      _forceSetLanguageNext = true;
+      setLanguage(_language);
+      _injectLiveStatsJavaScript();
     }
     notifyListeners();
+    debugPrint('[MonacoBridge] markReady FINISHED.');
+  }
+
+  Future<void> _injectLiveStatsJavaScript() async {
+    if (_webViewController == null || !_isReady) {
+      debugPrint(
+          '[MonacoBridge] Skipping JS stats injection: WebView not ready or null.');
+      return;
+    }
+    debugPrint('[MonacoBridge] Attempting to inject live stats JavaScript.');
+    const script = '''
+      console.log('[Stats Script] Injected and running.');
+      if (window.__liveStatsHooked) {
+        console.log('[Stats Script] Listeners already hooked. Skipping.');
+      } else {
+        window.__liveStatsHooked = true;
+        console.log('[Stats Script] First time hooking listeners.');
+        if (window.editor) {
+            console.log('[Stats Script] window.editor found. Attaching listeners.');
+            const sendStats = () => {
+                console.log('[Stats Script] sendStats called.');
+                const model = window.editor.getModel();
+                const selection = window.editor.getSelection();
+                const selections = window.editor.getSelections() || []; 
+                if (!model) { console.log('[Stats Script] sendStats: model is null!'); return; }
+                if (!selection) { console.log('[Stats Script] sendStats: selection is null!'); return; }
+                
+                console.log('[Stats Script] sendStats: Model and selection OK. Selection empty: ' + selection.isEmpty());
+
+                const stats = {
+                    event: 'stats', 
+                    lineCount: model.getLineCount(),
+                    charCount: model.getValueLength(),
+                    selLines: selection.isEmpty() ? 0 : selection.endLineNumber - selection.startLineNumber + 1,
+                    selChars: selection.isEmpty() ? 0 : model.getValueInRange(selection).length,
+                    caretCount: selections.length 
+                };
+                
+                if (window.flutterChannel && window.flutterChannel.postMessage) {
+                     console.log('[Stats Script] Attempting to post stats: ' + JSON.stringify(stats));
+                     window.flutterChannel.postMessage(JSON.stringify(stats));
+                     console.log('[Stats Script] Stats posted.');
+                } else {
+                    console.log('[Stats Script] ERROR: window.flutterChannel or postMessage not available.');
+                }
+            };
+
+            window.editor.onDidChangeModelContent(() => { 
+                console.log('[Stats Script] onDidChangeModelContent triggered.'); 
+                sendStats(); 
+            });
+            window.editor.onDidChangeCursorSelection(() => { 
+                console.log('[Stats Script] onDidChangeCursorSelection triggered.'); 
+                sendStats(); 
+            });
+            
+            console.log('[Stats Script] Event listeners attached. Performing initial sendStats.');
+            sendStats(); // Initial push
+        } else {
+            console.log('[Stats Script] ERROR: window.editor not found when trying to attach listeners.');
+        }
+      }
+    ''';
+    try {
+      await _webViewController!.runJavaScript(script);
+      debugPrint('[MonacoBridge] Successfully injected live stats JavaScript.');
+    } catch (e) {
+      debugPrint('[MonacoBridge] ERROR injecting live stats JavaScript: $e');
+    }
   }
 
   /// Updates the editor content
@@ -197,16 +317,43 @@ class MonacoBridge extends ChangeNotifier {
 
   /// Sets the editor language
   Future<void> setLanguage(String language) async {
-    if (_language == language) return;
+    debugPrint(
+        '[MonacoBridge] setLanguage ATTEMPTING for: "$language". Current _language: "$_language". Is ready: $_isReady. Force flag: $_forceSetLanguageNext');
 
-    _language = language;
-
-    if (_webViewController != null && _isReady) {
-      await _webViewController!.runJavaScript(
-        'window.setEditorLanguage("$language")',
-      );
+    if (!_isReady) {
+      debugPrint(
+          '[MonacoBridge] setLanguage: Editor not ready, just updating _language field to "$language".');
+      _language = language;
+      notifyListeners();
+      return;
     }
 
+    if (_language == language && !_forceSetLanguageNext) {
+      debugPrint(
+          '[MonacoBridge] setLanguage: Language "$language" is already current and no force flag. Skipping JS call.');
+      return;
+    }
+
+    _language = language;
+    _forceSetLanguageNext = false;
+
+    if (_webViewController != null) {
+      debugPrint(
+          '[MonacoBridge] setLanguage: Calling JS window.setEditorLanguage("$language")');
+      try {
+        await _webViewController!.runJavaScript(
+          'window.setEditorLanguage("$language")',
+        );
+        debugPrint(
+            '[MonacoBridge] setLanguage: JS call for "$language" completed.');
+      } catch (e) {
+        debugPrint(
+            '[MonacoBridge] setLanguage: ERROR calling JS for "$language": $e');
+      }
+    } else {
+      debugPrint(
+          '[MonacoBridge] setLanguage: WebViewController is null, cannot call JS for "$language".');
+    }
     notifyListeners();
   }
 
@@ -399,20 +546,25 @@ class MonacoBridge extends ChangeNotifier {
     if (_webViewController != null && _isReady) {
       try {
         final result =
-            await _webViewController!.runJavaScriptReturningResult(r'''
+            await _webViewController!.runJavaScriptReturningResult(r"""
           JSON.stringify({
             lineCount: window.editor?.getModel()?.getLineCount() || 0,
             characterCount: window.editor?.getValue()?.length || 0,
-            wordCount: (window.editor?.getValue()?.match(/\b\w+\b/g) || []).length,
+            wordCount: (window.editor?.getValue()?.match(/\\b\\w+\\b/g) || []).length,
             selectedText: window.editor?.getSelection()?.isEmpty() === false,
             language: window.editor?.getModel()?.getLanguageId() || 'unknown',
             cursorPosition: window.editor?.getPosition(),
             viewState: {
               scrollTop: window.editor?.getScrollTop() || 0,
               scrollLeft: window.editor?.getScrollLeft() || 0
-            }
+            },
+            // New stats
+            selectedLineCount: window.editor?.getSelection()?.isEmpty() 
+              ? 0 
+              : (window.editor?.getSelection()?.endLineNumber || 0) - (window.editor?.getSelection()?.startLineNumber || 0) + 1,
+            selectedCharCount: window.editor?.getModel()?.getValueInRange(window.editor?.getSelection())?.length || 0
           })
-        ''');
+        """);
 
         if (result is String) {
           return json.decode(result) as Map<String, dynamic>;
@@ -439,6 +591,8 @@ class MonacoBridge extends ChangeNotifier {
 
     final options = _settings.toMonacoOptions();
     final String optionsJson = json.encode(options);
+    debugPrint(
+        '[MonacoBridge._pushSettingsToEditor] Sending options: $optionsJson');
 
     await _webViewController!.runJavaScript(
       'window.setEditorOptions($optionsJson)',
@@ -553,6 +707,7 @@ JSON.stringify({
 
   @override
   void dispose() {
+    liveStats.dispose();
     _webViewController = null;
     super.dispose();
   }

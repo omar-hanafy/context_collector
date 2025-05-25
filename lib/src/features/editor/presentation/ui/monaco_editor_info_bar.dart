@@ -19,54 +19,63 @@ class MonacoEditorInfoBar extends StatefulWidget {
 }
 
 class _MonacoEditorInfoBarState extends State<MonacoEditorInfoBar> {
-  Map<String, dynamic> _editorStats = {};
+  // State variables for stats are no longer needed here,
+  // as ValueListenableBuilder will handle them.
 
-  @override
-  void initState() {
-    super.initState();
-    _loadEditorStats();
-  }
-
-  Future<void> _loadEditorStats() async {
-    if (widget.bridge.isReady) {
-      final stats = await widget.bridge.getEditorStats();
-      if (mounted) {
-        setState(() {
-          _editorStats = stats;
-        });
-      }
-    }
-  }
+  // _loadEditorStats and related listener logic can be removed.
 
   // Available languages from the enhanced bridge
   final List<Map<String, String>> _supportedLanguages =
       MonacoBridge.availableLanguages;
 
-  // Available themes from the theme manager
-  final List<String> _availableThemes = MonacoBridge.availableThemes;
+  String _currentLanguage = MonacoBridge.availableLanguages.isNotEmpty
+      ? MonacoBridge.availableLanguages.first['value']!
+      : 'markdown'; // Initialize with a default
+
+  @override
+  void initState() {
+    super.initState();
+    // Initial language determination (could also listen to bridge for language changes if needed)
+    _determineCurrentLanguage();
+    widget.bridge.addListener(
+        _determineCurrentLanguage); // Listen for language changes from bridge
+  }
+
+  @override
+  void dispose() {
+    widget.bridge.removeListener(_determineCurrentLanguage);
+    super.dispose();
+  }
+
+  Future<void> _determineCurrentLanguage() async {
+    if (widget.bridge.isReady) {
+      final stats = await widget.bridge
+          .getEditorStats(); // getEditorStats still useful for language
+      if (mounted) {
+        setState(() {
+          final String detectedRawLanguage =
+              stats['language'] as String? ?? 'markdown';
+          _currentLanguage = _supportedLanguages
+                  .any((lang) => lang['value'] == detectedRawLanguage)
+              ? detectedRawLanguage
+              : (_supportedLanguages.isNotEmpty
+                  ? _supportedLanguages.first['value']!
+                  : 'markdown');
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: widget.bridge,
+      listenable: widget
+          .bridge, // Still listen for isReady and other general bridge changes
       builder: (context, _) {
         if (!widget.bridge.isReady) {
           return _buildLoadingBar(context);
         }
-
-        final settings = widget.bridge.settings;
-        final String detectedRawLanguage =
-            _editorStats['language'] as String? ?? 'plaintext';
-
-        final String currentLanguage = _supportedLanguages
-                .any((lang) => lang['value'] == detectedRawLanguage)
-            ? detectedRawLanguage
-            : (_supportedLanguages.isNotEmpty
-                ? _supportedLanguages.first['value']!
-                : 'plaintext');
-
-        // Theme for concise display
-        final String currentThemeName = _getThemeDisplayName(settings.theme);
+        // Language determination is handled by _determineCurrentLanguage and setState
 
         return Container(
           padding: const EdgeInsetsDirectional.symmetric(horizontal: 8),
@@ -74,25 +83,55 @@ class _MonacoEditorInfoBarState extends State<MonacoEditorInfoBar> {
             color: Colors.transparent,
           ),
           child: Row(
-            // Simplified to a single Row for controls
             children: [
+              // Live Editor Stats Display using ValueListenableBuilder
+              ValueListenableBuilder<Map<String, int>>(
+                valueListenable: widget.bridge.liveStats,
+                builder: (context, stats, _) {
+                  final lines = stats['lines'] ?? 0;
+                  final chars = stats['chars'] ?? 0;
+                  final selLn = stats['selLn'] ?? 0;
+                  final selCh = stats['selCh'] ?? 0;
+                  final carets = stats['carets'] ?? 1;
+
+                  final selBlock = selLn > 0 || selCh > 0
+                      ? ' (Sel Ln: $selLn Ch: $selCh)'
+                      : '';
+                  final caretsBlock = carets > 1 ? ' — $carets cursors' : '';
+
+                  return Flexible(
+                    child: Padding(
+                      padding: const EdgeInsetsDirectional.only(end: 16),
+                      child: Text(
+                        'Ln: $lines Ch: $chars$selBlock$caretsBlock',
+                        style: context.labelSmall?.copyWith(
+                          color: context.onSurface.addOpacity(0.7),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines:
+                            1, // Ensure it doesn't wrap and cause overflow
+                      ),
+                    ),
+                  );
+                },
+              ),
+
               // Concise Language selector
               _buildConciseDropdown<String>(
                 context: context,
                 icon: Icons.translate,
-                // Changed icon for languages
-                value: currentLanguage,
+                value: _currentLanguage, // Use state variable for language
                 items: _supportedLanguages
                     .map((lang) => DropdownMenuItem<String>(
                           value: lang['value'],
-                          child: Text(lang['text']!,
-                              style: context.labelMedium), // For the list items
+                          child:
+                              Text(lang['text']!, style: context.labelMedium),
                         ))
                     .toList(),
                 onChanged: (value) async {
-                  if (value != null && value != currentLanguage) {
+                  if (value != null && value != _currentLanguage) {
                     await widget.bridge.setLanguage(value);
-                    await _loadEditorStats();
+                    // No need to call _determineCurrentLanguage here as the listener will handle it
                   }
                 },
                 getShortDisplayName: (val) {
@@ -116,8 +155,7 @@ class _MonacoEditorInfoBarState extends State<MonacoEditorInfoBar> {
               ),
               _buildActionButton(
                 context,
-                icon:
-                    Icons.format_align_left_outlined, // Or Icons.auto_fix_high
+                icon: Icons.format_align_left_outlined,
                 tooltip: 'Format Content',
                 onPressed: () async => widget.bridge.format(),
               ),
@@ -131,17 +169,8 @@ class _MonacoEditorInfoBarState extends State<MonacoEditorInfoBar> {
                 context,
                 icon: Icons.keyboard_arrow_down_outlined,
                 tooltip: 'Scroll to Bottom',
-                onPressed: () async =>
-                    widget.bridge.scrollToBottom(), // New Action
+                onPressed: () async => widget.bridge.scrollToBottom(),
               ),
-
-              // Settings button - REMOVED (now in sidebar)
-              // _buildActionButton(
-              //   context,
-              //   icon: Icons.settings_outlined,
-              //   tooltip: 'Editor Settings',
-              //   onPressed: widget.onSettings, // This callback is removed
-              // ),
             ],
           ),
         );
@@ -184,14 +213,13 @@ class _MonacoEditorInfoBarState extends State<MonacoEditorInfoBar> {
     );
   }
 
-  // New method for concise dropdowns
   Widget _buildConciseDropdown<T>({
     required BuildContext context,
     required IconData icon,
     required T value,
     required List<DropdownMenuItem<T>> items,
     required ValueChanged<T?> onChanged,
-    required String Function(T value) getShortDisplayName, // Added
+    required String Function(T value) getShortDisplayName,
     String? tooltip,
   }) {
     return Tooltip(
@@ -199,39 +227,32 @@ class _MonacoEditorInfoBarState extends State<MonacoEditorInfoBar> {
       child: Container(
         padding:
             const EdgeInsetsDirectional.symmetric(horizontal: 8, vertical: 4),
-        // Adjusted padding
         decoration: BoxDecoration(
           color: context.onSurface.addOpacity(0.05),
           borderRadius: BorderRadius.circular(8),
         ),
-        // Removed fixed maxWidth from here to allow DropdownButton to size more intrinsically
-        // It will be constrained by the parent Row if necessary.
         child: DropdownButtonHideUnderline(
           child: DropdownButton<T>(
-            icon: Icon(Icons.arrow_drop_down,
-                size: 20, color: context.onSurface.addOpacity(0.7)),
-            // Slightly larger icon
+            icon: Icon(
+              Icons.arrow_drop_down,
+              size: 20,
+              color: context.onSurface.addOpacity(0.7),
+            ),
             isDense: true,
             value: value,
             items: items,
             onChanged: onChanged,
             selectedItemBuilder: (context) {
               return items.map((DropdownMenuItem<T> item) {
-                // Ensure item is typed
-                // This Row is what's shown in the button when an item is selected.
                 return Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(icon,
-                        size: 16,
-                        color:
-                            context.primary), // Main icon for the dropdown type
+                    Icon(icon, size: 16, color: context.primary),
                     const SizedBox(width: 6),
                     Flexible(
                       fit: FlexFit.loose,
                       child: Text(
                         getShortDisplayName(value),
-                        // Display short name of the *selected* value
                         style: context.labelSmall?.copyWith(
                             color: context.onSurface.addOpacity(0.9)),
                         overflow: TextOverflow.ellipsis,
@@ -243,7 +264,6 @@ class _MonacoEditorInfoBarState extends State<MonacoEditorInfoBar> {
               }).toList();
             },
             hint: Row(
-              // Fallback hint if value is null (should not happen often here)
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(icon, size: 16, color: context.onSurface.addOpacity(0.7)),
@@ -258,7 +278,6 @@ class _MonacoEditorInfoBarState extends State<MonacoEditorInfoBar> {
     );
   }
 
-  // New method for action buttons for unified styling
   Widget _buildActionButton(
     BuildContext context, {
     required IconData icon,
@@ -271,29 +290,9 @@ class _MonacoEditorInfoBarState extends State<MonacoEditorInfoBar> {
       onPressed: onPressed,
       style: IconButton.styleFrom(
         foregroundColor: context.onSurface.addOpacity(0.7),
-        padding: const EdgeInsets.all(10), // Consistent padding
+        padding: const EdgeInsets.all(10),
       ),
       iconSize: 20,
     );
-  }
-
-  String _getThemeDisplayName(String themeId) {
-    switch (themeId) {
-      case 'vs':
-        return 'Light';
-      case 'vs-dark':
-        return 'Dark';
-      case 'hc-black':
-        return 'High Contrast';
-      case 'one-dark-pro':
-        return 'One Dark Pro';
-      case 'one-dark-pro-transparent':
-        return 'One Dark Pro Transparent';
-      default:
-        return themeId
-            .split('-')
-            .map((word) => word[0].toUpperCase() + word.substring(1))
-            .join(' ');
-    }
   }
 }

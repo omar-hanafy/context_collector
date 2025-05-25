@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -30,15 +31,18 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
   bool _isLoading = true;
   String? _error;
   Timer? _initTimer;
+  bool _bridgeIsMarkedReady = false;
 
   @override
   void initState() {
     super.initState();
+    debugPrint('[_MonacoEditorEmbeddedState] initState: $hashCode');
     _initWebView();
   }
 
   @override
   void dispose() {
+    debugPrint('[_MonacoEditorEmbeddedState] dispose: $hashCode');
     _initTimer?.cancel();
     widget.bridge.detachWebView();
     super.dispose();
@@ -76,33 +80,38 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
         NavigationDelegate(
           onProgress: (int progress) {
             if (progress == 100) {
-              // Inject JS bridge code
+              // Inject JS bridge code to forward console.log and signal editor readiness
               _webViewController.runJavaScript('''
                 console.originalLog = console.log;
                 console.log = function(...args) {
                   console.originalLog.apply(console, args);
                   if (window.flutterChannel) {
                     try {
+                      // Forward logs
                       window.flutterChannel.postMessage('log:' + args.join(' '));
                     } catch(e) {
                       console.originalLog('Error sending log to Flutter:', e);
                     }
                   }
-                  if (args[0] === "Monaco editor instance created successfully") {
+                  // Check for a specific message that indicates Monaco is fully up
+                  if (args[0] === "Monaco editor instance created successfully" || 
+                      (typeof args[0] === 'string' && args[0].includes("Monaco editor core services initialized"))) {
                     if (window.flutterChannel) {
-                      window.flutterChannel.postMessage(JSON.stringify({event: 'onEditorReady'}));
+                      // Ensure this event is unique and clearly identifiable
+                      window.flutterChannel.postMessage(JSON.stringify({event: 'onEditorReady', detail: 'Editor core ready'}));
                     }
                   }
                 };
                 
-                // Force immediate execution to check for editor
+                // Fallback check if the specific log message is missed
                 setTimeout(function() {
-                  if (window.editor) {
-                    if (window.flutterChannel) {
-                      window.flutterChannel.postMessage(JSON.stringify({event: 'onEditorReady'}));
-                    }
+                  if (window.editor && window.flutterChannel) {
+                     // Check if already sent by log, to avoid duplicate onEditorReady.
+                     // This part might be tricky; relying on a single, clear log message is often better.
+                     // For now, let it send; the Dart side has a guard (_bridgeIsMarkedReady).
+                    window.flutterChannel.postMessage(JSON.stringify({event: 'onEditorReady', detail: 'Editor available via window.editor after timeout'}));
                   }
-                }, 1000);
+                }, 2000); // Increased timeout for safety
               ''');
             }
           },
@@ -249,76 +258,78 @@ class _MonacoEditorEmbeddedState extends State<MonacoEditorEmbedded> {
   }
 
   void _handleUrlMessage(String payload) {
-    if (payload.startsWith('onEditorReady')) {
-      _onEditorReady();
-    }
+    debugPrint(
+        '[_MonacoEditorEmbeddedState._handleUrlMessage] Received URL message: $payload');
+    // Implement actual handling if this communication path is used
   }
 
   void _handleMessage(JavaScriptMessage message) {
+    final String msg = message.message;
+    if (msg.startsWith('log:')) {
+      // Optional: Handle JS console.log messages
+      // debugPrint('[JS Log] ${msg.substring(4)}');
+      return;
+    }
+
     try {
-      // Handle both direct messages and log messages
-      if (message.message.startsWith('log:')) {
-        // Console log message, ignore
-        return;
+      final decoded = json.decode(msg) as Map<String, dynamic>;
+      if (decoded['event'] == 'onEditorReady') {
+        if (!_bridgeIsMarkedReady) {
+          debugPrint(
+              '[_MonacoEditorEmbeddedState._handleMessage] Received onEditorReady (detail: ${decoded['detail']}), _bridgeIsMarkedReady: $_bridgeIsMarkedReady');
+          widget.bridge.markReady();
+          _bridgeIsMarkedReady = true;
+          widget.onReady?.call();
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+              _error = null;
+            });
+          }
+          _initTimer?.cancel();
+        } else {
+          debugPrint(
+              '[_MonacoEditorEmbeddedState._handleMessage] Received onEditorReady, but bridge already marked ready. Detail: ${decoded['detail']}. Ignoring.');
+        }
       }
+      // Potentially handle other events from JS if defined
+      // else if (decoded['event'] == 'someOtherEvent') { ... }
 
-      final data = tryToMap(message.message) ?? {};
-      final event = data.tryGetString('event');
-
-      if (event == 'onEditorReady') {
-        _onEditorReady();
-      } else if (event == 'contentChanged') {
-        // Handle content changes if needed
-      }
+      // Always forward any JSON payload to the bridge so it can
+      // handle 'stats' (and anything else you add later).
+      widget.bridge.handleJavaScriptMessage(message);
     } catch (e) {
-      // Try to handle as a simple string message
-      if (message.message == 'EDITOR_READY_EVENT_FIRED') {
-        _onEditorReady();
-      } else {
-        debugPrint('Error handling Monaco message: $e');
+      debugPrint(
+          '[_MonacoEditorEmbeddedState._handleMessage] Error decoding/handling message from JS: $e. Raw Message: "$msg"');
+      // Still try to forward non-JSON messages to the bridge as they might be handled differently there
+      try {
+        widget.bridge.handleJavaScriptMessage(message);
+      } catch (innerE) {
+        // If bridge also fails to handle it, just log and ignore
+        debugPrint(
+            '[_MonacoEditorEmbeddedState._handleMessage] Bridge also failed to handle message: $innerE');
       }
     }
   }
 
   void _onPageLoaded() {
-    // Page loaded, waiting for editor ready
-    if (mounted) {
-      setState(() {
-        _isLoading = true;
-      });
-    }
+    debugPrint(
+        '[_MonacoEditorEmbeddedState._onPageLoaded] Page finished loading HTML document.');
+    // This method is for when the HTML page itself has loaded.
+    // Monaco editor initialization within the page is a separate process,
+    // signaled by the 'onEditorReady' event from the JavaScript.
+    // Avoid calling widget.onReady or bridge.markReady() here.
   }
 
   void _onLoadError(WebResourceError error) {
-    if (mounted) {
-      setState(() {
-        _error = 'Failed to load Monaco: ${error.description}';
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _onEditorReady() async {
     _initTimer?.cancel();
-
-    widget.bridge.markReady();
-
-    // Apply initial content if any
-    if (widget.bridge.content.isNotEmpty) {
-      await widget.bridge.setContent(widget.bridge.content);
-    }
-
-    // calling here   Future<void> updateSettings(EditorSettings newSettings).
-    // Apply initial options
-    await widget.bridge.updateSettings(widget.bridge.settings);
-
     if (mounted) {
       setState(() {
+        _error = 'Failed to load Monaco Editor: ${error.description}';
         _isLoading = false;
       });
     }
-
-    widget.onReady?.call();
+    debugPrint('Monaco Editor WebResourceError: ${error.description}');
   }
 
   @override
