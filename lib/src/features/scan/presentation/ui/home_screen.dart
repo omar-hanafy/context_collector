@@ -40,6 +40,7 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: context.surface,
       appBar: AppBar(
         title: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
               padding: const EdgeInsetsDirectional.all(8),
@@ -62,6 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const Text('Context Collector'),
           ],
         ),
+        centerTitle: true,
         actions: [
           Consumer<SelectionCubit>(
             builder: (context, cubit, child) {
@@ -135,57 +137,59 @@ class _HomeScreenState extends State<HomeScreen> {
             await cubit.addDirectory(directory);
           }
         },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          decoration: BoxDecoration(
-            color: _isDragging
-                ? context.primary.addOpacity(0.1)
-                : Colors.transparent,
-            border: _isDragging
-                ? Border.all(
-                    color: context.primary.addOpacity(0.5),
-                    width: 2,
-                  )
-                : null,
-          ),
-          child: Consumer<SelectionCubit>(
-            builder: (context, cubit, child) {
-              // Show error messages
-              if (cubit.error != null) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(cubit.error!),
-                      backgroundColor: context.error,
-                      action: SnackBarAction(
-                        label: 'Dismiss',
-                        onPressed: cubit.clearError,
-                        textColor: context.onError,
+        child: Center(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            decoration: BoxDecoration(
+              color: _isDragging
+                  ? context.primary.addOpacity(0.1)
+                  : Colors.transparent,
+              border: _isDragging
+                  ? Border.all(
+                      color: context.primary.addOpacity(0.5),
+                      width: 2,
+                    )
+                  : null,
+            ),
+            child: Consumer<SelectionCubit>(
+              builder: (context, cubit, child) {
+                // Show error messages
+                if (cubit.error != null) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(cubit.error!),
+                        backgroundColor: context.error,
+                        action: SnackBarAction(
+                          label: 'Dismiss',
+                          onPressed: cubit.clearError,
+                          textColor: context.onError,
+                        ),
                       ),
-                    ),
-                  );
-                  cubit.clearError();
-                });
-              }
+                    );
+                    cubit.clearError();
+                  });
+                }
 
-              if (!cubit.hasFiles) {
-                return const DropZoneWidget();
-              }
+                if (!cubit.hasFiles) {
+                  return const DropZoneWidget();
+                }
 
-              return ResizableSplitter(
-                initialRatio: 0.35,
-                minRatio: 0.2,
-                maxRatio: 0.6,
-                startPanel: Column(
-                  children: [
-                    const ActionButtonsWidget(),
-                    const Expanded(child: FileListWidget()),
-                    if (cubit.isProcessing) const LinearProgressIndicator(),
-                  ],
-                ),
-                endPanel: const CombinedContentWidget(),
-              );
-            },
+                return ResizableSplitter(
+                  initialRatio: 0.35,
+                  minRatio: 0.2,
+                  maxRatio: 0.6,
+                  startPanel: Column(
+                    children: [
+                      const ActionButtonsWidget(),
+                      const Expanded(child: FileListWidget()),
+                      if (cubit.isProcessing) const LinearProgressIndicator(),
+                    ],
+                  ),
+                  endPanel: const CombinedContentWidget(),
+                );
+              },
+            ),
           ),
         ),
       ),

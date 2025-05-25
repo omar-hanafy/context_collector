@@ -1,3 +1,4 @@
+import '../../../shared/utils/language_mapper.dart';
 import '../domain/scanned_file.dart';
 
 /// Service responsible for assembling content from multiple files into a combined format
@@ -7,22 +8,32 @@ class ContentAssembler {
   Future<String> buildMerged(List<ScannedFile> selectedFiles) async {
     final buffer = StringBuffer()
       ..writeln('# Context Collection')
-      ..writeln('Generated on: ${DateTime.now().toIso8601String()}')
-      ..writeln('Total selected files: ${selectedFiles.length}')
       ..writeln();
 
-    for (final file in selectedFiles) {
+    // Sort files by path for better organization
+    final sortedFiles = List<ScannedFile>.from(selectedFiles)
+      ..sort((a, b) => a.fullPath.compareTo(b.fullPath));
+
+    for (final file in sortedFiles) {
+      // Get the language identifier for syntax highlighting
+      final language = LanguageMapper.getLanguageForFile(file.fullPath);
+
       buffer
-        ..writeln('=' * 80)
+        ..writeln('## ${file.name}')
         ..writeln(file.generateReference())
-        ..writeln('=' * 80);
+        ..writeln();
 
       if (file.content != null) {
-        buffer.writeln(file.content);
+        // Add code block with language identifier for syntax highlighting
+        buffer
+          ..writeln('```$language')
+          ..writeln(file.content)
+          ..writeln('```')
+          ..writeln('\n---\n');
       } else if (file.error != null) {
-        buffer.writeln('ERROR: ${file.error}');
+        buffer.writeln('```\nERROR: ${file.error}\n```');
       } else {
-        buffer.writeln('PENDING: Content not loaded');
+        buffer.writeln('```\nPENDING: Content not loaded\n```');
       }
 
       buffer
@@ -30,7 +41,23 @@ class ContentAssembler {
         ..writeln();
     }
 
-    return buffer.toString();
+    // Clean up excessive whitespace before returning
+    return _cleanupWhitespace(buffer.toString());
+  }
+
+  /// Remove multiple consecutive empty lines and replace with single empty line
+  String _cleanupWhitespace(String content) {
+    // Replace 3 or more consecutive newlines with just 2 newlines (1 empty line)
+    return content
+        // First, normalize different line endings to \n
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
+        // Remove multiple consecutive empty lines (3+ newlines become 2)
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+        // Clean up any trailing whitespace at the end of lines
+        .replaceAll(RegExp(r'[ \t]+$', multiLine: true), '')
+        // Remove excessive whitespace at the very end of the document
+        .replaceAll(RegExp(r'\n+$'), '\n');
   }
 
   /// Get content statistics

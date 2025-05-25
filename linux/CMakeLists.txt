@@ -4,10 +4,10 @@ project(runner LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
-set(BINARY_NAME "context_collector")
+set(BINARY_NAME "ContextCollector")
 # The unique GTK application identifier for this application. See:
 # https://wiki.gnome.org/HowDoI/ChooseApplicationID
-set(APPLICATION_ID "com.example.context_collector")
+set(APPLICATION_ID "com.omarhanafy.context.collector")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
@@ -126,3 +126,17 @@ if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
   install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
     COMPONENT Runtime)
 endif()
+
+# === Install application icons ===
+set(ICON_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/linux/hicolor")
+set(ICON_TARGET_NAME "context_collector")
+
+# Loop over each size directory and install & rename the PNG
+foreach(size IN ITEMS 16 22 24 32 48 64 96 128 192 256 512)
+  install(FILES
+    "${ICON_SRC_DIR}/${size}x${size}/apps/Icon-App-Name.png"
+    DESTINATION "${CMAKE_INSTALL_PREFIX}/share/icons/hicolor/${size}x${size}/apps"
+    RENAME "${ICON_TARGET_NAME}.png"
+    COMPONENT Runtime
+  )
+endforeach()

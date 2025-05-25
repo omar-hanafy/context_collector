@@ -44,6 +44,7 @@ class DropZoneWidget extends StatelessWidget {
                 const SizedBox(height: 32),
                 Text(
                   'Drop Your Files or Directories Here',
+                  textAlign: TextAlign.center,
                   style: context.displaySmall?.copyWith(
                     color: context.onSurface,
                     fontWeight: FontWeight.w800,
@@ -108,9 +109,9 @@ class DropZoneWidget extends StatelessWidget {
         description: 'One-click clipboard copy',
       ),
       (
-        icon: Icons.save_alt_rounded,
-        title: 'Export Ready',
-        description: 'Save as text file',
+        icon: Icons.edit_note_rounded,
+        title: 'Code Editor',
+        description: 'View and edit content in real-time',
       ),
     ];
 

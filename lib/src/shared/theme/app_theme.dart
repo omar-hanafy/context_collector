@@ -3,9 +3,8 @@ import 'package:flutter/material.dart';
 
 class AppTheme {
   // Modern color palette inspired by modern design systems
-  static const Color _primaryColor = Color(0xFF5B47E0); // Modern purple
-  static const Color _primaryVariant = Color(0xFF4936C9);
-  static const Color _secondaryColor = Color(0xFF00D4AA); // Mint green
+  static const Color _primaryColor = Color(0xFF97D0E1); // Modern purple
+  static const Color _secondaryColor = Color(0xFF1C9C96);
   static const Color _accentColor = Color(0xFFFF6B6B); // Coral red
   static const Color _surfaceColor = Color(0xFFF7F9FC); // Cool gray
   static const Color _backgroundColor = Color(0xFFFCFDFF); // Almost white

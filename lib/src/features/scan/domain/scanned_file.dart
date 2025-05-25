@@ -1,9 +1,11 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
 import 'package:path/path.dart' as path;
 
 import '../../../shared/utils/extension_catalog.dart';
+import '../../../shared/utils/language_mapper.dart';
 
 /// Represents a file that has been scanned from the filesystem
 /// This is an immutable value object that only holds data
@@ -59,9 +61,26 @@ class ScannedFile {
     return getExtensionCategory(extension, customExtensions);
   }
 
+  /// Get the language identifier for syntax highlighting
+  String get language {
+    return LanguageMapper.getLanguageForFile(fullPath);
+  }
+
+  /// Get the line count of the file content
+  int get lineCount {
+    if (content == null) return 0;
+    return content!.split('\n').length;
+  }
+
   /// Generate metadata reference for the combined content
   String generateReference() {
-    return '// File: $fullPath\n// Size: $sizeFormatted\n// Modified: ${lastModified.toIso8601String()}\n';
+    final dateFormat = DateFormat('yyyy-MM-dd HH:mm:ss');
+    // final formattedDate = dateFormat.format(lastModified);
+    // final category = getCategory()?.displayName ?? 'Unknown';
+    // final lines = lineCount > 0 ? ', Lines: $lineCount' : '';
+    // final displayLanguage = LanguageMapper.getLanguageDisplayName(language);
+
+    return '> **Path:** $fullPath  \n';
   }
 
   /// Create a copy with updated fields
