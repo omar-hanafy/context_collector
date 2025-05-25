@@ -22,7 +22,8 @@ dependencies:
   desktop_webview_window: ^0.2.3
   webview_flutter: ^4.13.0
   synchronized: ^3.3.1
-  file_picker: ^8.0.5
+  file_picker: ^10.1.9
+  diff_match_patch: ^0.4.1
 
 dev_dependencies:
   flutter_test:
@@ -33,7 +34,6 @@ flutter:
   assets:
     # top-level bundles you were already exposing
     - assets/
-    - assets/editor/
 
     # everything that lives directly under assets/monaco
     - assets/monaco/

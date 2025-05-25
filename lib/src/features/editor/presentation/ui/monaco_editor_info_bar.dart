@@ -120,7 +120,8 @@ class _MonacoEditorInfoBarState extends State<MonacoEditorInfoBar> {
               _buildConciseDropdown<String>(
                 context: context,
                 icon: Icons.translate,
-                value: _currentLanguage, // Use state variable for language
+                value: _currentLanguage,
+                // Use state variable for language
                 items: _supportedLanguages
                     .map((lang) => DropdownMenuItem<String>(
                           value: lang['value'],
@@ -143,33 +144,37 @@ class _MonacoEditorInfoBarState extends State<MonacoEditorInfoBar> {
                 tooltip: 'Select Language',
               ),
               const SizedBox(width: 8),
-
-              const Spacer(), // Pushes actions to the right
-
-              // Action Buttons - unified style
-              _buildActionButton(
-                context,
-                icon: Icons.copy_outlined,
-                tooltip: 'Copy Content',
-                onPressed: widget.onCopy,
-              ),
-              _buildActionButton(
-                context,
-                icon: Icons.format_align_left_outlined,
-                tooltip: 'Format Content',
-                onPressed: () async => widget.bridge.format(),
-              ),
-              _buildActionButton(
-                context,
-                icon: Icons.keyboard_arrow_up_outlined,
-                tooltip: 'Scroll to Top',
-                onPressed: () async => widget.bridge.scrollToTop(),
-              ),
-              _buildActionButton(
-                context,
-                icon: Icons.keyboard_arrow_down_outlined,
-                tooltip: 'Scroll to Bottom',
-                onPressed: () async => widget.bridge.scrollToBottom(),
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    // Action Buttons - unified style
+                    _buildActionButton(
+                      context,
+                      icon: Icons.copy_outlined,
+                      tooltip: 'Copy Content',
+                      onPressed: widget.onCopy,
+                    ),
+                    _buildActionButton(
+                      context,
+                      icon: Icons.format_align_left_outlined,
+                      tooltip: 'Format Content',
+                      onPressed: () async => widget.bridge.format(),
+                    ),
+                    _buildActionButton(
+                      context,
+                      icon: Icons.keyboard_arrow_up_outlined,
+                      tooltip: 'Scroll to Top',
+                      onPressed: () async => widget.bridge.scrollToTop(),
+                    ),
+                    _buildActionButton(
+                      context,
+                      icon: Icons.keyboard_arrow_down_outlined,
+                      tooltip: 'Scroll to Bottom',
+                      onPressed: () async => widget.bridge.scrollToBottom(),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

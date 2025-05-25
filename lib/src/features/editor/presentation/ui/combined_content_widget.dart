@@ -184,37 +184,6 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
                               size: 20,
                               color: context.onSurfaceVariant,
                             ),
-                            // File count badge (when collapsed and files selected)
-                            if (!_isSidebarExpanded &&
-                                cubit.selectedFilesCount > 0)
-                              PositionedDirectional(
-                                end: 0,
-                                top: 0,
-                                child: Container(
-                                  width: 14,
-                                  height: 14,
-                                  decoration: BoxDecoration(
-                                    color: context.error,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: context.surface,
-                                      width: 1.5,
-                                    ),
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      cubit.selectedFilesCount > 9
-                                          ? '9+'
-                                          : cubit.selectedFilesCount.toString(),
-                                      style: TextStyle(
-                                        color: context.onError,
-                                        fontSize: 8,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
                           ],
                         ),
                       ),
