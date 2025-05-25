@@ -5,7 +5,7 @@
 </div>
 
 <p align="center">
-  <img src="readme-assets/icon.png" width="150" alt="Context Collector Icon">
+  <img src="https://raw.githubusercontent.com/omar-hanafy/context_collector/refs/heads/main/readme-assets/icon.png" width="150" alt="Context Collector Icon">
 </p>
 
 <p align="center">
@@ -14,8 +14,8 @@
   <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Platforms: macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/Dart-%3E%3D3.0.0%20%3C4.0.0-blueviolet" alt="Dart SDK: >=3.0.0 <4.0.0">
   <img src="https://img.shields.io/badge/Flutter-blue?logo=flutter" alt="Flutter">
-  <a href="https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/commits/main"><img src="https://img.shields.io/github/last-commit/YOUR_USERNAME/YOUR_REPOSITORY" alt="Last Commit"></a>
-  <a href="https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/stargazers"><img src="https://img.shields.io/github/stars/YOUR_USERNAME/YOUR_REPOSITORY?style=social" alt="GitHub Stars"></a>
+  <a href="https://github.com/omar-hanafy/context_collector/commits/main"><img src="https://img.shields.io/github/last-commit/omar-hanafy/context_collector" alt="Last Commit"></a>
+  <a href="https://github.com/omar-hanafy/context_collector/stargazers"><img src="https://img.shields.io/github/stars/omar-hanafy/context_collector?style=social" alt="GitHub Stars"></a>
 </p>
 
 > **Combine files & folders into a clean, AI-ready text bundle — powered by Flutter and Monaco Editor.**
@@ -24,7 +24,7 @@ Context Collector is a lightweight desktop app (macOS • Windows • Linux) tha
 Every chunk includes full file paths and metadata, making it ideal for working smoothly with large-language models (LLMs) without the hassle of manual copying and pasting.
 
 <p align="center">
-  <img src="readme-assets/home.png" width="70%" alt="Context Collector main window (dark theme)">
+  <img src="https://raw.githubusercontent.com/omar-hanafy/context_collector/refs/heads/main/readme-assets/home.png" width="70%" alt="Context Collector main window (dark theme)">
 </p>
 
 ---
@@ -32,7 +32,7 @@ Every chunk includes full file paths and metadata, making it ideal for working s
 ## 🖥️ Typical Workflow
 
 <p align="center">
-  <img src="readme-assets/editor.png" width="70%" alt="Editor view with combined content">
+  <img src="https://raw.githubusercontent.com/omar-hanafy/context_collector/refs/heads/main/readme-assets/editor.png" width="70%" alt="Editor view with combined content">
 </p>
 
 1. **Drag & drop** files or directories onto the drop zone.
@@ -57,7 +57,7 @@ Every chunk includes full file paths and metadata, making it ideal for working s
 | **Extensible APIs**              | Integrate the toolkit into your Flutter apps or automate assembly using Dart scripts.                      |
 
 <p align="center">
-  <img src="readme-assets/sidepanel-expanded.png" width="70%" alt="Sidepanel expanded with file details">
+  <img src="https://raw.githubusercontent.com/omar-hanafy/context_collector/refs/heads/main/readme-assets/sidepanel-expanded.png" width="70%" alt="Sidepanel expanded with file details">
 </p>
 
 ---
@@ -66,14 +66,14 @@ Every chunk includes full file paths and metadata, making it ideal for working s
 
 ### Option 1: Pre-built app (Recommended)
 
-1. Go to [**Releases**](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/releases) and download the latest ZIP/DMG/EXE.
+1. Go to [**Releases**](https://github.com/omar-hanafy/context_collector/releases) and download the latest ZIP/DMG/EXE.
 2. Unzip and run—zero setup required.
 
 ### Option 2: Build from source (Flutter 3.22+)
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git
-cd YOUR_REPOSITORY
+git clone https://github.com/omar-hanafy/context_collector.git
+cd context_collector
 flutter pub get
 
 # Enable desktop support if not already enabled
@@ -93,12 +93,12 @@ flutter run  # or flutter build macos / windows / linux
 * **Customizable extension catalog**: Quickly enable or disable formats or add custom file-to-category mappings.
 
 <p align="center">
-  <img src="readme-assets/settings.png" width="70%" alt="Context Collector Settings"><br>
+  <img src="https://raw.githubusercontent.com/omar-hanafy/context_collector/refs/heads/main/readme-assets/settings.png" width="70%" alt="Context Collector Settings"><br>
   <em>General application settings.</em>
 </p>
 <br>
 <p align="center">
-  <img src="readme-assets/editor-settings.png" width="70%" alt="Context Collector Editor Settings"><br>
+  <img src="https://raw.githubusercontent.com/omar-hanafy/context_collector/refs/heads/main/readme-assets/editor-settings.png" width="70%" alt="Context Collector Editor Settings"><br>
   <em>Editor specific settings and theme selection.</em>
 </p>
 
@@ -121,7 +121,7 @@ flutter run  # or flutter build macos / windows / linux
 * 🌐 Add web support.
 * 🤖 AI summarization of context.
 
-Have an idea? [Open an issue](../../issues) or join our Discord! <!-- Add Discord link if you have one -->
+Have an idea? [Open an issue](https://github.com/omar-hanafy/context_collector/issues) or join our Discord! <!-- Add Discord link if you have one -->
 
 ---
 
