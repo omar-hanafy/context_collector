@@ -8,9 +8,19 @@
   <img src="readme-assets/icon.png" width="150" alt="Context Collector Icon">
 </p>
 
+<p align="center">
+  <!-- Badges will be added here -->
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Platforms: macOS, Windows, Linux">
+  <img src="https://img.shields.io/badge/Dart-%3E%3D3.0.0%20%3C4.0.0-blueviolet" alt="Dart SDK: >=3.0.0 <4.0.0">
+  <img src="https://img.shields.io/badge/Flutter-blue?logo=flutter" alt="Flutter">
+  <a href="https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/commits/main"><img src="https://img.shields.io/github/last-commit/YOUR_USERNAME/YOUR_REPOSITORY" alt="Last Commit"></a>
+  <a href="https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/stargazers"><img src="https://img.shields.io/github/stars/YOUR_USERNAME/YOUR_REPOSITORY?style=social" alt="GitHub Stars"></a>
+</p>
+
 > **Combine files & folders into a clean, AI-ready text bundle — powered by Flutter and Monaco Editor.**
 
-Context Collector is a lightweight desktop app (macOS • Windows • Linux) that lets you drag-and-drop source files, logs, configurations, or entire directories and outputs a neatly annotated document.  
+Context Collector is a lightweight desktop app (macOS • Windows • Linux) that lets you drag-and-drop source files, logs, configurations, or entire directories and outputs a neatly annotated document.
 Every chunk includes full file paths and metadata, making it ideal for working smoothly with large-language models (LLMs) without the hassle of manual copying and pasting.
 
 <p align="center">
@@ -22,7 +32,7 @@ Every chunk includes full file paths and metadata, making it ideal for working s
 ## 🖥️ Typical Workflow
 
 <p align="center">
-  <img src="readme-assets/editor.png" width="70%" alt="Editor view">
+  <img src="readme-assets/editor.png" width="70%" alt="Editor view with combined content">
 </p>
 
 1. **Drag & drop** files or directories onto the drop zone.
@@ -31,7 +41,7 @@ Every chunk includes full file paths and metadata, making it ideal for working s
 4. **Copy** your merged content instantly.
 
 > Tip: Head to *Settings → Extensions* to exclude noisy logs or add specialized formats (`.bert`, `.fish`, etc.).
- <img src="readme-assets/settings.png" width="70%" alt="Settings view">
+<!-- Image removed from here -->
 
 ---
 
@@ -43,12 +53,11 @@ Every chunk includes full file paths and metadata, making it ideal for working s
 | **250+ extensions supported**    | Built‑in support for code, logs, configs, docs, data & more — easily add your own custom extensions.       |
 | **Monaco editor inside Flutter** | Enjoy syntax highlighting, multi‑cursor editing, Vim/IntelliJ/VS Code keybindings, themes, and word-wrap.  |
 | **Live statistics**              | Line, character, cursor, and selection counts update in real-time—ideal for managing prompt token budgets. |
-| **Quick copy/export**            | Copy merged context to clipboard with one click.                              |
-| **Three‑way merge helper**       | Built‑in diff & merge engine handles *base ← local → remote* changes programmatically.                     |
+| **Quick copy**                   | Copy merged context to clipboard with one click.                                                           |
 | **Extensible APIs**              | Integrate the toolkit into your Flutter apps or automate assembly using Dart scripts.                      |
 
 <p align="center">
-  <img src="readme-assets/sidepanel-expanded.png" width="70%" alt="Sidepanel expanded view">
+  <img src="readme-assets/sidepanel-expanded.png" width="70%" alt="Sidepanel expanded with file details">
 </p>
 
 ---
@@ -83,6 +92,16 @@ flutter run  # or flutter build macos / windows / linux
 * **Theme support**: Comes bundled with VS Light/Dark, One Dark Pro, and HC Black. Easily import additional VS Code themes.
 * **Customizable extension catalog**: Quickly enable or disable formats or add custom file-to-category mappings.
 
+<p align="center">
+  <img src="readme-assets/settings.png" width="70%" alt="Context Collector Settings"><br>
+  <em>General application settings.</em>
+</p>
+<br>
+<p align="center">
+  <img src="readme-assets/editor-settings.png" width="70%" alt="Context Collector Editor Settings"><br>
+  <em>Editor specific settings and theme selection.</em>
+</p>
+
 ---
 
 ## 📌 Why Context Collector?
@@ -97,39 +116,70 @@ flutter run  # or flutter build macos / windows / linux
 ---
 
 ## 🔮 Roadmap
+* 📟 Export as file.
+* 🗂️ Import from GitHub repos.
+* 🌐 Add web support.
+* 🤖 AI summarization of context.
 
-* 🔍 **Full-text search** across merged content within Monaco.
-* 🗂️ Git repository crawler (honors `.gitignore` rules).
-* 📟 CLI exporter for CI and prompt-engineering automation.
-* 🧩 Plugin system for custom transformations (Markdown→HTML, etc.).
-
-Have an idea? [Open an issue](../../issues) or join our Discord!
+Have an idea? [Open an issue](../../issues) or join our Discord! <!-- Add Discord link if you have one -->
 
 ---
 
 ## 🤝 Contributing
+Contributions are welcome!
+Whether you're fixing bugs, adding features, or improving documentation, your help is appreciated.
 
-1. Fork the repo & create a feature branch (`git checkout -b feat/my-feature`)
-2. Before committing, run `flutter analyze && dart format .`
-3. Follow **Conventional Commits** style for commit messages.
-4. Submit your PR. We'll squash-merge and credit you!
+---
 
-> New to Flutter? Look for issues labeled **good-first-issue** for extra guidance.
+## ☕ Support
+
+If you find this project helpful or valuable, please consider supporting its development:
+
+<p align="center">
+  <a href="https://www.buymeacoffee.com/omar.hanafy" target="_blank">
+    <img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174">
+  </a>
+</p>
+
+Your support helps maintain and improve Context Collector. Thank you!
 
 ---
 
 ## 📄 License
 
 Context Collector is open-source software licensed under the **MIT License**—see [LICENSE](LICENSE).
-
 © 2025 Omar Hanafy & community contributors.
 
 ---
 
 ## 🙏 Acknowledgements
 
-* [Flutter](https://flutter.dev) & [Dart](https://dart.dev)
-* [Monaco Editor](https://github.com/microsoft/monaco-editor)
-* [`dart_helper_utils`](https://pub.dev/packages/dart_helper_utils) & [`flutter_helper_utils`](https://pub.dev/packages/flutter_helper_utils)
-* Everyone who stars, contributes code, or files an issue ❤️
+This project was made possible by the vibrant open-source community and these fantastic technologies:
+
+*   **Core Technologies**:
+    *   [Flutter](https://flutter.dev) & [Dart](https://dart.dev): For the framework and language that built this app.
+    *   [Monaco Editor](https://github.com/microsoft/monaco-editor): For the powerful in-app code editing experience.
+
+*   **State Management & UI**:
+    *   [`provider`](https://pub.dev/packages/provider): For efficient state management throughout the app.
+    *   [`dart_helper_utils`](https://pub.dev/packages/dart_helper_utils) & [`flutter_helper_utils`](https://pub.dev/packages/flutter_helper_utils): For foundational utilities.
+
+*   **File System & I/O**:
+    *   [`desktop_drop`](https://pub.dev/packages/desktop_drop): Enabling intuitive drag-and-drop.
+    *   [`file_picker`](https://pub.dev/packages/file_picker): For selecting files from the system.
+    *   [`file_selector`](https://pub.dev/packages/file_selector): Cross-platform file selection handling.
+    *   [`path`](https://pub.dev/packages/path) & [`path_provider`](https://pub.dev/packages/path_provider): Essential for file path operations.
+
+*   **Desktop Integration**:
+    *   [`window_manager`](https://pub.dev/packages/window_manager): For native window management.
+    *   [`webview_flutter`](https://pub.dev/packages/webview_flutter) & [`desktop_webview_window`](https://pub.dev/packages/desktop_webview_window): Crucial for integrating Monaco editor.
+
+*   **Data Handling & Persistence**:
+    *   [`shared_preferences`](https://pub.dev/packages/shared_preferences): For saving app settings.
+    *   [`synchronized`](https://pub.dev/packages/synchronized): For thread-safe operations.
+    *   [`intl`](https://pub.dev/packages/intl): For internationalization and formatting.
+    *   [`diff_match_patch`](https://pub.dev/packages/diff_match_patch): For comparing and merging content.
+
+*   **Community**:
+    *   A heartfelt thank you to everyone who stars the repository, contributes code, reports issues, or offers feedback. Your support is invaluable! ❤️
 
