@@ -412,7 +412,7 @@ class EditorSettings {
       customKeybindings: (json[keyCustomKeybindings] is String
               ? (json.tryGetString(keyCustomKeybindings)?.decode()
                       as Map<String, dynamic>?)
-                  ?.cast<String, String>()
+                  ?.map((key, value) => MapEntry(key, value.toString()))
               : Map<String, String>.from(
                   json[keyCustomKeybindings] as Map? ?? {})) ??
           {},
@@ -561,7 +561,7 @@ class EditorSettings {
   static const String defaultRenderLineHighlight = 'line';
 
   // Editor Behavior
-  static const WordWrap defaultWordWrap = WordWrap.off;
+  static const WordWrap defaultWordWrap = WordWrap.on;
   static const int defaultWordWrapColumn = 80;
   static const int defaultTabSize = 4;
   static const bool defaultInsertSpaces = true;
@@ -1064,7 +1064,7 @@ class EditorSettings {
       'fontFamily': fontFamily,
       'lineHeight': lineHeight,
       'letterSpacing': letterSpacing,
-      'lineNumbers': lineNumbersStyle.name,
+      'lineNumbers': showLineNumbers ? 'on' : 'off',
       'minimap': {
         'enabled': showMinimap,
         'side': minimapSide.name,
@@ -1436,9 +1436,9 @@ class EditorSettings {
       keybindingPreset: parseEnum(prefs.getString(keyKeybindingPreset),
               KeybindingPresetEnum.values) ??
           defaultKeybindingPreset,
-      customKeybindings: prefs.getString(keyCustomKeybindings)?.decode()
-              as Map<String, String>? ?? // Cast to Map<String, String>
-          {},
+      customKeybindings: ConvertObject.toMap(
+          prefs.getString(keyCustomKeybindings),
+          defaultValue: {}),
 
       // Advanced
       readOnly: prefs.getBool(keyReadOnly) ?? defaultReadOnly,

@@ -1,0 +1,2 @@
+- adding new file clears custom text added.
+- 

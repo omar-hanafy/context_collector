@@ -69,37 +69,24 @@ class _MonacoEditorInfoBarState extends State<MonacoEditorInfoBar> {
         final String currentThemeName = _getThemeDisplayName(settings.theme);
 
         return Container(
-          margin: const EdgeInsetsDirectional.only(top: 8),
-          padding: const EdgeInsetsDirectional.symmetric(
-            horizontal: 12, // Reduced padding for a more compact bar
-            vertical: 8, // Reduced padding
-          ),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                context.primary.addOpacity(0.05),
-                context.primary.addOpacity(0.02),
-              ],
-              begin: AlignmentDirectional.centerStart,
-              end: AlignmentDirectional.centerEnd,
-            ),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: context.primary.addOpacity(0.1),
-            ),
+          padding: const EdgeInsetsDirectional.symmetric(horizontal: 8),
+          decoration: const BoxDecoration(
+            color: Colors.transparent,
           ),
           child: Row(
             // Simplified to a single Row for controls
             children: [
               // Concise Language selector
-              _buildConciseDropdown(
+              _buildConciseDropdown<String>(
                 context: context,
-                icon: Icons.code,
+                icon: Icons.translate,
+                // Changed icon for languages
                 value: currentLanguage,
                 items: _supportedLanguages
                     .map((lang) => DropdownMenuItem<String>(
                           value: lang['value'],
-                          child: Text(lang['text']!, style: context.labelSmall),
+                          child: Text(lang['text']!,
+                              style: context.labelMedium), // For the list items
                         ))
                     .toList(),
                 onChanged: (value) async {
@@ -108,33 +95,15 @@ class _MonacoEditorInfoBarState extends State<MonacoEditorInfoBar> {
                     await _loadEditorStats();
                   }
                 },
+                getShortDisplayName: (val) {
+                  final selectedLang = _supportedLanguages.firstWhere(
+                      (lang) => lang['value'] == val,
+                      orElse: () => {'text': val.toUpperCase()});
+                  return selectedLang['text']!;
+                },
                 tooltip: 'Select Language',
               ),
               const SizedBox(width: 8),
-
-              // Concise Theme selector
-              _buildConciseDropdown(
-                context: context,
-                icon: Icons.palette_outlined,
-                value: settings.theme,
-                items: _availableThemes
-                    .map((theme) => DropdownMenuItem<String>(
-                          value: theme,
-                          child: Text(_getThemeDisplayName(theme),
-                              style: context.labelSmall),
-                        ))
-                    .toList(),
-                onChanged: (value) async {
-                  if (value != null && value != settings.theme) {
-                    final newSettings =
-                        widget.bridge.settings.copyWith(theme: value);
-                    await widget.bridge.updateSettings(newSettings);
-                  }
-                },
-                // Displaying only the current theme name or icon
-                // child: Text(currentThemeName, style: context.labelMedium?.copyWith(color: context.primary)),
-                tooltip: 'Select Theme ($currentThemeName)',
-              ),
 
               const Spacer(), // Pushes actions to the right
 
@@ -182,7 +151,6 @@ class _MonacoEditorInfoBarState extends State<MonacoEditorInfoBar> {
 
   Widget _buildLoadingBar(BuildContext context) {
     return Container(
-      margin: const EdgeInsetsDirectional.only(top: 8),
       padding: const EdgeInsetsDirectional.symmetric(
         horizontal: 16,
         vertical: 12,
@@ -223,54 +191,67 @@ class _MonacoEditorInfoBarState extends State<MonacoEditorInfoBar> {
     required T value,
     required List<DropdownMenuItem<T>> items,
     required ValueChanged<T?> onChanged,
-    Widget? child,
+    required String Function(T value) getShortDisplayName, // Added
     String? tooltip,
   }) {
     return Tooltip(
       message: tooltip ?? '',
       child: Container(
         padding:
-            const EdgeInsetsDirectional.symmetric(horizontal: 6, vertical: 4),
+            const EdgeInsetsDirectional.symmetric(horizontal: 8, vertical: 4),
+        // Adjusted padding
         decoration: BoxDecoration(
           color: context.onSurface.addOpacity(0.05),
           borderRadius: BorderRadius.circular(8),
         ),
-        constraints:
-            const BoxConstraints(maxWidth: 150), // Max width for dropdown
+        // Removed fixed maxWidth from here to allow DropdownButton to size more intrinsically
+        // It will be constrained by the parent Row if necessary.
         child: DropdownButtonHideUnderline(
           child: DropdownButton<T>(
             icon: Icon(Icons.arrow_drop_down,
-                size: 18, color: context.onSurface.addOpacity(0.6)),
+                size: 20, color: context.onSurface.addOpacity(0.7)),
+            // Slightly larger icon
             isDense: true,
             value: value,
             items: items,
             onChanged: onChanged,
-            selectedItemBuilder: child != null
-                ? (context) {
-                    // This part is tricky for dynamic width based on selected item text
-                    // For now, let's assume the icon + a short text or just icon is enough.
-                    // If child is provided, it's used, otherwise, we show the icon.
-                    return items.map((item) {
-                      return Align(
-                        alignment: AlignmentDirectional.centerStart,
-                        child: child ??
-                            Icon(icon, size: 18, color: context.primary),
-                      );
-                    }).toList();
-                  }
-                : null,
-            // If selectedItemBuilder is not used, this is the representation when closed
-            // We might want to show icon + current value text here
-            hint: child ??
-                Row(
+            selectedItemBuilder: (context) {
+              return items.map((DropdownMenuItem<T> item) {
+                // Ensure item is typed
+                // This Row is what's shown in the button when an item is selected.
+                return Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(icon,
-                        size: 16, color: context.primary.addOpacity(0.8)),
-                    // Optional: Add a short text representation of the current value if space allows
-                    // For example, for theme, the name; for language, its short code.
+                        size: 16,
+                        color:
+                            context.primary), // Main icon for the dropdown type
+                    const SizedBox(width: 6),
+                    Flexible(
+                      fit: FlexFit.loose,
+                      child: Text(
+                        getShortDisplayName(value),
+                        // Display short name of the *selected* value
+                        style: context.labelSmall?.copyWith(
+                            color: context.onSurface.addOpacity(0.9)),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ),
                   ],
-                ),
+                );
+              }).toList();
+            },
+            hint: Row(
+              // Fallback hint if value is null (should not happen often here)
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 16, color: context.onSurface.addOpacity(0.7)),
+                const SizedBox(width: 6),
+                Text('Select...',
+                    style: context.labelSmall, overflow: TextOverflow.ellipsis),
+              ],
+            ),
           ),
         ),
       ),

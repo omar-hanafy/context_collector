@@ -42,7 +42,7 @@ extension ThemeColorsExtension on BuildContext {
 
   Color get onBackground => themeData.onSurface;
 
-  Color get surface => themeData.surface;
+  Color get surface => themeData.surfaceContainerHighest;
 
   Color get surfaceContainerHighest => themeData.surfaceContainerHighest;
 

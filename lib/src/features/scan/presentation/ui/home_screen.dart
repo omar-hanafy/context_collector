@@ -68,47 +68,6 @@ class _HomeScreenState extends State<HomeScreen> {
               return Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    padding: cubit.hasFiles
-                        ? const EdgeInsetsDirectional.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          )
-                        : EdgeInsetsDirectional.zero,
-                    decoration: BoxDecoration(
-                      color: cubit.hasFiles
-                          ? context.primary.addOpacity(0.1)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: cubit.hasFiles
-                        ? Row(
-                            children: [
-                              Icon(
-                                Icons.check_circle_rounded,
-                                size: 16,
-                                color: context.primary,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                '${cubit.selectedFilesCount}',
-                                style: context.titleSmall?.copyWith(
-                                  color: context.primary,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              Text(
-                                ' / ${cubit.totalFilesCount}',
-                                style: context.titleSmall?.copyWith(
-                                  color: context.onSurface.addOpacity(0.6),
-                                ),
-                              ),
-                            ],
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                  if (cubit.hasFiles) const SizedBox(width: 8),
                   AnimatedScale(
                     scale: cubit.hasFiles ? 1.0 : 0.0,
                     duration: const Duration(milliseconds: 200),

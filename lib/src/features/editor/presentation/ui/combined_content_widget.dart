@@ -21,33 +21,29 @@ class CombinedContentWidget extends StatefulWidget {
 
 class _CombinedContentWidgetState extends State<CombinedContentWidget>
     with SingleTickerProviderStateMixin {
-  late AnimationController _collapseController;
-  late Animation<double> _collapseAnimation;
+  late AnimationController _animationController;
+  late Animation<double> _sidebarAnimation;
   late MonacoBridge _monacoBridge;
-  bool _isCollapsed = false;
+  bool _isSidebarExpanded = false;
   EditorSettings _editorSettings = const EditorSettings();
   final List<EditorTheme> _customThemes = [];
   final List<KeybindingPreset> _customKeybindingPresets = [];
   bool _isEditorReady = false;
 
-  // Store the width of the sidebar for animation and layout
-  final double _sidebarWidth = 250;
+  // Sidebar dimensions
+  static const double _expandedSidebarWidth = 280;
 
   @override
   void initState() {
     super.initState();
-    _collapseController = AnimationController(
+    _animationController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
-    _collapseAnimation = CurvedAnimation(
-      parent: _collapseController,
-      curve: Curves.easeInOut,
+    _sidebarAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOutCubic,
     );
-    // Start collapsed, so controller value is 0.0
-    // The button will allow it to expand to 1.0
-    _collapseController.value = 0.0;
-    _isCollapsed = true; // Reflects initial state
 
     _monacoBridge = MonacoBridge();
     _loadEditorSettings();
@@ -67,6 +63,8 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
 
   Future<void> _applySettingsToEditor() async {
     if (!_isEditorReady) return;
+    debugPrint(
+        '[_applySettingsToEditor] Applying to editor, current _editorSettings.showLineNumbers: ${_editorSettings.showLineNumbers}');
     try {
       await _monacoBridge.updateSettings(_editorSettings);
       await _monacoBridge
@@ -81,122 +79,379 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
 
   @override
   void dispose() {
-    _collapseController.dispose();
+    _animationController.dispose();
     _monacoBridge.dispose();
     super.dispose();
   }
 
-  void _toggleCollapse() {
+  void _toggleSidebar() {
     setState(() {
-      _isCollapsed = !_isCollapsed;
-      if (_isCollapsed) {
-        _collapseController.reverse();
+      _isSidebarExpanded = !_isSidebarExpanded;
+      if (_isSidebarExpanded) {
+        _animationController.forward();
       } else {
-        _collapseController.forward();
+        _animationController.reverse();
       }
     });
   }
 
-  // _buildEnhancedHeader is REMOVED
-  // _buildCollapseButton (old top bar button) is REMOVED or will be repurposed/replaced by edge toggle logic
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<SelectionCubit>(
+      builder: (context, cubit, child) {
+        return Stack(
+          children: [
+            // Main content with animated padding
+            Row(
+              children: [
+                // Animated Sidebar
+                AnimatedBuilder(
+                  animation: _sidebarAnimation,
+                  builder: (context, child) {
+                    final width =
+                        _expandedSidebarWidth * _sidebarAnimation.value;
 
-  Widget _buildCollapsedSidebar(BuildContext context, SelectionCubit cubit) {
-    // Original content restored
-    return Container(
-      width: _sidebarWidth, // It takes full width when animation allows
-      padding: const EdgeInsetsDirectional.symmetric(vertical: 16),
-      alignment: AlignmentDirectional.topCenter, // Align content to top
-      child: Column(
-        mainAxisAlignment:
-            MainAxisAlignment.center, // Center the content vertically
-        children: [
-          if (cubit.selectedFilesCount > 0)
-            RotatedBox(
-              quarterTurns: -1,
-              child: Container(
-                padding: const EdgeInsetsDirectional.symmetric(
-                  horizontal: 8,
-                  vertical: 4,
+                    return SizedBox(
+                      width: width,
+                      child: width > 0
+                          ? ClipRect(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: context.surfaceContainerHighest,
+                                  border: BorderDirectional(
+                                    end: BorderSide(
+                                      color: context.outline.addOpacity(0.2),
+                                    ),
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: context.shadow.addOpacity(0.05),
+                                      offset: const Offset(2, 0),
+                                      blurRadius: 4,
+                                    ),
+                                  ],
+                                ),
+                                child: _buildExpandedSidebar(context, cubit),
+                              ),
+                            )
+                          : null,
+                    );
+                  },
                 ),
-                decoration: BoxDecoration(
-                  color: context.primary.addOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${cubit.selectedFilesCount} files',
-                  style: context.labelSmall?.copyWith(
-                    color: context.primary,
-                    fontWeight: FontWeight.w600,
+
+                // Main Content (takes all remaining space)
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsetsDirectional.only(bottom: 16),
+                    child: _buildContent(context, cubit),
                   ),
                 ),
+              ],
+            ),
+
+            // Floating Toggle Button (positioned absolutely)
+            PositionedDirectional(
+              start: _isSidebarExpanded ? _expandedSidebarWidth - 20 : 8,
+              top: 16,
+              child: AnimatedBuilder(
+                animation: _sidebarAnimation,
+                builder: (context, child) {
+                  return Material(
+                    color: _isSidebarExpanded
+                        ? context.surfaceContainerHighest
+                        : context.surface,
+                    elevation: 4,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      onTap: _toggleSidebar,
+                      customBorder: const CircleBorder(),
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: context.outline.addOpacity(0.2),
+                          ),
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Icon(
+                              _isSidebarExpanded
+                                  ? Icons.chevron_left
+                                  : Icons.tune,
+                              size: 20,
+                              color: context.onSurfaceVariant,
+                            ),
+                            // File count badge (when collapsed and files selected)
+                            if (!_isSidebarExpanded &&
+                                cubit.selectedFilesCount > 0)
+                              PositionedDirectional(
+                                end: 0,
+                                top: 0,
+                                child: Container(
+                                  width: 14,
+                                  height: 14,
+                                  decoration: BoxDecoration(
+                                    color: context.error,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: context.surface,
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      cubit.selectedFilesCount > 9
+                                          ? '9+'
+                                          : cubit.selectedFilesCount.toString(),
+                                      style: TextStyle(
+                                        color: context.onError,
+                                        fontSize: 8,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
-        ],
-      ),
+          ],
+        );
+      },
     );
   }
 
-  Widget _buildExpandedSidebarContent(BuildContext context) {
-    // Original content restored
+  Widget _buildExpandedSidebar(BuildContext context, SelectionCubit cubit) {
     return SingleChildScrollView(
       padding: const EdgeInsetsDirectional.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Font Size', style: context.titleSmall),
+          // Header with some spacing for the floating button
+          const SizedBox(height: 28),
           Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.tune,
+                size: 20,
+                color: context.primary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Quick Settings',
+                style: context.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // File Count Badge
+          if (cubit.selectedFilesCount > 0) ...[
+            Container(
+              padding: const EdgeInsetsDirectional.symmetric(
+                horizontal: 12,
+                vertical: 8,
+              ),
+              decoration: BoxDecoration(
+                color: context.primary.addOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: context.primary.addOpacity(0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.description_outlined,
+                    size: 16,
+                    color: context.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${cubit.selectedFilesCount} files selected',
+                    style: context.labelMedium?.copyWith(
+                      color: context.primary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // Font Size Section
+          _buildSectionTitle('Font Size'),
+          const SizedBox(height: 8),
+          Row(
             children: [
               IconButton(
                 onPressed:
                     _editorSettings.fontSize > 8 ? _decreaseFontSize : null,
-                icon: const Icon(Icons.text_decrease),
-                iconSize: 20,
-                tooltip: 'Decrease font size',
+                icon: Icon(
+                  Icons.remove,
+                  color: context.themeData.onSurfaceVariant,
+                ),
+                iconSize: 18,
+                style: IconButton.styleFrom(
+                  minimumSize: const Size(32, 32),
+                ),
               ),
-              Container(
-                width: 36,
-                alignment: Alignment.center,
-                child: Text(
-                  '${_editorSettings.fontSize.round()}',
-                  style: context.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
+              Flexible(
+                fit: FlexFit.tight,
+                child: Container(
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: context.surface,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Center(
+                    child: Text(
+                      '${_editorSettings.fontSize.round()}px',
+                      style: context.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
               ),
               IconButton(
                 onPressed:
                     _editorSettings.fontSize < 32 ? _increaseFontSize : null,
-                icon: const Icon(Icons.text_increase),
-                iconSize: 20,
-                tooltip: 'Increase font size',
+                icon: Icon(
+                  Icons.add,
+                  color: context.themeData.onSurfaceVariant,
+                ),
+                iconSize: 18,
+                style: IconButton.styleFrom(
+                  minimumSize: const Size(32, 32),
+                ),
               ),
             ],
           ),
-          const Divider(height: 24),
-          ListTile(
-            contentPadding: EdgeInsetsDirectional.zero,
-            leading: Icon(
-              _editorSettings.wordWrap != WordWrap.off
-                  ? Icons.wrap_text
-                  : Icons.notes,
-              color: _editorSettings.wordWrap != WordWrap.off
-                  ? context.primary
-                  : context.onSurface.addOpacity(0.7),
-            ),
-            title: const Text('Word Wrap'),
-            trailing: Switch(
-              value: _editorSettings.wordWrap != WordWrap.off,
-              onChanged: (_) => _toggleWordWrap(),
-            ),
-            onTap: _toggleWordWrap,
+
+          const SizedBox(height: 20),
+
+          // Quick Toggles
+          _buildSectionTitle('Editor Options'),
+          const SizedBox(height: 8),
+
+          _buildToggleTile(
+            icon: Icons.wrap_text,
+            title: 'Word Wrap',
+            value: _editorSettings.wordWrap != WordWrap.off,
+            onChanged: (_) => _toggleWordWrap(),
           ),
-          const Divider(height: 24),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.tune),
-            label: const Text('Editor Settings'),
+
+          _buildToggleTile(
+            icon: Icons.format_list_numbered,
+            title: 'Line Numbers',
+            value: _editorSettings.showLineNumbers,
+            onChanged: (value) async {
+              final newSettings =
+                  _editorSettings.copyWith(showLineNumbers: value);
+              await _saveAndApplySettings(newSettings);
+            },
+          ),
+
+          _buildToggleTile(
+            icon: Icons.map_outlined,
+            title: 'Minimap',
+            value: _editorSettings.showMinimap,
+            onChanged: (value) async {
+              final newSettings = _editorSettings.copyWith(showMinimap: value);
+              await _saveAndApplySettings(newSettings);
+            },
+          ),
+
+          _buildToggleTile(
+            icon: _editorSettings.readOnly ? Icons.edit_off : Icons.edit,
+            title: 'Edit Mode',
+            value: !_editorSettings.readOnly,
+            onChanged: (isEditable) async {
+              final newSettings =
+                  _editorSettings.copyWith(readOnly: !isEditable);
+              await _saveAndApplySettings(newSettings);
+            },
+          ),
+
+          const SizedBox(height: 20),
+
+          // Theme Quick Select
+          Row(
+            children: [
+              Icon(
+                Icons.palette_outlined,
+                size: 16,
+                color: context.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              _buildSectionTitle('Theme'),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: context.surface,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                isExpanded: true,
+                value: _editorSettings.theme,
+                padding: const EdgeInsetsDirectional.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                borderRadius: BorderRadius.circular(8),
+                items: [
+                  _buildThemeDropdownItem('vs', 'Light'),
+                  _buildThemeDropdownItem('vs-dark', 'Dark'),
+                  _buildThemeDropdownItem('hc-black', 'High Contrast'),
+                  _buildThemeDropdownItem('one-dark-pro', 'One Dark Pro'),
+                ],
+                onChanged: (value) async {
+                  if (value != null) {
+                    final newSettings = _editorSettings.copyWith(theme: value);
+                    await _saveAndApplySettings(newSettings);
+                  }
+                },
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Full Settings Button
+          FilledButton.icon(
+            icon: const Icon(Icons.settings, size: 18),
+            label: const Text('All Settings'),
             onPressed: () => _showEnhancedEditorSettings(context),
-            style: ElevatedButton.styleFrom(
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(double.infinity, 40),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Copy Button
+          OutlinedButton.icon(
+            icon: const Icon(Icons.copy, size: 18),
+            label: const Text('Copy Content'),
+            onPressed: cubit.combinedContent.isNotEmpty
+                ? () => _copyToClipboard(context, cubit.combinedContent)
+                : null,
+            style: OutlinedButton.styleFrom(
               minimumSize: const Size(double.infinity, 40),
             ),
           ),
@@ -205,36 +460,55 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
     );
   }
 
-  Widget _buildSidebarToggleButton(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: _toggleCollapse,
-        borderRadius: BorderRadius.circular(30), // Make it roundish
-        child: Container(
-          padding: const EdgeInsetsDirectional.all(8),
-          decoration: BoxDecoration(
-            color: context.surface.addOpacity(0.8),
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.addOpacity(0.2),
-                blurRadius: 4,
-                offset: const Offset(1, 1),
-              )
-            ],
-            border: Border.all(color: context.onSurface.addOpacity(0.2)),
-          ),
-          child: AnimatedRotation(
-            turns: _isCollapsed
-                ? 0
-                : 0.5, // Point right when collapsed, left when expanded
-            duration: const Duration(milliseconds: 300),
-            child: Icon(
-              Icons
-                  .chevron_left, // Icon always points left, rotation handles direction
-              size: 20,
-              color: context.onSurface.addOpacity(0.7),
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: context.labelMedium?.copyWith(
+        fontWeight: FontWeight.w600,
+        color: context.onSurfaceVariant,
+      ),
+    );
+  }
+
+  Widget _buildToggleTile({
+    required IconData icon,
+    required String title,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Container(
+      margin: const EdgeInsetsDirectional.only(bottom: 8),
+      child: Material(
+        color: context.surface,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          onTap: () => onChanged(!value),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsetsDirectional.symmetric(
+              horizontal: 12,
+              vertical: 8,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: value ? context.primary : context.onSurfaceVariant,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: context.bodyMedium,
+                  ),
+                ),
+                Switch(
+                  value: value,
+                  onChanged: onChanged,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ],
             ),
           ),
         ),
@@ -242,86 +516,13 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<SelectionCubit>(
-      builder: (context, cubit, child) {
-        return Column(
-          children: [
-            // _buildEnhancedHeader is REMOVED
-            Expanded(
-              child: Stack(
-                children: [
-                  Row(
-                    children: [
-                      // Collapsed or Expanded sidebar content
-                      SizeTransition(
-                        sizeFactor: _collapseAnimation,
-                        axis: Axis.horizontal,
-                        child: Container(
-                          // This container defines the full expanded width
-                          width: _sidebarWidth,
-                          decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .surfaceContainerHighest,
-                            border: BorderDirectional(
-                              end: BorderSide(
-                                color: context.onSurface.addOpacity(0.1),
-                              ),
-                            ),
-                          ),
-                          // Key added here to ensure the Container and its child are swapped correctly
-                          key: ValueKey<String>(
-                              _isCollapsed ? 'collapsed' : 'expanded'),
-                          child: _isCollapsed
-                              ? _buildCollapsedSidebar(context, cubit) // Green
-                              : _buildExpandedSidebarContent(context), // Blue
-                          // Removed Opacity widget here
-                        ),
-                      ),
-                      Expanded(
-                        child: Container(
-                          margin: const EdgeInsetsDirectional.all(16),
-                          child: _buildContent(context, cubit),
-                        ),
-                      ),
-                    ],
-                  ),
-                  // Positioned Sidebar Toggle Button
-                  AnimatedBuilder(
-                    animation: _collapseAnimation,
-                    builder: (context, child) {
-                      const double buttonRadius =
-                          18; // Approximate half-width of the button
-                      double startPosition;
-                      if (_collapseAnimation.value < 0.1) {
-                        // Mostly or fully collapsed
-                        startPosition =
-                            4.0; // Keep button slightly inset from screen edge
-                      } else {
-                        // Expanding or fully expanded
-                        startPosition =
-                            (_sidebarWidth * _collapseAnimation.value) -
-                                buttonRadius;
-                      }
-
-                      return PositionedDirectional(
-                        top: 0,
-                        bottom: 0,
-                        start: startPosition,
-                        child: Center(
-                          child: _buildSidebarToggleButton(context),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ],
-        );
-      },
+  DropdownMenuItem<String> _buildThemeDropdownItem(String value, String label) {
+    return DropdownMenuItem(
+      value: value,
+      child: Text(
+        label,
+        style: context.bodyMedium,
+      ),
     );
   }
 
@@ -335,39 +536,22 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
     return Column(
       children: [
         Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: context.onSurface.addOpacity(0.1),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: context.onSurface.addOpacity(0.05),
-                  offset: const Offset(0, 2),
-                  blurRadius: 8,
-                ),
-              ],
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: MonacoEditorEmbedded(
-              bridge: _monacoBridge,
-              onReady: () async {
-                setState(() {
-                  _isEditorReady = true;
-                });
-                await _applySettingsToEditor();
-                await 100.millisecondsDelay();
-                await _monacoBridge.setContent(cubit.combinedContent);
-              },
-            ),
+          child: MonacoEditorEmbedded(
+            bridge: _monacoBridge,
+            onReady: () async {
+              setState(() {
+                _isEditorReady = true;
+              });
+              await _applySettingsToEditor();
+              await 100.millisecondsDelay();
+              await _monacoBridge.setContent(cubit.combinedContent);
+            },
           ),
         ),
         const SizedBox(height: 16),
         MonacoEditorInfoBar(
           bridge: _monacoBridge,
           onCopy: () => _copyToClipboard(context, cubit.combinedContent),
-          // onSettings is removed as per previous refactor
         ),
       ],
     );
@@ -409,121 +593,15 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
           ),
           const SizedBox(height: 8),
           Text(
-            'Select files and load their content to start editing with the full power of Monaco',
+            'Select files to start editing with Monaco',
             textAlign: TextAlign.center,
             style: context.bodyLarge?.copyWith(
               color: context.onSurface.addOpacity(0.6),
             ),
           ),
-          const SizedBox(height: 40),
-          Container(
-            constraints: const BoxConstraints(maxWidth: 500),
-            padding: const EdgeInsetsDirectional.all(24),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  context.primary.addOpacity(0.08),
-                  context.primary.addOpacity(0.03),
-                ],
-                begin: AlignmentDirectional.topStart,
-                end: AlignmentDirectional.bottomEnd,
-              ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: context.primary.addOpacity(0.2),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsetsDirectional.all(8),
-                      decoration: BoxDecoration(
-                        color: context.primary.addOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        Icons.auto_awesome,
-                        size: 20,
-                        color: context.primary,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Monaco Editor Features',
-                      style: context.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: context.primary,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _buildFeatureTip(context, Icons.palette,
-                    'Multiple themes including One Dark Pro'),
-                _buildFeatureTip(context, Icons.keyboard,
-                    'VS Code, IntelliJ, Vim, and Emacs keybindings'),
-                _buildFeatureTip(context, Icons.code,
-                    'Syntax highlighting for 80+ languages'),
-                _buildFeatureTip(context, Icons.search,
-                    'Advanced find & replace with regex support'),
-                _buildFeatureTip(context, Icons.format_align_left,
-                    'Auto-formatting and code folding'),
-                _buildFeatureTip(context, Icons.accessibility,
-                    'Full accessibility and screen reader support'),
-              ],
-            ),
-          ),
         ],
       ),
     );
-  }
-
-  Widget _buildFeatureTip(BuildContext context, IconData icon, String text) {
-    return Padding(
-      padding: const EdgeInsetsDirectional.only(bottom: 12),
-      child: Row(
-        children: [
-          Icon(
-            icon,
-            size: 16,
-            color: context.primary.addOpacity(0.8),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              text,
-              style: context.bodyMedium?.copyWith(
-                color: context.onSurface.addOpacity(0.8),
-                height: 1.5,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  bool _hasCustomSettings() {
-    const defaultSettings = EditorSettings();
-    return _editorSettings.theme != defaultSettings.theme ||
-        _editorSettings.fontSize != defaultSettings.fontSize ||
-        _editorSettings.keybindingPreset != defaultSettings.keybindingPreset ||
-        _editorSettings.wordWrap != defaultSettings.wordWrap;
-  }
-
-  String _formatByteSize(int bytes) {
-    if (bytes < 1024) return '${bytes}B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)}KB';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)}MB';
-  }
-
-  Future<void> _toggleTheme() async {
-    final newTheme = _editorSettings.theme.contains('dark') ? 'vs' : 'vs-dark';
-    final newSettings = _editorSettings.copyWith(theme: newTheme);
-    await _saveAndApplySettings(newSettings);
   }
 
   Future<void> _increaseFontSize() async {
@@ -549,30 +627,13 @@ class _CombinedContentWidgetState extends State<CombinedContentWidget>
     await _saveAndApplySettings(newSettings);
   }
 
-  Future<void> _formatContent() async {
-    if (_isEditorReady) {
-      await _monacoBridge.format();
-    }
-  }
-
-  Future<void> _scrollToTop() async {
-    if (_isEditorReady) {
-      await _monacoBridge.scrollToTop();
-    }
-  }
-
-  Future<void> _scrollToBottom() async {
-    // Added for completeness, if called from somewhere
-    if (_isEditorReady) {
-      await _monacoBridge.scrollToBottom();
-    }
-  }
-
   Future<void> _saveAndApplySettings(EditorSettings newSettings) async {
     setState(() {
       _editorSettings = newSettings;
     });
     await newSettings.save();
+    debugPrint(
+        '[_saveAndApplySettings] _isEditorReady: $_isEditorReady, new showLineNumbers: ${newSettings.showLineNumbers}');
     if (_isEditorReady) {
       await _applySettingsToEditor();
     }

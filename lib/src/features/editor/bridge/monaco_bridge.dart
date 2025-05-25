@@ -13,7 +13,7 @@ class MonacoBridge extends ChangeNotifier {
   WebViewController? _webViewController;
 
   String _content = '';
-  String _language = 'plaintext';
+  String _language = 'markdown';
   EditorSettings _settings = const EditorSettings();
   bool _isReady = false;
 
