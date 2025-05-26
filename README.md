@@ -18,6 +18,8 @@
   <a href="https://github.com/omar-hanafy/context_collector/stargazers"><img src="https://img.shields.io/github/stars/omar-hanafy/context_collector?style=social" alt="GitHub Stars"></a>
 </p>
 
+> **⚠️ Beta Notice:** This project is currently in beta and officially supports **macOS only**. Windows and Linux support is under active development and coming soon!
+
 > **Combine files & folders into a clean, AI-ready text bundle — powered by Flutter and Monaco Editor.**
 
 Context Collector is a lightweight desktop app (macOS • Windows • Linux) that lets you drag-and-drop source files, logs, configurations, or entire directories and outputs a neatly annotated document.
