@@ -118,6 +118,8 @@ flutter run  # or flutter build macos / windows / linux
 ---
 
 ## 🔮 Roadmap
+* Add Windows support.
+* Add Linux support.
 * 📟 Export as file.
 * 🗂️ Import from GitHub repos.
 * 🌐 Add web support.
