@@ -6,11 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'src/features/editor/assets_manager/notifier.dart';
-import 'src/features/editor/services/monaco_editor_providers.dart';
 import 'src/features/editor/presentation/ui/global_monaco_container.dart';
+import 'src/features/editor/services/monaco_editor_providers.dart';
 import 'src/features/editor/services/monaco_editor_state.dart';
 import 'src/features/editor/utils/webview_platform_utils.dart';
 import 'src/features/scan/presentation/ui/home_screen.dart';
+import 'src/features/settings/presentation/state/theme_notifier.dart';
 import 'src/shared/theme/app_theme.dart';
 
 void main() async {
@@ -173,11 +174,13 @@ class ContextCollectorApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(themeProvider);
+    
     return MaterialApp(
       title: 'Context Collector',
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system,
+      themeMode: themeMode,
       home: WebViewPlatformUtils.buildCompatibilityChecker(
         // Wrap with GlobalMonacoContainer to ensure editor is always present
         child: const GlobalMonacoContainer(
@@ -250,8 +253,6 @@ class UnsupportedPlatformScreen extends ConsumerWidget {
                     ...[
                       'Windows 10/11 with WebView2 Runtime',
                       'macOS 10.13 or later',
-                      'Android 5.0 or later',
-                      'iOS 11.0 or later',
                     ].map(
                       (platform) => Padding(
                         padding: const EdgeInsets.only(bottom: 4),

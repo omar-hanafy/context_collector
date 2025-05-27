@@ -30,7 +30,6 @@ class MonacoEditorService {
   String? _queuedContent;
   bool _isContentUpdatePending = false;
 
-
   /// Get the bridge instance (for UI components)
   MonacoBridgePlatform get bridge => _bridge;
 
@@ -45,7 +44,8 @@ class MonacoEditorService {
     // Check current state
     final currentStatus = _ref.read(monacoEditorStatusProvider);
     if (currentStatus.state != MonacoEditorServiceState.idle) {
-      debugPrint('[MonacoEditorService] Already initialized or initializing: ${currentStatus.state}');
+      debugPrint(
+          '[MonacoEditorService] Already initialized or initializing: ${currentStatus.state}');
       return;
     }
 
@@ -85,11 +85,9 @@ class MonacoEditorService {
   void markEditorReady() {
     debugPrint('[MonacoEditorService] Editor marked as ready');
 
-
-
     _updateStatus(MonacoEditorStatus(
       state: MonacoEditorServiceState.ready,
-      progress: 1.0,
+      progress: 1,
       message: 'Monaco Editor ready',
       isVisible: true, // Always visible in layered architecture
       hasContent: _currentContent != null || _config.showInitContent,
@@ -101,7 +99,9 @@ class MonacoEditorService {
     _initCompleter = null;
 
     // Set initial content if configured
-    if (_config.showInitContent && _currentContent == null && _queuedContent == null) {
+    if (_config.showInitContent &&
+        _currentContent == null &&
+        _queuedContent == null) {
       Future.microtask(() async {
         await _bridge.setContent(_config.initContent);
         await _bridge.setLanguage(_config.initLanguage);

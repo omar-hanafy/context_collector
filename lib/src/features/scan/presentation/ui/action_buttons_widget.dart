@@ -11,7 +11,7 @@ class ActionButtonsWidget extends ConsumerWidget {
     final selectionNotifier = ref.read(selectionProvider.notifier);
 
     return Container(
-      padding: const EdgeInsetsDirectional.all(20),
+      padding: const EdgeInsetsDirectional.fromSTEB(12, 8, 12, 8),
       decoration: BoxDecoration(
         color: context.background,
         border: BorderDirectional(
@@ -183,12 +183,6 @@ class ActionButtonsWidget extends ConsumerWidget {
               ],
             ),
           ),
-
-          const SizedBox(height: 16),
-
-          // Action buttons are removed as per original request
-          // Relying on drag-and-drop and the combined content widget for actions
-          const SizedBox.shrink(),
         ],
       ),
     );

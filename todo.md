@@ -1,0 +1,3 @@
+- adding new file clears custom text added.
+- support for tree view.
+- support for custom text item in tree view.

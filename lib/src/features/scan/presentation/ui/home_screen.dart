@@ -2,9 +2,12 @@
 import 'dart:io';
 
 import 'package:context_collector/context_collector.dart';
+import 'package:context_collector/src/shared/consts.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Home screen overlay that shows when no files are selected
 /// This is the top layer in the layered architecture
@@ -26,7 +29,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (mounted) {
         final selectionNotifier = ref.read(selectionProvider.notifier);
         final prefsState = ref.read(preferencesProvider);
-        selectionNotifier.setSupportedExtensions(prefsState.prefs.activeExtensions);
+        selectionNotifier
+            .setSupportedExtensions(prefsState.prefs.activeExtensions);
       }
     });
   }
@@ -34,28 +38,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     // Listen for preference changes
-    ref.listen<ExtensionPrefsWithLoading>(preferencesProvider, (previous, next) {
-      if (previous?.prefs.activeExtensions != next.prefs.activeExtensions) {
-        ref.read(selectionProvider.notifier).setSupportedExtensions(next.prefs.activeExtensions);
-      }
-    });
+    ref
+      ..listen<ExtensionPrefsWithLoading>(preferencesProvider,
+          (previous, next) {
+        if (previous?.prefs.activeExtensions != next.prefs.activeExtensions) {
+          ref
+              .read(selectionProvider.notifier)
+              .setSupportedExtensions(next.prefs.activeExtensions);
+        }
+      })
 
-    // Listen for errors
-    ref.listen<SelectionState>(selectionProvider, (previous, next) {
-      if (next.error != null && next.error != previous?.error) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(next.error!),
-            backgroundColor: context.error,
-            action: SnackBarAction(
-              label: 'Dismiss',
-              onPressed: () => ref.read(selectionProvider.notifier).clearError(),
-              textColor: context.onError,
+      // Listen for errors
+      ..listen<SelectionState>(selectionProvider, (previous, next) {
+        if (next.error != null && next.error != previous?.error) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(next.error!),
+              backgroundColor: context.error,
+              action: SnackBarAction(
+                label: 'Dismiss',
+                onPressed: () =>
+                    ref.read(selectionProvider.notifier).clearError(),
+                textColor: context.onError,
+              ),
             ),
-          ),
-        );
-      }
-    });
+          );
+        }
+      });
 
     final selectionNotifier = ref.read(selectionProvider.notifier);
 
@@ -88,6 +97,45 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
         centerTitle: true,
         actions: [
+          IconButton(
+            onPressed: () async {
+              final githubUrl =
+                  Uri.parse('https://github.com/omar-hanafy/context_collector');
+              if (!await launchUrl(githubUrl)) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Could not open GitHub')),
+                  );
+                }
+              }
+            },
+            icon: SvgPicture.asset(
+              context.isDark ? AppAssets.githubLight : AppAssets.githubDark,
+              width: 20,
+              height: 20,
+            ),
+            tooltip: 'View on GitHub',
+          ),
+          IconButton(
+            onPressed: () async {
+              final coffeeUrl =
+                  Uri.parse('https://www.buymeacoffee.com/omar.hanafy');
+              if (!await launchUrl(coffeeUrl)) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Could not open Buy Me a Coffee')),
+                  );
+                }
+              }
+            },
+            icon: SvgPicture.asset(
+              context.isDark ? AppAssets.logoLight : AppAssets.logoDark,
+              width: 20,
+              height: 20,
+            ),
+            tooltip: 'Buy Me a Coffee',
+          ),
           IconButton(
             onPressed: () {
               Navigator.push(
@@ -126,7 +174,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           }
 
           if (files.isNotEmpty) {
-            selectionNotifier.addFiles(files);
+            await selectionNotifier.addFiles(files);
           }
 
           for (final directory in directories) {

@@ -1,4 +1,3 @@
-// Main exports for the refactored Context Collector app
 export '../main.dart';
 export 'features/editor/editor.dart';
 export 'features/scan/scan.dart';

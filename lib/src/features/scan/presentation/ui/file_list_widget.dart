@@ -222,19 +222,6 @@ class _FileListItem extends StatelessWidget {
             highlightColor: Colors.transparent,
             splashColor: Colors.transparent,
             hoverColor: context.error.addOpacity(0.05),
-          )
-        else if (file.content != null)
-          Container(
-            padding: const EdgeInsetsDirectional.all(6),
-            decoration: BoxDecoration(
-              color: context.primary.addOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              Icons.check_rounded,
-              color: context.primary,
-              size: 20,
-            ),
           ),
         const SizedBox(width: 8),
         IconButton(

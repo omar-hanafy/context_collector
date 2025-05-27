@@ -11,23 +11,32 @@
 <p align="center">
   <!-- Badges will be added here -->
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Platforms: macOS, Windows, Linux">
+  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-blue" alt="Platforms: macOS, Windows">
   <img src="https://img.shields.io/badge/Dart-%3E%3D3.0.0%20%3C4.0.0-blueviolet" alt="Dart SDK: >=3.0.0 <4.0.0">
   <img src="https://img.shields.io/badge/Flutter-blue?logo=flutter" alt="Flutter">
   <a href="https://github.com/omar-hanafy/context_collector/commits/main"><img src="https://img.shields.io/github/last-commit/omar-hanafy/context_collector" alt="Last Commit"></a>
   <a href="https://github.com/omar-hanafy/context_collector/stargazers"><img src="https://img.shields.io/github/stars/omar-hanafy/context_collector?style=social" alt="GitHub Stars"></a>
 </p>
 
-> **⚠️ Beta Notice:** This project is currently in beta and officially supports **macOS only**. Windows and Linux support is under active development and coming soon!
-
 > **Combine files & folders into a clean, AI-ready text bundle — powered by Flutter and Monaco Editor.**
 
-Context Collector is a lightweight desktop app (macOS • Windows • Linux) that lets you drag-and-drop source files, logs, configurations, or entire directories and outputs a neatly annotated document.
+Context Collector is a lightweight desktop app (macOS • Windows) that lets you drag-and-drop source files, logs, configurations, or entire directories and outputs a neatly annotated document.
 Every chunk includes full file paths and metadata, making it ideal for working smoothly with large-language models (LLMs) without the hassle of manual copying and pasting.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/omar-hanafy/context_collector/refs/heads/main/readme-assets/home.png" width="100%" alt="Context Collector main window (dark theme)">
 </p>
+
+---
+
+## 🖥️ Platform Support
+
+| Platform | Status | Requirements |
+|----------|--------|--------------|
+| **macOS** | ✅ Fully Supported | macOS 10.13 or later |
+| **Windows** | ✅ Fully Supported | Windows 10/11 with [WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) |
+
+> **Note for Windows users:** The app will prompt you to install WebView2 Runtime if it's not already installed. This is required for the Monaco editor integration.
 
 ---
 
@@ -68,8 +77,10 @@ Every chunk includes full file paths and metadata, making it ideal for working s
 
 ### Option 1: Pre-built app (Recommended)
 
-1. Go to [**Releases**](https://github.com/omar-hanafy/context_collector/releases) and download the latest ZIP/DMG/EXE.
-2. Unzip and run—zero setup required.
+1. Go to [**Releases**](https://github.com/omar-hanafy/context_collector/releases) and download the latest:
+   - **macOS**: `.dmg` file
+   - **Windows**: `.exe` installer
+2. Install and run—zero setup required.
 
 ### Option 2: Build from source (Flutter 3.22+)
 
@@ -79,10 +90,10 @@ cd context_collector
 flutter pub get
 
 # Enable desktop support if not already enabled
-flutter config --enable-macos-desktop --enable-windows-desktop --enable-linux-desktop
+flutter config --enable-macos-desktop --enable-windows-desktop
 
 # Run or build
-flutter run  # or flutter build macos / windows / linux
+flutter run  # or flutter build macos / windows
 ```
 
 ---
@@ -118,8 +129,7 @@ flutter run  # or flutter build macos / windows / linux
 ---
 
 ## 🔮 Roadmap
-* Add Windows support.
-* Add Linux support.
+* ✅ ~~Add Windows support.~~ **Done!**
 * 📟 Export as file.
 * 🗂️ Import from GitHub repos.
 * 🌐 Add web support.
@@ -165,7 +175,7 @@ This project was made possible by the vibrant open-source community and these fa
     *   [Monaco Editor](https://github.com/microsoft/monaco-editor): For the powerful in-app code editing experience.
 
 *   **State Management & UI**:
-    *   [`provider`](https://pub.dev/packages/provider): For efficient state management throughout the app.
+    *   [`flutter_riverpod`](https://pub.dev/packages/flutter_riverpod): For efficient state management throughout the app.
     *   [`dart_helper_utils`](https://pub.dev/packages/dart_helper_utils) & [`flutter_helper_utils`](https://pub.dev/packages/flutter_helper_utils): For foundational utilities.
 
 *   **File System & I/O**:
@@ -176,7 +186,7 @@ This project was made possible by the vibrant open-source community and these fa
 
 *   **Desktop Integration**:
     *   [`window_manager`](https://pub.dev/packages/window_manager): For native window management.
-    *   [`webview_flutter`](https://pub.dev/packages/webview_flutter) & [`desktop_webview_window`](https://pub.dev/packages/desktop_webview_window): Crucial for integrating Monaco editor.
+    *   [`flutter_inappwebview`](https://pub.dev/packages/flutter_inappwebview): Crucial for integrating Monaco editor.
 
 *   **Data Handling & Persistence**:
     *   [`shared_preferences`](https://pub.dev/packages/shared_preferences): For saving app settings.
@@ -186,4 +196,3 @@ This project was made possible by the vibrant open-source community and these fa
 
 *   **Community**:
     *   A heartfelt thank you to everyone who stars the repository, contributes code, reports issues, or offers feedback. Your support is invaluable! ❤️
-

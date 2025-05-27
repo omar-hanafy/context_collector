@@ -41,34 +41,12 @@ class WebViewPlatformUtils {
         engine: 'WebKit',
         requirements: ['macOS 10.13 or later'],
       );
-    } else if (Platform.isLinux) {
-      return const WebViewPlatformInfo(
-        platform: 'Linux',
-        isSupported: false,
-        error: 'WebView not currently supported on Linux desktop',
-        requirements: ['Not supported'],
-        engine: '',
-      );
-    } else if (Platform.isAndroid) {
-      return const WebViewPlatformInfo(
-        platform: 'Android',
-        isSupported: true,
-        engine: 'Chromium WebView',
-        requirements: ['Android 5.0 (API level 21) or later'],
-      );
-    } else if (Platform.isIOS) {
-      return const WebViewPlatformInfo(
-        platform: 'iOS',
-        isSupported: true,
-        engine: 'WebKit',
-        requirements: ['iOS 11.0 or later'],
-      );
     } else {
       return WebViewPlatformInfo(
         platform: Platform.operatingSystem,
         isSupported: false,
-        error: 'Unsupported platform',
-        requirements: ['Not supported'],
+        error: 'Context Collector only supports macOS and Windows',
+        requirements: ['macOS 10.13+ or Windows 10/11 with WebView2'],
         engine: '',
       );
     }

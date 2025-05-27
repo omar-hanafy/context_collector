@@ -174,14 +174,13 @@ class MonacoAssetManager {
 
   /// Get the target directory for Monaco assets
   Future<String> _getTargetDirectory() async {
-    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+    if (Platform.isWindows || Platform.isMacOS) {
       // Desktop: Use app support directory for persistent caching
       final appDir = await getApplicationSupportDirectory();
       return path.join(appDir.path, _cacheSubDir);
     } else {
-      // Mobile: Use temporary directory
-      final tempDir = await getTemporaryDirectory();
-      return path.join(tempDir.path, _cacheSubDir);
+      // Unsupported platform
+      throw UnsupportedError('Context Collector only supports macOS and Windows');
     }
   }
 
