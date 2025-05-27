@@ -1,12 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:context_collector/src/features/editor/domain/monaco_data.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../shared/theme/extensions.dart';
-import '../../bridge/monaco_bridge.dart';
 import '../../domain/editor_settings.dart';
 import '../../domain/keybinding_manager.dart';
 import '../../domain/theme_manager.dart';
@@ -50,14 +50,6 @@ class _EnhancedEditorSettingsDialogState
     extends State<EnhancedEditorSettingsDialog> with TickerProviderStateMixin {
   late EditorSettings _settings;
   late TabController _tabController;
-
-  // Tab indices
-  static const int _generalTab = 0;
-  static const int _appearanceTab = 1;
-  static const int _editorTab = 2;
-  static const int _keybindingsTab = 3;
-  static const int _languagesTab = 4;
-  static const int _advancedTab = 5;
 
   // Form controllers
   final _fontSizeController = TextEditingController();
@@ -914,7 +906,7 @@ class _EnhancedEditorSettingsDialogState
       ),
       itemBuilder: (context, index) {
         final entry = entries[index];
-        final languageName = MonacoBridge.availableLanguages.firstWhere(
+        final languageName = MonacoData.availableLanguages.firstWhere(
             (lang) => lang['value'] == entry.key,
             orElse: () => {'value': entry.key, 'text': entry.key})['text'];
 
@@ -1826,7 +1818,7 @@ class _LanguageSettingsDialogState extends State<_LanguageSettingsDialog> {
       existingKeys.remove(widget.language);
     }
 
-    return MonacoBridge.availableLanguages
+    return MonacoData.availableLanguages
         .where((lang) => !existingKeys.contains(lang['value']))
         .map((lang) => DropdownMenuItem<String>(
               value: lang['value'],
@@ -1842,7 +1834,7 @@ class _LanguageSettingsDialogState extends State<_LanguageSettingsDialog> {
 
     return AlertDialog(
       title: Text(isEditing
-          ? 'Edit ${MonacoBridge.availableLanguages.firstWhere((l) => l['value'] == _selectedLanguage, orElse: () => {
+          ? 'Edit ${MonacoData.availableLanguages.firstWhere((l) => l['value'] == _selectedLanguage, orElse: () => {
                 'text': _selectedLanguage!
               })['text']} Settings'
           : 'Add Language-Specific Settings'),
@@ -1868,7 +1860,7 @@ class _LanguageSettingsDialogState extends State<_LanguageSettingsDialog> {
               Padding(
                 padding: const EdgeInsetsDirectional.only(bottom: 16),
                 child: Text(
-                    'Editing settings for: ${MonacoBridge.availableLanguages.firstWhere((l) => l['value'] == _selectedLanguage, orElse: () => {
+                    'Editing settings for: ${MonacoData.availableLanguages.firstWhere((l) => l['value'] == _selectedLanguage, orElse: () => {
                           'text': _selectedLanguage!
                         })['text']}',
                     style: theme.titleMedium),
@@ -1897,7 +1889,8 @@ class _LanguageSettingsDialogState extends State<_LanguageSettingsDialog> {
             _buildDropdown<WordWrap>(
               label: 'Word Wrap (Optional)',
               value: _config.wordWrap,
-              items: [null, ...WordWrap.values], // Allow clearing
+              items: [null, ...WordWrap.values],
+              // Allow clearing
               itemBuilder: (ww) =>
                   ww == null ? 'Default' : ww.name.capitalize(),
               onChanged: (value) {

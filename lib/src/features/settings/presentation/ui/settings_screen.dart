@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../shared/theme/extensions.dart';
 import '../../../../shared/utils/extension_catalog.dart';
-import '../state/preferences_cubit.dart';
+import '../state/preferences_notifier.dart';
 
-class SettingsScreen extends StatefulWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _extensionController = TextEditingController();
   FileCategory _selectedCategory = FileCategory.other;
   final _formKey = GlobalKey<FormState>();
@@ -24,8 +24,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.dispose();
   }
 
-  Future<void> _showAddExtensionDialog(
-      BuildContext context, PreferencesCubit cubit) async {
+  Future<void> _showAddExtensionDialog(BuildContext context) async {
+    final notifier = ref.read(preferencesProvider.notifier);
+    final currentPrefs = ref.read(preferencesProvider).prefs;
+
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -43,7 +45,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   prefixIcon: Icon(Icons.extension_rounded),
                 ),
                 inputFormatters: [
-                  // Ensure it starts with a dot
                   TextInputFormatter.withFunction((oldValue, newValue) {
                     final text = newValue.text;
                     if (text.isEmpty) return newValue;
@@ -64,7 +65,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   if (!value.startsWith('.')) {
                     return 'Extension must start with a dot';
                   }
-                  if (cubit.activeExtensions
+                  if (currentPrefs.activeExtensions
                       .containsKey(value.toLowerCase())) {
                     return 'Extension already exists';
                   }
@@ -108,7 +109,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: () async {
               if (_formKey.currentState!.validate()) {
                 try {
-                  await cubit.addCustomExtension(
+                  await notifier.addCustomExtension(
                     _extensionController.text.toLowerCase(),
                     _selectedCategory,
                   );
@@ -142,227 +143,220 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final prefsState = ref.watch(preferencesProvider);
+    final notifier = ref.read(preferencesProvider.notifier);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Extension Settings'),
         actions: [
-          Consumer<PreferencesCubit>(
-            builder: (context, cubit, child) {
-              return PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert_rounded),
-                onSelected: (value) async {
-                  switch (value) {
-                    case 'enable_all':
-                      await cubit.enableAll();
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('All extensions enabled'),
-                          ),
-                        );
-                      }
-                    case 'disable_all':
-                      await cubit.disableAll();
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('All default extensions disabled'),
-                          ),
-                        );
-                      }
-                    case 'reset':
-                      await showDialog<void>(
-                        context: context,
-                        builder: (dialogContext) => AlertDialog(
-                          title: const Text('Reset to Defaults'),
-                          content: const Text(
-                            'This will remove all custom extensions and reset all settings to default. Are you sure?',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(dialogContext),
-                              child: const Text('Cancel'),
-                            ),
-                            FilledButton(
-                              onPressed: () async {
-                                await cubit.resetToDefaults();
-                                if (mounted) {
-                                  Navigator.pop(dialogContext);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content:
-                                          Text('Settings reset to defaults'),
-                                    ),
-                                  );
-                                }
-                              },
-                              style: FilledButton.styleFrom(
-                                backgroundColor: context.error,
-                              ),
-                              child: const Text('Reset'),
-                            ),
-                          ],
-                        ),
-                      );
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded),
+            onSelected: (value) async {
+              switch (value) {
+                case 'enable_all':
+                  await notifier.enableAll();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('All extensions enabled'),
+                      ),
+                    );
                   }
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'enable_all',
-                    child: Row(
-                      children: [
-                        Icon(Icons.check_circle_outline_rounded),
-                        SizedBox(width: 12),
-                        Text('Enable All'),
+                case 'disable_all':
+                  await notifier.disableAll();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('All default extensions disabled'),
+                      ),
+                    );
+                  }
+                case 'reset':
+                  await showDialog<void>(
+                    context: context,
+                    builder: (dialogContext) => AlertDialog(
+                      title: const Text('Reset to Defaults'),
+                      content: const Text(
+                        'This will remove all custom extensions and reset all settings to default. Are you sure?',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialogContext),
+                          child: const Text('Cancel'),
+                        ),
+                        FilledButton(
+                          onPressed: () async {
+                            await notifier.resetToDefaults();
+                            if (mounted) {
+                              Navigator.pop(dialogContext);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Settings reset to defaults'),
+                                ),
+                              );
+                            }
+                          },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: context.error,
+                          ),
+                          child: const Text('Reset'),
+                        ),
                       ],
                     ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'disable_all',
-                    child: Row(
-                      children: [
-                        Icon(Icons.remove_circle_outline_rounded),
-                        SizedBox(width: 12),
-                        Text('Disable All Default'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuDivider(),
-                  const PopupMenuItem(
-                    value: 'reset',
-                    child: Row(
-                      children: [
-                        Icon(Icons.restore_rounded),
-                        SizedBox(width: 12),
-                        Text('Reset to Defaults'),
-                      ],
-                    ),
-                  ),
-                ],
-              );
+                  );
+              }
             },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'enable_all',
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle_outline_rounded),
+                    SizedBox(width: 12),
+                    Text('Enable All'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'disable_all',
+                child: Row(
+                  children: [
+                    Icon(Icons.remove_circle_outline_rounded),
+                    SizedBox(width: 12),
+                    Text('Disable All Default'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'reset',
+                child: Row(
+                  children: [
+                    Icon(Icons.restore_rounded),
+                    SizedBox(width: 12),
+                    Text('Reset to Defaults'),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(width: 8),
         ],
       ),
-      body: Consumer<PreferencesCubit>(
-        builder: (context, cubit, child) {
-          if (cubit.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: Builder(builder: (context) {
+        if (prefsState.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-          final groupedExtensions = cubit.groupedExtensions;
+        final groupedExtensions = notifier.groupedExtensions;
+        final currentPrefs = prefsState.prefs;
 
-          return Column(
-            children: [
-              Container(
-                padding: const EdgeInsetsDirectional.all(16),
-                color: context.surfaceContainerHighest,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Customize Supported File Extensions',
-                      style: context.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+        return Column(
+          children: [
+            Container(
+              padding: const EdgeInsetsDirectional.all(16),
+              color: context.surfaceContainerHighest,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Customize Supported File Extensions',
+                    style: context.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Enable or disable file extensions for context collection. You can also add custom extensions.',
-                      style: context.bodyMedium?.copyWith(
-                        color: context.onSurface.addOpacity(0.7),
-                      ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Enable or disable file extensions for context collection. You can also add custom extensions.',
+                    style: context.bodyMedium?.copyWith(
+                      color: context.onSurface.addOpacity(0.7),
                     ),
-                    const SizedBox(height: 16),
-                    FilledButton.icon(
-                      onPressed: () =>
-                          _showAddExtensionDialog(context, cubit),
-                      icon: const Icon(Icons.add_rounded),
-                      label: const Text('Add Custom Extension'),
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: () => _showAddExtensionDialog(context),
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('Add Custom Extension'),
+                  ),
+                ],
               ),
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsetsDirectional.all(16),
-                  itemCount: groupedExtensions.length,
-                  itemBuilder: (context, index) {
-                    final category = groupedExtensions.keys.elementAt(index);
-                    final extensions = groupedExtensions[category]!;
-                    final enabledCount =
-                        extensions.where((e) => e.value).length;
+            ),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsetsDirectional.all(16),
+                itemCount: groupedExtensions.length,
+                itemBuilder: (context, index) {
+                  final category = groupedExtensions.keys.elementAt(index);
+                  final extensions = groupedExtensions[category]!;
+                  final enabledCount = extensions.where((e) => e.value).length;
 
-                    return Card(
-                      margin: const EdgeInsetsDirectional.only(bottom: 16),
-                      child: ExpansionTile(
-                        leading: Icon(category.icon),
-                        title: Text(category.displayName),
-                        subtitle: Text(
-                          '$enabledCount of ${extensions.length} enabled',
-                          style: context.bodySmall?.copyWith(
-                            color: context.onSurface.addOpacity(0.6),
+                  return Card(
+                    margin: const EdgeInsetsDirectional.only(bottom: 16),
+                    child: ExpansionTile(
+                      leading: Icon(category.icon),
+                      title: Text(category.displayName),
+                      subtitle: Text(
+                        '$enabledCount of ${extensions.length} enabled',
+                        style: context.bodySmall?.copyWith(
+                          color: context.onSurface.addOpacity(0.6),
+                        ),
+                      ),
+                      children: [
+                        const Divider(height: 1),
+                        Padding(
+                          padding: const EdgeInsetsDirectional.all(8),
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: extensions.map((entry) {
+                              final extension = entry.key;
+                              final isEnabled = entry.value;
+                              final isCustom = currentPrefs.customExtensions
+                                  .containsKey(extension);
+
+                              return FilterChip(
+                                label: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(extension),
+                                    if (isCustom) ...[
+                                      const SizedBox(width: 4),
+                                      Icon(
+                                        Icons.star_rounded,
+                                        size: 14,
+                                        color: context.primary,
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                selected: isEnabled,
+                                onSelected: (_) async {
+                                  await notifier.toggleExtension(extension);
+                                },
+                                showCheckmark: true,
+                                deleteIcon: isCustom
+                                    ? const Icon(Icons.close_rounded, size: 18)
+                                    : null,
+                                onDeleted: isCustom
+                                    ? () async {
+                                        await notifier
+                                            .toggleExtension(extension);
+                                      }
+                                    : null,
+                              );
+                            }).toList(),
                           ),
                         ),
-                        children: [
-                          const Divider(height: 1),
-                          Padding(
-                            padding: const EdgeInsetsDirectional.all(8),
-                            child: Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: extensions.map((entry) {
-                                final extension = entry.key;
-                                final isEnabled = entry.value;
-                                final isCustom = cubit
-                                    .preferences.customExtensions
-                                    .containsKey(extension);
-
-                                return FilterChip(
-                                  label: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(extension),
-                                      if (isCustom) ...[
-                                        const SizedBox(width: 4),
-                                        Icon(
-                                          Icons.star_rounded,
-                                          size: 14,
-                                          color: context.primary,
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                  selected: isEnabled,
-                                  onSelected: (_) async {
-                                    await cubit.toggleExtension(extension);
-                                  },
-                                  showCheckmark: true,
-                                  deleteIcon: isCustom
-                                      ? const Icon(Icons.close_rounded,
-                                          size: 18)
-                                      : null,
-                                  onDeleted: isCustom
-                                      ? () async {
-                                          await cubit
-                                              .toggleExtension(extension);
-                                        }
-                                      : null,
-                                );
-                              }).toList(),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
+                      ],
+                    ),
+                  );
+                },
               ),
-            ],
-          );
-        },
-      ),
+            ),
+          ],
+        );
+      }),
     );
   }
 }

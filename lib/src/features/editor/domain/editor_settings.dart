@@ -1,4 +1,5 @@
 import 'package:dart_helper_utils/dart_helper_utils.dart';
+import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -44,7 +45,22 @@ enum WordBasedSuggestions {
 
 enum AccessibilitySupport { auto, off, on }
 
-enum KeybindingPresetEnum { vscode, intellij, vim, emacs, custom }
+enum KeybindingPresetEnum {
+  vscode,
+  intellij,
+  vim,
+  emacs,
+  custom;
+
+  // Map your enum values to Monaco keybinding presets
+  String get monacoPreset => switch (this) {
+        KeybindingPresetEnum.vscode => 'vscode',
+        KeybindingPresetEnum.intellij => 'intellij',
+        KeybindingPresetEnum.vim => 'vim',
+        KeybindingPresetEnum.emacs => 'emacs',
+        KeybindingPresetEnum.custom => 'custom',
+      };
+}
 
 /// Language-specific configuration
 class LanguageConfig {
@@ -138,7 +154,7 @@ class LanguageConfig {
 
 /// Enhanced Editor configuration settings with comprehensive options
 @immutable
-class EditorSettings {
+class EditorSettings extends Equatable {
   const EditorSettings({
     // General Settings
     this.theme = defaultTheme,
@@ -1475,44 +1491,19 @@ class EditorSettings {
   }
 
   @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-    return other is EditorSettings &&
-        other.theme == theme &&
-        other.fontSize == fontSize &&
-        other.fontFamily == fontFamily &&
-        other.lineHeight == lineHeight &&
-        other.letterSpacing == letterSpacing &&
-        other.showLineNumbers == showLineNumbers &&
-        other.lineNumbersStyle == lineNumbersStyle &&
-        other.showMinimap == showMinimap &&
-        other.minimapSide == minimapSide &&
-        other.minimapRenderCharacters == minimapRenderCharacters &&
-        other.minimapSize == minimapSize &&
-        other.showIndentGuides == showIndentGuides &&
-        other.renderWhitespace == renderWhitespace &&
-        other.rulers.toString() == rulers.toString() &&
-        other.stickyScroll == stickyScroll &&
-        other.showFoldingControls == showFoldingControls &&
-        other.glyphMargin == glyphMargin &&
-        other.renderLineHighlight == renderLineHighlight &&
-        other.wordWrap == wordWrap &&
-        other.wordWrapColumn == wordWrapColumn &&
-        other.tabSize == tabSize &&
-        other.insertSpaces == insertSpaces &&
-        other.autoIndent == autoIndent &&
-        other.autoClosingBrackets == autoClosingBrackets &&
-        other.autoClosingQuotes == autoClosingQuotes &&
-        other.autoSurround == autoSurround &&
-        other.bracketPairColorization == bracketPairColorization &&
-        other.codeFolding == codeFolding &&
-        other.scrollBeyondLastLine == scrollBeyondLastLine &&
-        other.smoothScrolling == smoothScrolling &&
-        other.readOnly == readOnly;
-  }
+  String toString() => 'EditorSettings('
+      'theme: $theme, '
+      'fontSize: $fontSize, '
+      'fontFamily: $fontFamily, '
+      'showLineNumbers: $showLineNumbers, '
+      'showMinimap: $showMinimap, '
+      'wordWrap: $wordWrap, '
+      'tabSize: $tabSize, '
+      'readOnly: $readOnly'
+      ')';
 
   @override
-  int get hashCode => Object.hashAll([
+  List<Object?> get props => [
         theme,
         fontSize,
         fontFamily,
@@ -1544,17 +1535,5 @@ class EditorSettings {
         scrollBeyondLastLine,
         smoothScrolling,
         readOnly,
-      ]);
-
-  @override
-  String toString() => 'EditorSettings('
-      'theme: $theme, '
-      'fontSize: $fontSize, '
-      'fontFamily: $fontFamily, '
-      'showLineNumbers: $showLineNumbers, '
-      'showMinimap: $showMinimap, '
-      'wordWrap: $wordWrap, '
-      'tabSize: $tabSize, '
-      'readOnly: $readOnly'
-      ')';
+      ];
 }

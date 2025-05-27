@@ -1,0 +1,35 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+1. **Always Check Local Source First**
+   Before offering any implementation detail about a package, look in the user's local pub cache at:
+
+   ```
+   /Users/omarhanafy/.pub-cache/hosted/pub.dev/<package-name>-<version>/lib/
+   ```
+
+   For example:
+
+   * `webview_windows versions 0.4.0` →
+     `/Users/omarhanafy/.pub-cache/hosted/pub.dev/webview_windows-0.4.0`
+
+2. **Fall Back to Official Repo if Needed**
+   If the code isn't in the local cache (maybe the user hasn't pulled that version yet), fetch it from the package's GitHub or pub.dev repository before answering.
+
+3. **Quote or Reference Exact API**
+   When describing classes, methods, parameters, or behaviors, copy the signature and docs straight from the source so we're never paraphrasing from memory.
+
+4. **Flag Unknowns Explicitly**
+   If you still aren't 100% sure—say so. You can add:
+
+   > “I couldn't find that symbol in the local cache or official repo; could you confirm the version or point me to the relevant file?”
+
+5. **Keep Paths and Versions Up to Date**
+   Always use the exact version folder that the user's pub-cache contains. If you spot a mismatch, mention it and suggest checking `pubspec.lock`.
+
+6. **Residual Checks**
+   Before finalizing, quickly scan for `export` statements in the package's `lib/` folder to see which APIs are publicly exposed.
+

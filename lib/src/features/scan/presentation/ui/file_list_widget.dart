@@ -1,32 +1,32 @@
 import 'package:context_collector/context_collector.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class FileListWidget extends StatelessWidget {
+class FileListWidget extends ConsumerWidget {
   const FileListWidget({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Consumer2<SelectionCubit, PreferencesCubit>(
-      builder: (context, selectionCubit, preferencesCubit, child) {
-        if (selectionCubit.allFiles.isEmpty) {
-          return const Center(
-            child: Text('No files added yet'),
-          );
-        }
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selectionState = ref.watch(selectionProvider);
+    final prefsState = ref.watch(preferencesProvider);
 
-        return ListView.builder(
-          itemCount: selectionCubit.allFiles.length,
-          itemBuilder: (context, index) {
-            final file = selectionCubit.allFiles[index];
-            return _FileListItem(
-              file: file,
-              isSelected: selectionCubit.isFileSelected(file),
-              activeExtensions: preferencesCubit.activeExtensions,
-              onToggle: () => selectionCubit.toggleFileSelection(file),
-              onRemove: () => selectionCubit.removeFile(file),
-            );
-          },
+    if (selectionState.allFiles.isEmpty) {
+      return const Center(
+        child: Text('No files added yet'),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: selectionState.allFiles.length,
+      itemBuilder: (context, index) {
+        final file = selectionState.allFiles[index];
+        return _FileListItem(
+          file: file,
+          isSelected: selectionState.selectedFilePaths.contains(file.fullPath),
+          activeExtensions: prefsState.prefs.activeExtensions,
+          onToggle: () =>
+              ref.read(selectionProvider.notifier).toggleFileSelection(file),
+          onRemove: () => ref.read(selectionProvider.notifier).removeFile(file),
         );
       },
     );
@@ -72,6 +72,9 @@ class _FileListItem extends StatelessWidget {
         child: InkWell(
           onTap: onToggle,
           borderRadius: BorderRadius.circular(16),
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          hoverColor: isSelected ? context.primary.addOpacity(0.02) : context.onSurface.addOpacity(0.02),
           child: Padding(
             padding: const EdgeInsetsDirectional.all(16),
             child: Row(
@@ -215,6 +218,10 @@ class _FileListItem extends StatelessWidget {
             style: IconButton.styleFrom(
               backgroundColor: context.error.addOpacity(0.1),
             ),
+            splashRadius: 0.1,
+            highlightColor: Colors.transparent,
+            splashColor: Colors.transparent,
+            hoverColor: context.error.addOpacity(0.05),
           )
         else if (file.content != null)
           Container(
@@ -238,6 +245,10 @@ class _FileListItem extends StatelessWidget {
             foregroundColor: context.error,
             backgroundColor: context.error.addOpacity(0.1),
           ),
+          splashRadius: 0.1,
+          highlightColor: Colors.transparent,
+          splashColor: Colors.transparent,
+          hoverColor: context.error.addOpacity(0.05),
         ),
       ],
     );

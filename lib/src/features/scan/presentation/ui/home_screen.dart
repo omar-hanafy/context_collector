@@ -1,41 +1,64 @@
+// lib/src/features/scan/presentation/ui/home_screen.dart
 import 'dart:io';
 
 import 'package:context_collector/context_collector.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class HomeScreen extends StatefulWidget {
+/// Home screen overlay that shows when no files are selected
+/// This is the top layer in the layered architecture
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _isDragging = false;
 
   @override
   void initState() {
     super.initState();
-    // Connect the preferences to the selection cubit
+    // Initial setup for supported extensions
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final selectionCubit = context.read<SelectionCubit>();
-      final preferencesCubit = context.read<PreferencesCubit>();
-
-      // Listen to preferences changes and update selection cubit
-      preferencesCubit.addListener(() {
-        selectionCubit
-            .setSupportedExtensions(preferencesCubit.activeExtensions);
-      });
-
-      // Set initial extensions
-      selectionCubit.setSupportedExtensions(preferencesCubit.activeExtensions);
+      if (mounted) {
+        final selectionNotifier = ref.read(selectionProvider.notifier);
+        final prefsState = ref.read(preferencesProvider);
+        selectionNotifier.setSupportedExtensions(prefsState.prefs.activeExtensions);
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    // Listen for preference changes
+    ref.listen<ExtensionPrefsWithLoading>(preferencesProvider, (previous, next) {
+      if (previous?.prefs.activeExtensions != next.prefs.activeExtensions) {
+        ref.read(selectionProvider.notifier).setSupportedExtensions(next.prefs.activeExtensions);
+      }
+    });
+
+    // Listen for errors
+    ref.listen<SelectionState>(selectionProvider, (previous, next) {
+      if (next.error != null && next.error != previous?.error) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.error!),
+            backgroundColor: context.error,
+            action: SnackBarAction(
+              label: 'Dismiss',
+              onPressed: () => ref.read(selectionProvider.notifier).clearError(),
+              textColor: context.onError,
+            ),
+          ),
+        );
+      }
+    });
+
+    final selectionNotifier = ref.read(selectionProvider.notifier);
+
     return Scaffold(
       backgroundColor: context.surface,
       appBar: AppBar(
@@ -43,7 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsetsDirectional.all(8),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -65,29 +88,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         centerTitle: true,
         actions: [
-          Consumer<SelectionCubit>(
-            builder: (context, cubit, child) {
-              return Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AnimatedScale(
-                    scale: cubit.hasFiles ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 200),
-                    child: IconButton(
-                      onPressed: cubit.hasFiles ? cubit.clearFiles : null,
-                      icon: const Icon(Icons.clear_all_rounded),
-                      tooltip: 'Clear all files',
-                      style: IconButton.styleFrom(
-                        backgroundColor: context.error.addOpacity(0.1),
-                        foregroundColor: context.error,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-              );
-            },
-          ),
           IconButton(
             onPressed: () {
               Navigator.push(
@@ -112,12 +112,10 @@ class _HomeScreenState extends State<HomeScreen> {
         },
         onDragDone: (details) async {
           setState(() => _isDragging = false);
-          final cubit = context.read<SelectionCubit>();
 
           final files = <String>[];
           final directories = <String>[];
 
-          // Separate files and directories
           for (final file in details.files) {
             final entity = FileSystemEntity.typeSync(file.path);
             if (entity == FileSystemEntityType.file) {
@@ -127,14 +125,12 @@ class _HomeScreenState extends State<HomeScreen> {
             }
           }
 
-          // Add files first
           if (files.isNotEmpty) {
-            cubit.addFiles(files);
+            selectionNotifier.addFiles(files);
           }
 
-          // Add directories
           for (final directory in directories) {
-            await cubit.addDirectory(directory);
+            await selectionNotifier.addDirectory(directory);
           }
         },
         child: Center(
@@ -151,45 +147,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     )
                   : null,
             ),
-            child: Consumer<SelectionCubit>(
-              builder: (context, cubit, child) {
-                // Show error messages
-                if (cubit.error != null) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(cubit.error!),
-                        backgroundColor: context.error,
-                        action: SnackBarAction(
-                          label: 'Dismiss',
-                          onPressed: cubit.clearError,
-                          textColor: context.onError,
-                        ),
-                      ),
-                    );
-                    cubit.clearError();
-                  });
-                }
-
-                if (!cubit.hasFiles) {
-                  return const DropZoneWidget();
-                }
-
-                return ResizableSplitter(
-                  initialRatio: 0.35,
-                  minRatio: 0.2,
-                  maxRatio: 0.6,
-                  startPanel: Column(
-                    children: [
-                      const ActionButtonsWidget(),
-                      const Expanded(child: FileListWidget()),
-                      if (cubit.isProcessing) const LinearProgressIndicator(),
-                    ],
-                  ),
-                  endPanel: const CombinedContentWidget(),
-                );
-              },
-            ),
+            child: const DropZoneWidget(),
           ),
         ),
       ),

@@ -1,51 +1,64 @@
 import 'package:context_collector/context_collector.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// State management for user preferences
-/// Renamed from SettingsProvider for clarity about its purpose
-class PreferencesCubit with ChangeNotifier {
-  PreferencesCubit() {
+// Provider for the PreferencesNotifier
+final preferencesProvider =
+    StateNotifierProvider<PreferencesNotifier, ExtensionPrefsWithLoading>(
+  (ref) => PreferencesNotifier(),
+);
+
+// State class to include loading status
+class ExtensionPrefsWithLoading {
+  const ExtensionPrefsWithLoading({
+    this.prefs = const ExtensionPrefs(),
+    this.isLoading = true,
+  });
+  final ExtensionPrefs prefs;
+  final bool isLoading;
+
+  ExtensionPrefsWithLoading copyWith({
+    ExtensionPrefs? prefs,
+    bool? isLoading,
+  }) {
+    return ExtensionPrefsWithLoading(
+      prefs: prefs ?? this.prefs,
+      isLoading: isLoading ?? this.isLoading,
+    );
+  }
+}
+
+class PreferencesNotifier extends StateNotifier<ExtensionPrefsWithLoading> {
+  PreferencesNotifier() : super(const ExtensionPrefsWithLoading()) {
     _loadPreferences();
   }
 
   static const String _prefsKey = 'extension_preferences';
 
-  ExtensionPrefs _prefs = const ExtensionPrefs();
-  bool _isLoading = true;
-
-  ExtensionPrefs get preferences => _prefs;
-  bool get isLoading => _isLoading;
-
-  /// Get all active extensions
+  // Getters for convenience, accessing prefs from the state object
+  ExtensionPrefs get _prefs => state.prefs;
   Map<String, FileCategory> get activeExtensions => _prefs.activeExtensions;
 
-  /// Get all available extensions grouped by category
   Map<FileCategory, List<MapEntry<String, bool>>> get groupedExtensions {
     final result = <FileCategory, List<MapEntry<String, bool>>>{};
 
-    // Add default extensions from catalog
     for (final entry in ExtensionCatalog.extensionCategories.entries) {
       final category = entry.value;
       final isEnabled = !_prefs.disabledExtensions.contains(entry.key);
-
       result.putIfAbsent(category, () => []);
       result[category]!.add(MapEntry(entry.key, isEnabled));
     }
 
-    // Add custom extensions
     for (final entry in _prefs.customExtensions.entries) {
       final category = entry.value;
-
       result.putIfAbsent(category, () => []);
       result[category]!.add(MapEntry(entry.key, true));
     }
 
-    // Sort extensions within each category
     for (final list in result.values) {
       list.sort((a, b) => a.key.compareTo(b.key));
     }
-
     return result;
   }
 
@@ -53,94 +66,79 @@ class PreferencesCubit with ChangeNotifier {
     try {
       final sharedPrefs = await SharedPreferences.getInstance();
       final prefsJson = sharedPrefs.getString(_prefsKey);
-
       if (prefsJson != null) {
-        _prefs = ExtensionPrefs.fromJsonString(prefsJson);
+        state = state.copyWith(
+            prefs: ExtensionPrefs.fromJsonString(prefsJson), isLoading: false);
+      } else {
+        state = state.copyWith(isLoading: false);
       }
     } catch (e) {
       debugPrint('Error loading preferences: $e');
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+      state = state.copyWith(isLoading: false);
     }
   }
 
   Future<void> _savePreferences() async {
     try {
       final sharedPrefs = await SharedPreferences.getInstance();
-      await sharedPrefs.setString(_prefsKey, _prefs.encode());
+      await sharedPrefs.setString(_prefsKey, state.prefs.encode());
     } catch (e) {
       debugPrint('Error saving preferences: $e');
     }
   }
 
-  /// Toggle extension enabled/disabled state
   Future<void> toggleExtension(String extension) async {
+    ExtensionPrefs newPrefs;
     final isDefault =
         ExtensionCatalog.extensionCategories.containsKey(extension);
 
     if (isDefault) {
-      // For default extensions, add/remove from disabled list
       if (_prefs.disabledExtensions.contains(extension)) {
-        _prefs = _prefs.enableExtension(extension);
+        newPrefs = _prefs.enableExtension(extension);
       } else {
-        _prefs = _prefs.disableExtension(extension);
+        newPrefs = _prefs.disableExtension(extension);
       }
     } else {
-      // For custom extensions, remove from custom list
-      _prefs = _prefs.removeCustomExtension(extension);
+      newPrefs = _prefs.removeCustomExtension(extension);
     }
-
+    state = state.copyWith(prefs: newPrefs);
     await _savePreferences();
-    notifyListeners();
   }
 
-  /// Add a custom extension
   Future<void> addCustomExtension(
       String extension, FileCategory category) async {
     if (extension.isEmpty || !extension.startsWith('.')) {
       throw ArgumentError('Invalid extension format');
     }
-
     final ext = extension.toLowerCase();
-
-    // Check if it already exists
     if (ExtensionCatalog.extensionCategories.containsKey(ext) ||
         _prefs.customExtensions.containsKey(ext)) {
       throw ArgumentError('Extension already exists');
     }
 
-    _prefs = _prefs.addCustomExtension(ext, category);
-
-    // Remove from disabled if it was there
-    if (_prefs.disabledExtensions.contains(ext)) {
-      _prefs = _prefs.enableExtension(ext);
+    var newPrefs = _prefs.addCustomExtension(ext, category);
+    if (newPrefs.disabledExtensions.contains(ext)) {
+      newPrefs = newPrefs.enableExtension(ext);
     }
-
+    state = state.copyWith(prefs: newPrefs);
     await _savePreferences();
-    notifyListeners();
   }
 
-  /// Reset to default preferences
   Future<void> resetToDefaults() async {
-    _prefs = const ExtensionPrefs();
+    state = state.copyWith(prefs: const ExtensionPrefs());
     await _savePreferences();
-    notifyListeners();
   }
 
-  /// Enable all extensions
   Future<void> enableAll() async {
-    _prefs = _prefs.copyWith(disabledExtensions: {});
+    state = state.copyWith(prefs: _prefs.copyWith(disabledExtensions: {}));
     await _savePreferences();
-    notifyListeners();
   }
 
-  /// Disable all default extensions (except custom ones)
   Future<void> disableAll() async {
-    _prefs = _prefs.copyWith(
+    state = state.copyWith(
+        prefs: _prefs.copyWith(
       disabledExtensions: ExtensionCatalog.extensionCategories.keys.toSet(),
-    );
+    ));
     await _savePreferences();
-    notifyListeners();
   }
 }

@@ -1,0 +1,1643 @@
+diff --git a/lib/src/features/editor/presentation/ui/combined_content_widget.dart b/lib/src/features/editor/presentation/ui/combined_content_widget.dart
+index dcdfbef..55b4414 100644
+--- a/lib/src/features/editor/presentation/ui/combined_content_widget.dart
++++ b/lib/src/features/editor/presentation/ui/combined_content_widget.dart
+@@ -1,336 +1,87 @@
+ // lib/src/features/editor/presentation/ui/combined_content_widget.dart
+-import 'package:enefty_icons/enefty_icons.dart';
+ import 'package:flutter/foundation.dart';
+ import 'package:flutter/material.dart';
+-import 'package:flutter/services.dart';
+ import 'package:flutter_riverpod/flutter_riverpod.dart';
+ 
+ import '../../../../shared/theme/extensions.dart';
+ import '../../../scan/presentation/state/selection_notifier.dart';
+-import '../../domain/editor_settings.dart';
+-import '../../domain/keybinding_manager.dart';
+-import '../../domain/theme_manager.dart';
+ import '../../services/monaco_editor_providers.dart';
+-import '../../services/monaco_editor_service.dart';
+ import '../../services/monaco_editor_state.dart';
+-import 'enhanced_editor_settings_dialog.dart';
+-import 'monaco_editor_info_bar.dart';
+ 
+-/// Combined content widget that uses the global Monaco editor
+-class CombinedContentWidget extends ConsumerStatefulWidget {
++/// Combined content widget for the drop area overlay
++/// In the layered architecture, this widget is part of the overlay that fades out
++/// when files are selected, revealing the Monaco editor underneath
++class CombinedContentWidget extends ConsumerWidget {
+   const CombinedContentWidget({super.key});
+ 
+   @override
+-  ConsumerState<CombinedContentWidget> createState() =>
+-      _CombinedContentWidgetState();
+-}
+-
+-class _CombinedContentWidgetState extends ConsumerState<CombinedContentWidget>
+-    with SingleTickerProviderStateMixin {
+-  // Animation controllers
+-  late AnimationController _sidebarAnimationController;
+-  late Animation<double> _sidebarAnimation;
+-
+-  // Settings state
+-  bool _isSidebarExpanded = false;
+-  EditorSettings _editorSettings = const EditorSettings();
+-  final List<EditorTheme> _customThemes = [];
+-  final List<KeybindingPreset> _customKeybindingPresets = [];
+-
+-  // Track if we've applied initial settings
+-  bool _hasAppliedInitialSettings = false;
+-
+-  // Sidebar dimensions
+-  static const double _expandedSidebarWidth = 280;
+-
+-  @override
+-  void initState() {
+-    super.initState();
+-    
+-    // Initialize animations
+-    _sidebarAnimationController = AnimationController(
+-      duration: const Duration(milliseconds: 300),
+-      vsync: this,
+-    );
+-    _sidebarAnimation = CurvedAnimation(
+-      parent: _sidebarAnimationController,
+-      curve: Curves.easeInOutCubic,
+-    );
+-
+-    // Load saved editor settings
+-    _loadEditorSettings();
+-  }
+-
+-  @override
+-  void dispose() {
+-    _sidebarAnimationController.dispose();
+-    super.dispose();
+-  }
+-
+-  Future<void> _loadEditorSettings() async {
+-    final settings = await EditorSettings.load();
+-    if (mounted) {
+-      setState(() {
+-        _editorSettings = settings;
+-      });
+-    }
+-  }
+-
+-  Future<void> _applySettingsToEditor() async {
+-    final editorService = ref.read(monacoEditorServiceProvider);
+-    await editorService.applySettings(_editorSettings);
+-  }
+-
+-  void _toggleSidebar() {
+-    setState(() {
+-      _isSidebarExpanded = !_isSidebarExpanded;
+-      if (_isSidebarExpanded) {
+-        _sidebarAnimationController.forward();
+-      } else {
+-        _sidebarAnimationController.reverse();
+-      }
+-    });
+-  }
+-
+-  @override
+-  Widget build(BuildContext context) {
++  Widget build(BuildContext context, WidgetRef ref) {
+     final selectionState = ref.watch(selectionProvider);
+     final editorStatus = ref.watch(monacoEditorStatusProvider);
+-    final editorService = ref.watch(monacoEditorServiceProvider);
+-
+-    // Listen for editor ready state to apply initial settings
+-    ref.listen<MonacoEditorStatus>(monacoEditorStatusProvider, (previous, next) {
+-      if (!_hasAppliedInitialSettings && next.isReady) {
+-        _hasAppliedInitialSettings = true;
+-        _applySettingsToEditor();
+-      }
+-    });
++    final editorService = ref.read(monacoEditorServiceProvider);
+ 
+-    // Listen for content changes
++    // Listen for content changes and update editor
+     ref.listen<SelectionState>(selectionProvider, (previous, next) {
+-      debugPrint('[CombinedContentWidget] Selection changed - has content: ${next.combinedContent.isNotEmpty}');
+-      
++      debugPrint(
++          '[CombinedContentWidget] Selection changed - has content: ${next.combinedContent.isNotEmpty}');
++
+       if (previous?.combinedContent != next.combinedContent) {
+-        // Small delay to ensure smooth transition
++        // Update editor content
+         Future.microtask(() {
+           if (next.combinedContent.isNotEmpty) {
+-            debugPrint('[CombinedContentWidget] Setting content and showing editor');
+-            // Set content and show editor
++            debugPrint('[CombinedContentWidget] Setting editor content');
+             editorService.setContent(next.combinedContent);
+-            editorService.show();
+           } else {
+-            debugPrint('[CombinedContentWidget] Clearing content and hiding editor');
+-            // Clear content and hide editor
++            debugPrint('[CombinedContentWidget] Clearing editor content');
+             editorService.clearContent();
+-            editorService.hide();
+           }
+         });
+       }
+     });
+ 
+-    return Stack(
+-      children: [
+-        // Main content with animated padding
+-        Row(
+-          children: [
+-            // Animated Sidebar
+-            AnimatedBuilder(
+-              animation: _sidebarAnimation,
+-              builder: (context, child) {
+-                final width = _expandedSidebarWidth * _sidebarAnimation.value;
+-
+-                return SizedBox(
+-                  width: width,
+-                  child: width > 0
+-                      ? ClipRect(
+-                          child: Container(
+-                            decoration: BoxDecoration(
+-                              color: context.surfaceContainerHighest,
+-                              border: BorderDirectional(
+-                                end: BorderSide(
+-                                  color: context.outline.addOpacity(0.2),
+-                                ),
+-                              ),
+-                              boxShadow: [
+-                                BoxShadow(
+-                                  color: context.shadow.addOpacity(0.05),
+-                                  offset: const Offset(2, 0),
+-                                  blurRadius: 4,
+-                                ),
+-                              ],
+-                            ),
+-                            child: _buildExpandedSidebar(context, selectionState),
+-                          ),
+-                        )
+-                      : null,
+-                );
+-              },
+-            ),
+-
+-            // Main Content (takes all remaining space)
+-            Expanded(
+-              child: Container(
+-                padding: const EdgeInsetsDirectional.only(bottom: 16),
+-                child: _buildContent(context, selectionState, editorStatus),
+-              ),
+-            ),
+-          ],
+-        ),
+-
+-        // Floating Toggle Button (positioned absolutely)
+-        PositionedDirectional(
+-          start: _isSidebarExpanded ? _expandedSidebarWidth - 20 : 8,
+-          top: 16,
+-          child: AnimatedBuilder(
+-            animation: _sidebarAnimation,
+-            builder: (context, child) {
+-              return Material(
+-                color: _isSidebarExpanded
+-                    ? context.surfaceContainerHighest
+-                    : context.surface,
+-                elevation: 4,
+-                shape: const CircleBorder(),
+-                child: InkWell(
+-                  onTap: _toggleSidebar,
+-                  customBorder: const CircleBorder(),
+-                  child: Container(
+-                    width: 36,
+-                    height: 36,
+-                    decoration: BoxDecoration(
+-                      shape: BoxShape.circle,
+-                      border: Border.all(
+-                        color: context.outline.addOpacity(0.2),
+-                      ),
+-                    ),
+-                    child: Icon(
+-                      _isSidebarExpanded
+-                          ? Icons.chevron_left
+-                          : EneftyIcons.setting_3_outline,
+-                      size: 20,
+-                      color: context.onSurfaceVariant,
+-                    ),
+-                  ),
+-                ),
+-              );
+-            },
+-          ),
+-        ),
+-      ],
+-    );
+-  }
+-
+-  Widget _buildContent(
+-    BuildContext context,
+-    SelectionState selectionState,
+-    MonacoEditorStatus editorStatus,
+-  ) {
+-    // The global editor is always present and manages its own visibility
+-    // We just show different UI based on whether content is selected
+-    
+-    if (selectionState.combinedContent.isEmpty) {
+-      // Show empty state
+-      return _buildEmptyState(context, editorStatus);
+-    }
+-    
+-    // Content is selected - show the editor area
+-    // The global editor will slide over this area when visible
+-    return Column(
+-      children: [
+-        Expanded(
+-          child: Container(
+-            color: context.isDark ? const Color(0xFF1E1E1E) : Colors.white,
+-            child: editorStatus.isVisible && editorStatus.isReady
+-                ? const SizedBox.expand() // Editor is shown globally over this area
+-                : Center(
+-                    child: _buildLoadingIndicator(context, editorStatus),
+-                  ),
+-          ),
+-        ),
+-        const SizedBox(height: 16),
+-        MonacoEditorInfoBar(
+-          bridge: ref.read(monacoEditorServiceProvider).bridge,
+-          onCopy: () => _copyToClipboard(context, selectionState.combinedContent),
+-        ),
+-      ],
+-    );
+-  }
+-
+-  Widget _buildLoadingIndicator(BuildContext context, MonacoEditorStatus status) {
+-    if (status.hasError) {
+-      return Column(
+-        mainAxisSize: MainAxisSize.min,
+-        children: [
+-          Icon(Icons.error_outline, size: 48, color: context.error),
+-          const SizedBox(height: 16),
+-          Text(
+-            'Editor Error',
+-            style: context.titleMedium?.copyWith(color: context.error),
+-          ),
+-          const SizedBox(height: 8),
+-          Text(
+-            status.error ?? 'Unknown error',
+-            style: context.bodySmall,
+-            textAlign: TextAlign.center,
+-          ),
+-        ],
+-      );
+-    }
+-    
+-    return Column(
+-      mainAxisSize: MainAxisSize.min,
+-      children: [
+-        CircularProgressIndicator(
+-          value: status.progress > 0 ? status.progress : null,
+-        ),
+-        const SizedBox(height: 16),
+-        Text(
+-          'Loading Editor...',
+-          style: context.titleMedium,
+-        ),
+-        if (status.message != null) ...[
+-          const SizedBox(height: 8),
+-          Text(
+-            status.message!,
+-            style: context.bodySmall?.copyWith(
+-              color: context.onSurface.addOpacity(0.7),
+-            ),
+-          ),
+-        ],
+-      ],
+-    );
++    // Always show the drop area/empty state
++    // The GlobalMonacoContainer will handle fading this out when files are selected
++    return _buildEmptyState(context, editorStatus, ref);
+   }
+ 
+   Widget _buildEmptyState(
+     BuildContext context,
+     MonacoEditorStatus editorStatus,
++    WidgetRef ref,
+   ) {
+     // Show status information about editor preloading
+     final statusWidget = switch (editorStatus.state) {
+       MonacoEditorServiceState.idle ||
+       MonacoEditorServiceState.waitingForAssets =>
+         _buildStatusBadge(
++          context,
+           icon: Icons.hourglass_empty,
+           label: 'Preparing Editor...',
+-          color: context.primary.addOpacity(0.8),
++          color: context.primary.withOpacity(0.8),
+         ),
+       MonacoEditorServiceState.initializing ||
+       MonacoEditorServiceState.loading =>
+         _buildStatusBadge(
++          context,
+           icon: Icons.downloading,
+-          label: 'Loading Editor (${(editorStatus.progress * 100).toInt()}%)...',
++          label:
++              'Loading Editor (${(editorStatus.progress * 100).toInt()}%)...',
+           color: context.primary,
+         ),
+       MonacoEditorServiceState.ready => _buildStatusBadge(
++          context,
+           icon: Icons.check_circle,
+           label: 'Editor Ready',
+           color: Colors.green,
+         ),
+       MonacoEditorServiceState.error => _buildStatusBadge(
++          context,
+           icon: Icons.error_outline,
+           label: 'Editor Error',
+           color: context.error,
+         ),
+       MonacoEditorServiceState.retrying => _buildStatusBadge(
++          context,
+           icon: Icons.refresh,
+           label: 'Retrying...',
+           color: Colors.orange,
+@@ -342,31 +93,31 @@ class _CombinedContentWidgetState extends ConsumerState<CombinedContentWidget>
+         mainAxisAlignment: MainAxisAlignment.center,
+         children: [
+           Container(
+-            padding: const EdgeInsetsDirectional.all(32),
++            padding: const EdgeInsets.all(32),
+             decoration: BoxDecoration(
+               gradient: RadialGradient(
+                 colors: [
+-                  context.primary.addOpacity(0.1),
+-                  context.primary.addOpacity(0.05),
++                  context.primary.withOpacity(0.1),
++                  context.primary.withOpacity(0.05),
+                 ],
+               ),
+               shape: BoxShape.circle,
+               border: Border.all(
+-                color: context.primary.addOpacity(0.2),
++                color: context.primary.withOpacity(0.2),
+                 width: 2,
+               ),
+             ),
+             child: Icon(
+               Icons.merge_type_rounded,
+               size: 64,
+-              color: context.primary.addOpacity(0.6),
++              color: context.primary.withOpacity(0.6),
+             ),
+           ),
+           const SizedBox(height: 32),
+           Text(
+             'Context Collector',
+             style: context.headlineSmall?.copyWith(
+-              color: context.onSurface.addOpacity(0.9),
++              color: context.onSurface.withOpacity(0.9),
+               fontWeight: FontWeight.w600,
+             ),
+           ),
+@@ -375,23 +126,24 @@ class _CombinedContentWidgetState extends ConsumerState<CombinedContentWidget>
+             'Select files to start editing with Monaco',
+             textAlign: TextAlign.center,
+             style: context.bodyLarge?.copyWith(
+-              color: context.onSurface.addOpacity(0.6),
++              color: context.onSurface.withOpacity(0.6),
+             ),
+           ),
+           const SizedBox(height: 24),
+           statusWidget,
+-          
++
+           // Debug panel (only in debug mode)
+           if (kDebugMode) ...[
+             const SizedBox(height: 24),
+-            _buildDebugPanel(context, editorStatus),
++            _buildDebugPanel(context, ref, editorStatus),
+           ],
+         ],
+       ),
+     );
+   }
+ 
+-  Widget _buildStatusBadge({
++  Widget _buildStatusBadge(
++    BuildContext context, {
+     required IconData icon,
+     required String label,
+     required Color color,
+@@ -399,10 +151,10 @@ class _CombinedContentWidgetState extends ConsumerState<CombinedContentWidget>
+     return Container(
+       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+       decoration: BoxDecoration(
+-        color: color.addOpacity(0.1),
++        color: color.withOpacity(0.1),
+         borderRadius: BorderRadius.circular(20),
+         border: Border.all(
+-          color: color.addOpacity(0.3),
++          color: color.withOpacity(0.3),
+         ),
+       ),
+       child: Row(
+@@ -422,344 +174,13 @@ class _CombinedContentWidgetState extends ConsumerState<CombinedContentWidget>
+     );
+   }
+ 
+-  Widget _buildExpandedSidebar(
+-    BuildContext context,
+-    SelectionState selectionState,
+-  ) {
+-    return SingleChildScrollView(
+-      padding: const EdgeInsetsDirectional.all(16),
+-      child: Column(
+-        crossAxisAlignment: CrossAxisAlignment.start,
+-        children: [
+-          // Header with some spacing for the floating button
+-          const SizedBox(height: 28),
+-          Row(
+-            children: [
+-              Icon(
+-                Icons.tune,
+-                size: 20,
+-                color: context.primary,
+-              ),
+-              const SizedBox(width: 8),
+-              Text(
+-                'Quick Settings',
+-                style: context.titleSmall?.copyWith(
+-                  fontWeight: FontWeight.w600,
+-                ),
+-              ),
+-            ],
+-          ),
+-          const SizedBox(height: 20),
+-
+-          // File Count Badge
+-          if (selectionState.selectedFilesCount > 0) ...[
+-            Container(
+-              padding: const EdgeInsetsDirectional.symmetric(
+-                horizontal: 12,
+-                vertical: 8,
+-              ),
+-              decoration: BoxDecoration(
+-                color: context.primary.addOpacity(0.1),
+-                borderRadius: BorderRadius.circular(8),
+-                border: Border.all(
+-                  color: context.primary.addOpacity(0.3),
+-                ),
+-              ),
+-              child: Row(
+-                children: [
+-                  Icon(
+-                    Icons.description_outlined,
+-                    size: 16,
+-                    color: context.primary,
+-                  ),
+-                  const SizedBox(width: 8),
+-                  Text(
+-                    '${selectionState.selectedFilesCount} files selected',
+-                    style: context.labelMedium?.copyWith(
+-                      color: context.primary,
+-                      fontWeight: FontWeight.w500,
+-                    ),
+-                  ),
+-                ],
+-              ),
+-            ),
+-            const SizedBox(height: 16),
+-          ],
+-
+-          // Font Size Section
+-          _buildSectionTitle('Font Size'),
+-          const SizedBox(height: 8),
+-          Row(
+-            children: [
+-              IconButton(
+-                onPressed:
+-                    _editorSettings.fontSize > 8 ? _decreaseFontSize : null,
+-                icon: Icon(
+-                  Icons.remove,
+-                  color: context.themeData.onSurfaceVariant,
+-                ),
+-                iconSize: 18,
+-                style: IconButton.styleFrom(
+-                  minimumSize: const Size(32, 32),
+-                ),
+-              ),
+-              Flexible(
+-                fit: FlexFit.tight,
+-                child: Container(
+-                  height: 32,
+-                  decoration: BoxDecoration(
+-                    color: context.surface,
+-                    borderRadius: BorderRadius.circular(8),
+-                  ),
+-                  child: Center(
+-                    child: Text(
+-                      '${_editorSettings.fontSize.round()}px',
+-                      style: context.labelLarge?.copyWith(
+-                        fontWeight: FontWeight.w600,
+-                      ),
+-                    ),
+-                  ),
+-                ),
+-              ),
+-              IconButton(
+-                onPressed:
+-                    _editorSettings.fontSize < 32 ? _increaseFontSize : null,
+-                icon: Icon(
+-                  Icons.add,
+-                  color: context.themeData.onSurfaceVariant,
+-                ),
+-                iconSize: 18,
+-                style: IconButton.styleFrom(
+-                  minimumSize: const Size(32, 32),
+-                ),
+-              ),
+-            ],
+-          ),
+-
+-          const SizedBox(height: 20),
+-
+-          // Quick Toggles
+-          _buildSectionTitle('Editor Options'),
+-          const SizedBox(height: 8),
+-
+-          _buildToggleTile(
+-            icon: Icons.wrap_text,
+-            title: 'Word Wrap',
+-            value: _editorSettings.wordWrap != WordWrap.off,
+-            onChanged: (_) => _toggleWordWrap(),
+-          ),
+-
+-          _buildToggleTile(
+-            icon: Icons.format_list_numbered,
+-            title: 'Line Numbers',
+-            value: _editorSettings.showLineNumbers,
+-            onChanged: (value) async {
+-              final newSettings =
+-                  _editorSettings.copyWith(showLineNumbers: value);
+-              await _saveAndApplySettings(newSettings);
+-            },
+-          ),
+-
+-          _buildToggleTile(
+-            icon: Icons.map_outlined,
+-            title: 'Minimap',
+-            value: _editorSettings.showMinimap,
+-            onChanged: (value) async {
+-              final newSettings = _editorSettings.copyWith(showMinimap: value);
+-              await _saveAndApplySettings(newSettings);
+-            },
+-          ),
+-
+-          _buildToggleTile(
+-            icon: _editorSettings.readOnly ? Icons.edit_off : Icons.edit,
+-            title: 'Edit Mode',
+-            value: !_editorSettings.readOnly,
+-            onChanged: (isEditable) async {
+-              final newSettings =
+-                  _editorSettings.copyWith(readOnly: !isEditable);
+-              await _saveAndApplySettings(newSettings);
+-            },
+-          ),
+-
+-          const SizedBox(height: 20),
+-
+-          // Theme Quick Select
+-          Row(
+-            children: [
+-              Icon(
+-                Icons.palette_outlined,
+-                size: 16,
+-                color: context.onSurfaceVariant,
+-              ),
+-              const SizedBox(width: 8),
+-              _buildSectionTitle('Theme'),
+-            ],
+-          ),
+-          const SizedBox(height: 8),
+-          Container(
+-            decoration: BoxDecoration(
+-              color: context.surface,
+-              borderRadius: BorderRadius.circular(8),
+-            ),
+-            child: DropdownButtonHideUnderline(
+-              child: DropdownButton<String>(
+-                isExpanded: true,
+-                value: _editorSettings.theme,
+-                padding: const EdgeInsetsDirectional.symmetric(
+-                  horizontal: 12,
+-                  vertical: 4,
+-                ),
+-                borderRadius: BorderRadius.circular(8),
+-                items: [
+-                  _buildThemeDropdownItem('vs', 'Light'),
+-                  _buildThemeDropdownItem('vs-dark', 'Dark'),
+-                  _buildThemeDropdownItem('hc-black', 'High Contrast'),
+-                  _buildThemeDropdownItem('one-dark-pro', 'One Dark Pro'),
+-                ],
+-                onChanged: (value) async {
+-                  if (value != null) {
+-                    final newSettings = _editorSettings.copyWith(theme: value);
+-                    await _saveAndApplySettings(newSettings);
+-                  }
+-                },
+-              ),
+-            ),
+-          ),
+-
+-          const SizedBox(height: 24),
+-
+-          // Full Settings Button
+-          FilledButton.icon(
+-            icon: const Icon(Icons.settings, size: 18),
+-            label: const Text('All Settings'),
+-            onPressed: () => _showEnhancedEditorSettings(context),
+-            style: FilledButton.styleFrom(
+-              minimumSize: const Size(double.infinity, 40),
+-            ),
+-          ),
+-
+-          const SizedBox(height: 12),
+-
+-          // Copy Button
+-          OutlinedButton.icon(
+-            icon: const Icon(Icons.copy, size: 18),
+-            label: const Text('Copy Content'),
+-            onPressed: selectionState.combinedContent.isNotEmpty
+-                ? () =>
+-                    _copyToClipboard(context, selectionState.combinedContent)
+-                : null,
+-            style: OutlinedButton.styleFrom(
+-              minimumSize: const Size(double.infinity, 40),
+-            ),
+-          ),
+-        ],
+-      ),
+-    );
+-  }
+-
+-  Widget _buildSectionTitle(String title) {
+-    return Text(
+-      title,
+-      style: context.labelMedium?.copyWith(
+-        fontWeight: FontWeight.w600,
+-        color: context.onSurfaceVariant,
+-      ),
+-    );
+-  }
+-
+-  Widget _buildToggleTile({
+-    required IconData icon,
+-    required String title,
+-    required bool value,
+-    required ValueChanged<bool> onChanged,
+-  }) {
+-    return Container(
+-      margin: const EdgeInsetsDirectional.only(bottom: 8),
+-      child: Material(
+-        color: context.surface,
+-        borderRadius: BorderRadius.circular(8),
+-        child: InkWell(
+-          onTap: () => onChanged(!value),
+-          borderRadius: BorderRadius.circular(8),
+-          child: Padding(
+-            padding: const EdgeInsetsDirectional.symmetric(
+-              horizontal: 12,
+-              vertical: 8,
+-            ),
+-            child: Row(
+-              children: [
+-                Icon(
+-                  icon,
+-                  size: 18,
+-                  color: value ? context.primary : context.onSurfaceVariant,
+-                ),
+-                const SizedBox(width: 12),
+-                Expanded(
+-                  child: Text(
+-                    title,
+-                    style: context.bodyMedium,
+-                  ),
+-                ),
+-                Switch(
+-                  value: value,
+-                  onChanged: onChanged,
+-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+-                ),
+-              ],
+-            ),
+-          ),
+-        ),
+-      ),
+-    );
+-  }
+-
+-  DropdownMenuItem<String> _buildThemeDropdownItem(String value, String label) {
+-    return DropdownMenuItem(
+-      value: value,
+-      child: Text(
+-        label,
+-        style: context.bodyMedium,
+-      ),
+-    );
+-  }
+-
+-  Future<void> _increaseFontSize() async {
+-    if (_editorSettings.fontSize < 32) {
+-      final newSettings =
+-          _editorSettings.copyWith(fontSize: _editorSettings.fontSize + 1);
+-      await _saveAndApplySettings(newSettings);
+-    }
+-  }
+-
+-  Future<void> _decreaseFontSize() async {
+-    if (_editorSettings.fontSize > 8) {
+-      final newSettings =
+-          _editorSettings.copyWith(fontSize: _editorSettings.fontSize - 1);
+-      await _saveAndApplySettings(newSettings);
+-    }
+-  }
+-
+-  Future<void> _toggleWordWrap() async {
+-    final newWrap =
+-        _editorSettings.wordWrap == WordWrap.off ? WordWrap.on : WordWrap.off;
+-    final newSettings = _editorSettings.copyWith(wordWrap: newWrap);
+-    await _saveAndApplySettings(newSettings);
+-  }
+-
+-  Future<void> _saveAndApplySettings(EditorSettings newSettings) async {
+-    setState(() {
+-      _editorSettings = newSettings;
+-    });
+-    await newSettings.save();
+-    await _applySettingsToEditor();
+-  }
+-
+   Widget _buildDebugPanel(
+     BuildContext context,
++    WidgetRef ref,
+     MonacoEditorStatus editorStatus,
+   ) {
+     final editorService = ref.read(monacoEditorServiceProvider);
+-    
++
+     return Container(
+       margin: const EdgeInsets.symmetric(horizontal: 32),
+       padding: const EdgeInsets.all(16),
+@@ -767,7 +188,7 @@ class _CombinedContentWidgetState extends ConsumerState<CombinedContentWidget>
+         color: context.surfaceContainerHighest,
+         borderRadius: BorderRadius.circular(12),
+         border: Border.all(
+-          color: context.primary.addOpacity(0.3),
++          color: context.primary.withOpacity(0.3),
+         ),
+       ),
+       child: Column(
+@@ -822,18 +243,11 @@ class _CombinedContentWidgetState extends ConsumerState<CombinedContentWidget>
+                 },
+                 child: const Text('Init'),
+               ),
+-              TextButton(
+-                onPressed: () {
+-                  debugPrint('[Debug] Manually showing editor...');
+-                  editorService.show();
+-                },
+-                child: const Text('Show'),
+-              ),
+               TextButton(
+                 onPressed: () {
+                   debugPrint('[Debug] Setting test content...');
+-                  editorService.setContent('# Test Content\n\nThis is test content set manually.');
+-                  editorService.show();
++                  editorService.setContent(
++                      '# Test Content\n\nThis is test content set manually.');
+                 },
+                 child: const Text('Test Content'),
+               ),
+@@ -844,55 +258,16 @@ class _CombinedContentWidgetState extends ConsumerState<CombinedContentWidget>
+                 },
+                 child: const Text('Force Ready'),
+               ),
++              TextButton(
++                onPressed: () {
++                  ref.read(selectionProvider.notifier).clearFiles();
++                },
++                child: const Text('Clear Files'),
++              ),
+             ],
+           ),
+         ],
+       ),
+     );
+   }
+-
+-  void _copyToClipboard(BuildContext context, String content) {
+-    Clipboard.setData(ClipboardData(text: content)).then((_) {
+-      ScaffoldMessenger.of(context).showSnackBar(
+-        SnackBar(
+-          content: Row(
+-            children: [
+-              Icon(
+-                Icons.check_circle,
+-                color: context.onPrimary,
+-                size: 20,
+-              ),
+-              const SizedBox(width: 8),
+-              const Text('Content copied to clipboard!'),
+-            ],
+-          ),
+-          backgroundColor: context.primary,
+-          behavior: SnackBarBehavior.floating,
+-          duration: const Duration(seconds: 2),
+-          shape: RoundedRectangleBorder(
+-            borderRadius: BorderRadius.circular(8),
+-          ),
+-        ),
+-      );
+-    }).catchError((dynamic error) {
+-      ScaffoldMessenger.of(context).showSnackBar(
+-        SnackBar(
+-          content: Text('Error copying to clipboard: $error'),
+-          backgroundColor: context.error,
+-        ),
+-      );
+-    });
+-  }
+-
+-  Future<void> _showEnhancedEditorSettings(BuildContext context) async {
+-    final newSettings = await EnhancedEditorSettingsDialog.show(
+-      context,
+-      _editorSettings,
+-      customThemes: _customThemes,
+-      customKeybindingPresets: _customKeybindingPresets,
+-    );
+-    if (newSettings != null && mounted) {
+-      await _saveAndApplySettings(newSettings);
+-    }
+-  }
+ }
+diff --git a/lib/src/features/editor/presentation/ui/global_monaco_container.dart b/lib/src/features/editor/presentation/ui/global_monaco_container.dart
+index a9ecb7d..c0d4763 100644
+--- a/lib/src/features/editor/presentation/ui/global_monaco_container.dart
++++ b/lib/src/features/editor/presentation/ui/global_monaco_container.dart
+@@ -1,14 +1,21 @@
+ // lib/src/features/editor/presentation/ui/global_monaco_container.dart
+-import 'package:context_collector/src/features/editor/assets_manager/notifier.dart';
++import 'package:context_collector/src/features/editor/services/monaco_editor_state.dart';
+ import 'package:flutter/material.dart';
++import 'package:flutter/services.dart';
+ import 'package:flutter_riverpod/flutter_riverpod.dart';
+ 
++import '../../../../shared/theme/extensions.dart';
++import '../../../scan/presentation/state/selection_notifier.dart';
++import '../../domain/editor_settings.dart';
+ import '../../services/monaco_editor_providers.dart';
++import 'enhanced_editor_settings_dialog.dart';
+ import 'monaco_editor_container.dart';
++import 'monaco_editor_info_bar.dart';
+ 
+-/// Global Monaco container that ensures the editor is always present in the app
+-/// This keeps the WebView alive throughout the app lifecycle
+-class GlobalMonacoContainer extends ConsumerWidget {
++/// Global Monaco container with layered architecture
++/// Bottom layer: Monaco editor (always present, always loaded)
++/// Top layer: App content that fades in/out based on file selection
++class GlobalMonacoContainer extends ConsumerStatefulWidget {
+   const GlobalMonacoContainer({
+     super.key,
+     required this.child,
+@@ -17,43 +24,444 @@ class GlobalMonacoContainer extends ConsumerWidget {
+   final Widget child;
+ 
+   @override
+-  Widget build(BuildContext context, WidgetRef ref) {
++  ConsumerState<GlobalMonacoContainer> createState() =>
++      _GlobalMonacoContainerState();
++}
++
++class _GlobalMonacoContainerState extends ConsumerState<GlobalMonacoContainer>
++    with SingleTickerProviderStateMixin {
++  // Animation controllers for sidebar
++  late AnimationController _sidebarAnimationController;
++  late Animation<double> _sidebarAnimation;
++  bool _isSidebarExpanded = false;
++
++  // Settings state
++  EditorSettings _editorSettings = const EditorSettings();
++  bool _hasAppliedInitialSettings = false;
++
++  // Sidebar dimensions
++  static const double _expandedSidebarWidth = 280;
++
++  @override
++  void initState() {
++    super.initState();
++
++    // Initialize animations
++    _sidebarAnimationController = AnimationController(
++      duration: const Duration(milliseconds: 300),
++      vsync: this,
++    );
++    _sidebarAnimation = CurvedAnimation(
++      parent: _sidebarAnimationController,
++      curve: Curves.easeInOutCubic,
++    );
++
++    // Load saved editor settings
++    _loadEditorSettings();
++  }
++
++  @override
++  void dispose() {
++    _sidebarAnimationController.dispose();
++    super.dispose();
++  }
++
++  Future<void> _loadEditorSettings() async {
++    final settings = await EditorSettings.load();
++    if (mounted) {
++      setState(() {
++        _editorSettings = settings;
++      });
++    }
++  }
++
++  Future<void> _applySettingsToEditor() async {
++    final editorService = ref.read(monacoEditorServiceProvider);
++    await editorService.applySettings(_editorSettings);
++  }
++
++  Future<void> _saveAndApplySettings(EditorSettings newSettings) async {
++    setState(() {
++      _editorSettings = newSettings;
++    });
++    await newSettings.save();
++    await _applySettingsToEditor();
++  }
++
++  void _toggleSidebar() {
++    setState(() {
++      _isSidebarExpanded = !_isSidebarExpanded;
++      if (_isSidebarExpanded) {
++        _sidebarAnimationController.forward();
++      } else {
++        _sidebarAnimationController.reverse();
++      }
++    });
++  }
++
++  @override
++  Widget build(BuildContext context) {
+     final editorStatus = ref.watch(monacoEditorStatusProvider);
+-    final assetStatus = ref.watch(monacoAssetStatusProvider);
++    final selectionState = ref.watch(selectionProvider);
++
++    // Listen for editor ready state to apply initial settings
++    ref.listen<MonacoEditorStatus>(monacoEditorStatusProvider,
++        (previous, next) {
++      if (!_hasAppliedInitialSettings && next.isReady) {
++        _hasAppliedInitialSettings = true;
++        _applySettingsToEditor();
++      }
++    });
++
++    // Determine if we should show the overlay (when no files are selected)
++    final showOverlay = selectionState.combinedContent.isEmpty;
+ 
+     debugPrint(
+-        '[GlobalMonacoContainer] Build - Editor: ${editorStatus.state}, Assets: ${assetStatus.state}');
++        '[GlobalMonacoContainer] Build - Editor: ${editorStatus.state}, ShowOverlay: $showOverlay');
+ 
+     return Material(
+       child: Stack(
+         children: [
+-          // Main app content - always visible
+-          child,
+-
+-          // Monaco editor - always present but positioned off-screen when hidden
+-          // This ensures the WebView is created once and never disposed
+-          Positioned(
+-            // Position off-screen to the left when hidden
+-            left: editorStatus.isVisible ? 0 : -3000,
+-            top: 0,
+-            bottom: 0,
+-            right: editorStatus.isVisible ? 0 : null,
+-            width: editorStatus.isVisible ? null : 1920,
+-            child: IgnorePointer(
+-              ignoring: !editorStatus.isVisible,
+-              child: RepaintBoundary(
+-                child: MonacoEditorContainer(
+-                  key: const Key('global_monaco_editor'),
+-                  onReady: () {
+-                    debugPrint(
+-                        '[GlobalMonacoContainer] ✅ Monaco Editor is ready!');
+-                  },
++          // BOTTOM LAYER: Monaco editor - always at the bottom, always loaded
++          Positioned.fill(
++            child: RepaintBoundary(
++              child: MonacoEditorContainer(
++                key: const Key('global_monaco_editor'),
++                onReady: () {
++                  debugPrint(
++                      '[GlobalMonacoContainer] ✅ Monaco Editor is ready!');
++                },
++              ),
++            ),
++          ),
++
++          // TOP LAYER: App content with animated fade
++          // This layer fades out when files are selected, revealing the editor underneath
++          AnimatedSwitcher(
++            duration: const Duration(milliseconds: 400),
++            child: showOverlay
++                ? Container(
++                    key: const ValueKey('overlay'),
++                    color: Theme.of(context).scaffoldBackgroundColor,
++                    child: widget.child,
++                  )
++                : const SizedBox.shrink(),
++          ),
++
++          // CONTROLS LAYER: Sidebar and info bar when editor is visible
++          if (!showOverlay && editorStatus.isReady) ...[
++            // Settings sidebar
++            Positioned(
++              left: 0,
++              top: 0,
++              bottom: 0,
++              child: AnimatedBuilder(
++                animation: _sidebarAnimation,
++                builder: (context, child) {
++                  final width = _expandedSidebarWidth * _sidebarAnimation.value;
++                  return SizedBox(
++                    width: width,
++                    child: width > 0 ? _buildSidebar(context) : null,
++                  );
++                },
++              ),
++            ),
++
++            // Toggle button for sidebar
++            Positioned(
++              left: _isSidebarExpanded ? _expandedSidebarWidth - 20 : 8,
++              top: 16,
++              child: AnimatedBuilder(
++                animation: _sidebarAnimation,
++                builder: (context, child) {
++                  return Material(
++                    color: _isSidebarExpanded
++                        ? context.surfaceContainerHighest
++                        : context.surface,
++                    elevation: 4,
++                    shape: const CircleBorder(),
++                    child: InkWell(
++                      onTap: _toggleSidebar,
++                      customBorder: const CircleBorder(),
++                      child: Container(
++                        width: 36,
++                        height: 36,
++                        decoration: BoxDecoration(
++                          shape: BoxShape.circle,
++                          border: Border.all(
++                            color: context.outline.withOpacity(0.2),
++                          ),
++                        ),
++                        child: Icon(
++                          _isSidebarExpanded
++                              ? Icons.chevron_left
++                              : Icons.settings,
++                          size: 20,
++                          color: context.onSurfaceVariant,
++                        ),
++                      ),
++                    ),
++                  );
++                },
++              ),
++            ),
++
++            // Info bar at bottom
++            Positioned(
++              left: 0,
++              right: 0,
++              bottom: 0,
++              child: _buildEditorControls(context),
++            ),
++          ],
++        ],
++      ),
++    );
++  }
++
++  Widget _buildSidebar(BuildContext context) {
++    return Container(
++      decoration: BoxDecoration(
++        color: context.surfaceContainerHighest,
++        border: BorderDirectional(
++          end: BorderSide(
++            color: context.outline.withOpacity(0.2),
++          ),
++        ),
++        boxShadow: [
++          BoxShadow(
++            color: context.shadow.withOpacity(0.05),
++            offset: const Offset(2, 0),
++            blurRadius: 4,
++          ),
++        ],
++      ),
++      child: SafeArea(
++        child: Column(
++          children: [
++            // Header
++            Container(
++              padding: const EdgeInsets.all(16),
++              child: Row(
++                children: [
++                  Icon(
++                    Icons.tune,
++                    size: 20,
++                    color: context.primary,
++                  ),
++                  const SizedBox(width: 8),
++                  Text(
++                    'Editor Settings',
++                    style: context.titleSmall?.copyWith(
++                      fontWeight: FontWeight.w600,
++                    ),
++                  ),
++                ],
++              ),
++            ),
++            const Divider(height: 1),
++            // Settings content
++            Expanded(
++              child: SingleChildScrollView(
++                padding: const EdgeInsets.all(16),
++                child: Column(
++                  crossAxisAlignment: CrossAxisAlignment.start,
++                  children: [
++                    // Quick settings placeholder
++                    _buildQuickSettings(context),
++                  ],
+                 ),
+               ),
+             ),
++          ],
++        ),
++      ),
++    );
++  }
++
++  Widget _buildQuickSettings(BuildContext context) {
++    final selectionState = ref.watch(selectionProvider);
++
++    return Column(
++      crossAxisAlignment: CrossAxisAlignment.start,
++      children: [
++        // File count
++        Container(
++          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
++          decoration: BoxDecoration(
++            color: context.primary.withOpacity(0.1),
++            borderRadius: BorderRadius.circular(8),
++            border: Border.all(
++              color: context.primary.withOpacity(0.3),
++            ),
++          ),
++          child: Row(
++            children: [
++              Icon(
++                Icons.description_outlined,
++                size: 16,
++                color: context.primary,
++              ),
++              const SizedBox(width: 8),
++              Text(
++                '${selectionState.selectedFilesCount} files selected',
++                style: context.labelMedium?.copyWith(
++                  color: context.primary,
++                  fontWeight: FontWeight.w500,
++                ),
++              ),
++            ],
++          ),
++        ),
++        const SizedBox(height: 24),
++
++        // Theme selector
++        Text(
++          'Theme',
++          style: context.labelMedium?.copyWith(
++            fontWeight: FontWeight.w600,
++            color: context.onSurfaceVariant,
++          ),
++        ),
++        const SizedBox(height: 8),
++        Container(
++          decoration: BoxDecoration(
++            color: context.surface,
++            borderRadius: BorderRadius.circular(8),
++          ),
++          child: DropdownButtonHideUnderline(
++            child: DropdownButton<String>(
++              isExpanded: true,
++              value: _editorSettings.theme,
++              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
++              borderRadius: BorderRadius.circular(8),
++              items: [
++                _buildThemeItem('vs', 'Light'),
++                _buildThemeItem('vs-dark', 'Dark'),
++                _buildThemeItem('hc-black', 'High Contrast'),
++                _buildThemeItem('one-dark-pro', 'One Dark Pro'),
++              ],
++              onChanged: (value) async {
++                if (value != null) {
++                  final newSettings = _editorSettings.copyWith(theme: value);
++                  await _saveAndApplySettings(newSettings);
++                }
++              },
++            ),
++          ),
++        ),
++
++        const SizedBox(height: 24),
++
++        // Full settings button
++        FilledButton.icon(
++          icon: const Icon(Icons.settings, size: 18),
++          label: const Text('All Settings'),
++          onPressed: () async {
++            final newSettings = await EnhancedEditorSettingsDialog.show(
++              context,
++              _editorSettings,
++              customThemes: [],
++              customKeybindingPresets: [],
++            );
++            if (newSettings != null && mounted) {
++              await _saveAndApplySettings(newSettings);
++            }
++          },
++          style: FilledButton.styleFrom(
++            minimumSize: const Size(double.infinity, 40),
++          ),
++        ),
++      ],
++    );
++  }
++
++  DropdownMenuItem<String> _buildThemeItem(String value, String label) {
++    return DropdownMenuItem(
++      value: value,
++      child: Text(
++        label,
++        style: context.bodyMedium,
++      ),
++    );
++  }
++
++  Widget _buildEditorControls(BuildContext context) {
++    final selectionState = ref.watch(selectionProvider);
++    final editorService = ref.read(monacoEditorServiceProvider);
++
++    return Container(
++      padding: const EdgeInsets.all(16),
++      decoration: BoxDecoration(
++        color: context.surface,
++        boxShadow: [
++          BoxShadow(
++            color: Colors.black.withOpacity(0.1),
++            offset: const Offset(0, -2),
++            blurRadius: 8,
++          ),
++        ],
++      ),
++      child: Column(
++        mainAxisSize: MainAxisSize.min,
++        children: [
++          // Info bar with actions
++          MonacoEditorInfoBar(
++            bridge: editorService.bridge,
++            onCopy: () =>
++                _copyToClipboard(context, selectionState.combinedContent),
++          ),
++
++          // Clear files button
++          const SizedBox(height: 12),
++          SizedBox(
++            width: double.infinity,
++            child: OutlinedButton.icon(
++              onPressed: () {
++                ref.read(selectionProvider.notifier).clearFiles();
++              },
++              icon: const Icon(Icons.clear),
++              label: const Text('Clear Files'),
++              style: OutlinedButton.styleFrom(
++                padding: const EdgeInsets.symmetric(vertical: 12),
++              ),
++            ),
+           ),
+         ],
+       ),
+     );
+   }
++
++  void _copyToClipboard(BuildContext context, String content) {
++    Clipboard.setData(ClipboardData(text: content)).then((_) {
++      ScaffoldMessenger.of(context).showSnackBar(
++        SnackBar(
++          content: Row(
++            children: [
++              Icon(
++                Icons.check_circle,
++                color: context.onPrimary,
++                size: 20,
++              ),
++              const SizedBox(width: 8),
++              const Text('Content copied to clipboard!'),
++            ],
++          ),
++          backgroundColor: context.primary,
++          behavior: SnackBarBehavior.floating,
++          duration: const Duration(seconds: 2),
++          shape: RoundedRectangleBorder(
++            borderRadius: BorderRadius.circular(8),
++          ),
++        ),
++      );
++    }).catchError((dynamic error) {
++      ScaffoldMessenger.of(context).showSnackBar(
++        SnackBar(
++          content: Text('Error copying to clipboard: $error'),
++          backgroundColor: context.error,
++        ),
++      );
++    });
++  }
+ }
+diff --git a/lib/src/features/editor/presentation/ui/monaco_editor_container.dart b/lib/src/features/editor/presentation/ui/monaco_editor_container.dart
+index d778af1..822a86c 100644
+--- a/lib/src/features/editor/presentation/ui/monaco_editor_container.dart
++++ b/lib/src/features/editor/presentation/ui/monaco_editor_container.dart
+@@ -1,9 +1,9 @@
+ // lib/src/features/editor/presentation/ui/monaco_editor_container.dart
+-import 'package:context_collector/src/features/editor/assets_manager/notifier.dart';
+ import 'package:flutter/material.dart';
+ import 'package:flutter_riverpod/flutter_riverpod.dart';
+ 
+ import '../../../../shared/theme/extensions.dart';
++import '../../assets_manager/notifier.dart';
+ import '../../services/monaco_editor_providers.dart';
+ import '../../services/monaco_editor_service.dart';
+ import '../../services/monaco_editor_state.dart';
+@@ -120,16 +120,7 @@ class _MonacoEditorContainerState extends ConsumerState<MonacoEditorContainer>
+       debugPrint(
+           '[MonacoEditorContainer] Status changed: ${previous?.state} → ${next.state}');
+ 
+-      // Handle visibility animation
+-      if (previous?.isVisible != next.isVisible) {
+-        if (next.isVisible) {
+-          debugPrint('[MonacoEditorContainer] Showing editor (fade in)');
+-          _animationController.forward();
+-        } else {
+-          debugPrint('[MonacoEditorContainer] Hiding editor (fade out)');
+-          _animationController.reverse();
+-        }
+-      }
++      // No visibility animation needed in layered architecture
+ 
+       // Notify ready callback once
+       if (!_hasNotifiedReady && next.isReady) {
+@@ -146,9 +137,8 @@ class _MonacoEditorContainerState extends ConsumerState<MonacoEditorContainer>
+           // Create editor widget when assets are ready
+           if (_shouldCreateEditor) _buildEditor(editorService, editorStatus),
+ 
+-          // Overlay for loading/error states when visible or during initialization
+-          if ((editorStatus.isLoading || editorStatus.hasError) &&
+-              (editorStatus.isVisible || !editorStatus.isReady))
++          // Overlay for loading/error states during initialization
++          if ((editorStatus.isLoading || editorStatus.hasError) && !editorStatus.isReady)
+             _buildOverlay(editorStatus),
+         ],
+       ),
+@@ -160,51 +150,25 @@ class _MonacoEditorContainerState extends ConsumerState<MonacoEditorContainer>
+     MonacoEditorStatus status,
+   ) {
+     debugPrint(
+-        '[MonacoEditorContainer] Building editor widget - Status: ${status.state}, Visible: ${status.isVisible}');
+-
+-    // CRITICAL: Always keep the editor in the widget tree and ALWAYS visible to WebView
+-    // We control visibility through opacity and pointer events only
+-    // This ensures WebView never gets disposed or recreated
+-
+-    return Stack(
+-      children: [
+-        // The actual editor - ALWAYS rendered
+-        MonacoEditorIntegrated(
+-          key: const Key('monaco_editor_webview'),
+-          bridge: service.bridge,
+-          onReady: () {
+-            debugPrint(
+-                '[MonacoEditorContainer] Editor WebView ready, marking service ready');
+-            // Mark the service as ready
+-            service.markEditorReady();
+-          },
+-          height: widget.height,
+-        ),
++        '[MonacoEditorContainer] Building editor widget - Status: ${status.state}');
+ 
+-        // Visibility overlay - controls visual appearance only
+-        if (!status.isVisible)
+-          Positioned.fill(
+-            child: AnimatedBuilder(
+-              animation: _fadeAnimation,
+-              builder: (context, child) {
+-                return Container(
+-                  color: context.isDark
+-                      ? const Color(0xFF1E1E1E)
+-                          .withOpacity(1 - _fadeAnimation.value)
+-                      : Colors.white.withOpacity(1 - _fadeAnimation.value),
+-                );
+-              },
+-            ),
+-          ),
+-      ],
++    // In the new layered architecture, the editor is always visible
++    // No overlays or visibility controls needed
++    return MonacoEditorIntegrated(
++      key: const Key('monaco_editor_webview'),
++      bridge: service.bridge,
++      onReady: () {
++        debugPrint(
++            '[MonacoEditorContainer] Editor WebView ready, marking service ready');
++        // Mark the service as ready
++        service.markEditorReady();
++      },
++      height: widget.height,
+     );
+   }
+ 
+   Widget _buildOverlay(MonacoEditorStatus status) {
+-    // Only show overlay if editor is visible or not ready yet
+-    if (!status.isVisible && status.isReady) {
+-      return const SizedBox.shrink();
+-    }
++    // Show overlay only during initialization
+ 
+     return AnimatedSwitcher(
+       duration: const Duration(milliseconds: 300),
+diff --git a/lib/src/features/editor/presentation/ui/monaco_editor_display.dart b/lib/src/features/editor/presentation/ui/monaco_editor_display.dart
+index ce99f00..e69de29 100644
+--- a/lib/src/features/editor/presentation/ui/monaco_editor_display.dart
++++ b/lib/src/features/editor/presentation/ui/monaco_editor_display.dart
+@@ -1,65 +0,0 @@
+-// lib/src/features/editor/presentation/ui/monaco_editor_display.dart
+-import 'package:flutter/material.dart';
+-import 'package:flutter_riverpod/flutter_riverpod.dart';
+-
+-import '../../services/monaco_editor_providers.dart';
+-
+-/// Display widget that shows the global Monaco editor in the content area
+-/// This widget doesn't contain the actual editor - it just provides the visual space
+-/// where the global editor (from GlobalMonacoContainer) becomes visible
+-class MonacoEditorDisplay extends ConsumerWidget {
+-  const MonacoEditorDisplay({super.key});
+-
+-  @override
+-  Widget build(BuildContext context, WidgetRef ref) {
+-    final editorStatus = ref.watch(monacoEditorStatusProvider);
+-    
+-    // This widget is just a placeholder that indicates where the editor should appear
+-    // The actual editor is rendered globally and positioned here when visible
+-    return Container(
+-      color: Theme.of(context).brightness == Brightness.dark 
+-          ? const Color(0xFF1E1E1E) 
+-          : Colors.white,
+-      child: Stack(
+-        children: [
+-          // Main area where the global editor will be shown
+-          const SizedBox.expand(),
+-          
+-          // Debug overlay (only in debug mode)
+-          if (editorStatus.isReady && editorStatus.isVisible)
+-            Positioned(
+-              top: 8,
+-              right: 8,
+-              child: Container(
+-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+-                decoration: BoxDecoration(
+-                  color: Colors.green.withOpacity(0.2),
+-                  borderRadius: BorderRadius.circular(4),
+-                  border: Border.all(color: Colors.green.withOpacity(0.4)),
+-                ),
+-                child: Row(
+-                  mainAxisSize: MainAxisSize.min,
+-                  children: [
+-                    Icon(
+-                      Icons.check_circle,
+-                      size: 12,
+-                      color: Colors.green.shade700,
+-                    ),
+-                    const SizedBox(width: 4),
+-                    Text(
+-                      'Editor Active',
+-                      style: TextStyle(
+-                        fontSize: 10,
+-                        color: Colors.green.shade700,
+-                        fontWeight: FontWeight.w600,
+-                      ),
+-                    ),
+-                  ],
+-                ),
+-              ),
+-            ),
+-        ],
+-      ),
+-    );
+-  }
+-}
+diff --git a/lib/src/features/editor/services/monaco_editor_service.dart b/lib/src/features/editor/services/monaco_editor_service.dart
+index 2d3881d..5625c67 100644
+--- a/lib/src/features/editor/services/monaco_editor_service.dart
++++ b/lib/src/features/editor/services/monaco_editor_service.dart
+@@ -29,7 +29,7 @@ class MonacoEditorService {
+   String? _currentContent;
+   String? _queuedContent;
+   bool _isContentUpdatePending = false;
+-  bool _shouldShowWhenReady = false;
++
+ 
+   /// Get the bridge instance (for UI components)
+   MonacoBridgePlatform get bridge => _bridge;
+@@ -85,13 +85,13 @@ class MonacoEditorService {
+   void markEditorReady() {
+     debugPrint('[MonacoEditorService] Editor marked as ready');
+ 
+-    final shouldShow = _shouldShowWhenReady;
++
+ 
+     _updateStatus(MonacoEditorStatus(
+       state: MonacoEditorServiceState.ready,
+       progress: 1.0,
+       message: 'Monaco Editor ready',
+-      isVisible: shouldShow,
++      isVisible: true, // Always visible in layered architecture
+       hasContent: _currentContent != null || _config.showInitContent,
+       lastUpdate: DateTime.now(),
+     ));
+@@ -125,11 +125,10 @@ class MonacoEditorService {
+     _currentContent = content;
+     final status = _ref.read(monacoEditorStatusProvider);
+ 
+-    // If not ready, queue the content and mark that we should show when ready
++    // If not ready, queue the content
+     if (!status.isReady) {
+       debugPrint('[MonacoEditorService] Editor not ready, queueing content');
+       _queuedContent = content;
+-      _shouldShowWhenReady = true;
+       _updateStatus(status.copyWith(
+         queuedContent: content,
+         hasContent: true,
+@@ -179,27 +178,18 @@ class MonacoEditorService {
+     _currentContent = null;
+   }
+ 
+-  /// Show the editor
++  /// Show the editor (no longer needed with layered architecture)
++  @Deprecated('Editor visibility is now managed by overlay')
+   void show() {
+-    debugPrint('[MonacoEditorService] Show requested');
+-    final status = _ref.read(monacoEditorStatusProvider);
+-
+-    if (status.isReady) {
+-      debugPrint('[MonacoEditorService] Editor is ready, showing');
+-      _updateStatus(status.copyWith(isVisible: true));
+-    } else {
+-      debugPrint(
+-          '[MonacoEditorService] Editor not ready, will show when ready');
+-      _shouldShowWhenReady = true;
+-    }
++    debugPrint('[MonacoEditorService] Show requested (deprecated)');
++    // No-op: visibility is now controlled by the overlay
+   }
+ 
+-  /// Hide the editor
++  /// Hide the editor (no longer needed with layered architecture)
++  @Deprecated('Editor visibility is now managed by overlay')
+   void hide() {
+-    debugPrint('[MonacoEditorService] Hide requested');
+-    final status = _ref.read(monacoEditorStatusProvider);
+-    _shouldShowWhenReady = false;
+-    _updateStatus(status.copyWith(isVisible: false));
++    debugPrint('[MonacoEditorService] Hide requested (deprecated)');
++    // No-op: visibility is now controlled by the overlay
+   }
+ 
+   /// Apply editor settings
