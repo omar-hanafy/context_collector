@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../shared/shared.dart';
 import '../../../../shared/utils/drop_file_resolver.dart';
+import '../../../../shared/utils/vscode_drop_detector.dart';
 import '../../../scan/presentation/state/selection_notifier.dart';
 import '../../../scan/presentation/ui/action_buttons_widget.dart';
 import '../../../scan/presentation/ui/file_list_widget.dart';
@@ -116,6 +117,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       await _saveAndApplySettings(newSettings);
     }
   }
+  
 
   Future<void> _toggleWordWrap() async {
     final newWrap =
@@ -226,25 +228,48 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           final directories = <String>[];
 
           for (final file in details.files) {
-            final entity = FileSystemEntity.typeSync(file.path);
-            if (entity == FileSystemEntityType.file) {
-              files.add(file.path);
-            } else if (entity == FileSystemEntityType.directory) {
-              // Check if this is a temporary drop file that was misidentified as a directory
-              if (DropFileResolver.isTemporaryDropFile(file.path)) {
-                // Sometimes desktop_drop temporary files are reported as directories
-                // Try to read it as a file first
+            final filePath = file.path;
+            
+            // Check if this is a VS Code directory drop
+            if (filePath.contains('/tmp/Drops/')) {
+              try {
+                // Try to read as VS Code directory listing
+                final content = await File(filePath).readAsString();
+                final directoryPath = VSCodeDropDetector.extractDirectoryPath(content);
+                
+                if (directoryPath != null) {
+                  // Just add the directory path and let normal error handling deal with permissions
+                  directories.add(directoryPath);
+                  continue;
+                }
+              } catch (_) {
+                // Not a VS Code directory listing, process normally
+              }
+            }
+            
+            // Handle typed drops (desktop_drop 0.6.0+)
+            if (file is DropItemDirectory) {
+              directories.add(filePath);
+            } else if (file is DropItemFile) {
+              files.add(filePath);
+            } else {
+              // Fallback for regular XFile - use filesystem check
+              final entity = FileSystemEntity.typeSync(filePath);
+              if (entity == FileSystemEntityType.directory) {
+                directories.add(filePath);
+              } else if (entity == FileSystemEntityType.file) {
+                files.add(filePath);
+              } else if (DropFileResolver.isTemporaryDropFile(filePath)) {
+                // Handle other temporary drop files
                 try {
-                  final testFile = File(file.path);
+                  final testFile = File(filePath);
                   if (testFile.existsSync() && testFile.statSync().type == FileSystemEntityType.file) {
-                    files.add(file.path);
-                    continue;
+                    files.add(filePath);
                   }
                 } catch (_) {
-                  // If it fails, treat it as a directory
+                  // Skip files that can't be accessed
                 }
               }
-              directories.add(file.path);
             }
           }
 

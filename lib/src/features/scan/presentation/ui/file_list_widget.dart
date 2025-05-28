@@ -140,15 +140,32 @@ class _FileListItem extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: 4),
-        Text(
-          file.fullPath,
-          style: context.bodySmall?.copyWith(
-            color: context.onSurface.addOpacity(0.5),
-            fontFamily: 'monospace',
-            fontSize: 11,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        Row(
+          children: [
+            if (file.isVSCodeDrop) ...[
+              Tooltip(
+                message: 'Dragged from VS Code',
+                child: Icon(
+                  Icons.code_rounded,
+                  size: 12,
+                  color: context.onSurface.addOpacity(0.5),
+                ),
+              ),
+              const SizedBox(width: 4),
+            ],
+            Expanded(
+              child: Text(
+                file.displayPath ?? file.fullPath,
+                style: context.bodySmall?.copyWith(
+                  color: context.onSurface.addOpacity(0.5),
+                  fontFamily: 'monospace',
+                  fontSize: 11,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         SingleChildScrollView(

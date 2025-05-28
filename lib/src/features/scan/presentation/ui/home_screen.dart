@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:context_collector/context_collector.dart';
 import 'package:context_collector/src/shared/consts.dart';
 import 'package:context_collector/src/shared/utils/drop_file_resolver.dart';
+import 'package:context_collector/src/shared/utils/vscode_drop_detector.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,6 +22,23 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _isDragging = false;
+  
+  // Helper method to process children of DropItemDirectory recursively
+  Future<void> _processDropItemChildren(
+    List<DropItem> children,
+    List<String> files,
+    List<String> directories,
+  ) async {
+    for (final child in children) {
+      if (child is DropItemDirectory) {
+        directories.add(child.path);
+        await _processDropItemChildren(child.children, files, directories);
+      } else if (child is DropItemFile) {
+        files.add(child.path);
+      }
+    }
+  }
+  
 
   @override
   void initState() {
@@ -165,26 +183,50 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           final files = <String>[];
           final directories = <String>[];
 
-          for (final file in details.files) {
-            final entity = FileSystemEntity.typeSync(file.path);
-            if (entity == FileSystemEntityType.file) {
-              files.add(file.path);
-            } else if (entity == FileSystemEntityType.directory) {
-              // Check if this is a temporary drop file that was misidentified as a directory
-              if (DropFileResolver.isTemporaryDropFile(file.path)) {
-                // Sometimes desktop_drop temporary files are reported as directories
-                // Try to read it as a file first
+          for (final item in details.files) {
+            final filePath = item.path;
+            
+            // Check if this is a VS Code directory drop
+            if (filePath.contains('/tmp/Drops/')) {
+              try {
+                // Try to read as VS Code directory listing
+                final content = await File(filePath).readAsString();
+                final directoryPath = VSCodeDropDetector.extractDirectoryPath(content);
+                
+                if (directoryPath != null) {
+                  // Just add the directory path and let normal error handling deal with permissions
+                  directories.add(directoryPath);
+                  continue;
+                }
+              } catch (_) {
+                // Not a VS Code directory listing, process normally
+              }
+            }
+            
+            // Handle typed drops (desktop_drop 0.6.0+)
+            if (item is DropItemDirectory) {
+              directories.add(filePath);
+              await _processDropItemChildren(item.children, files, directories);
+            } else if (item is DropItemFile) {
+              files.add(filePath);
+            } else {
+              // Fallback for regular XFile - use filesystem check
+              final entity = FileSystemEntity.typeSync(filePath);
+              if (entity == FileSystemEntityType.directory) {
+                directories.add(filePath);
+              } else if (entity == FileSystemEntityType.file) {
+                files.add(filePath);
+              } else if (DropFileResolver.isTemporaryDropFile(filePath)) {
+                // Handle other temporary drop files
                 try {
-                  final testFile = File(file.path);
+                  final testFile = File(filePath);
                   if (testFile.existsSync() && testFile.statSync().type == FileSystemEntityType.file) {
-                    files.add(file.path);
-                    continue;
+                    files.add(filePath);
                   }
                 } catch (_) {
-                  // If it fails, treat it as a directory
+                  // Skip files that can't be accessed
                 }
               }
-              directories.add(file.path);
             }
           }
 
