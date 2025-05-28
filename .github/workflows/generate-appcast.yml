@@ -121,13 +121,4 @@ jobs:
           git add appcast.xml
           git diff --quiet && git diff --staged --quiet || (git commit -m "Update appcast.xml" && git push origin gh-pages)
 
-  deploy-pages:
-    needs: generate-appcast
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v3
+  # Removed deploy-pages job since we're directly pushing to gh-pages branch
