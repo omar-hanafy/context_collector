@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../shared/theme/extensions.dart';
 import '../../../../shared/utils/extension_catalog.dart';
+import '../../services/auto_updater_service.dart';
 import '../state/preferences_notifier.dart';
 import '../state/theme_notifier.dart';
 
@@ -24,7 +27,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    // Add Updates tab only on supported platforms
+    final tabCount = (Platform.isMacOS || Platform.isWindows) ? 3 : 2;
+    _tabController = TabController(length: tabCount, vsync: this);
   }
 
   @override
@@ -166,9 +171,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         title: const Text('Settings'),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(text: 'General'),
-            Tab(text: 'Extensions'),
+          tabs: [
+            const Tab(text: 'General'),
+            const Tab(text: 'Extensions'),
+            if (Platform.isMacOS || Platform.isWindows)
+              const Tab(text: 'Updates'),
           ],
         ),
       ),
@@ -179,6 +186,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           _buildGeneralSettings(context, currentTheme),
           // Extensions Settings Tab
           _buildExtensionsSettings(context, prefsState, notifier),
+          // Updates Settings Tab (only on supported platforms)
+          if (Platform.isMacOS || Platform.isWindows)
+            _buildUpdatesSettings(context),
         ],
       ),
     );
@@ -461,6 +471,204 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               },
             );
           }),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildUpdatesSettings(BuildContext context) {
+    final autoUpdaterService = ref.read(autoUpdaterServiceProvider);
+    
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.system_update_rounded,
+                      color: context.primary,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Automatic Updates',
+                      style: context.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Keep Context Collector up to date with the latest features and improvements.',
+                  style: context.bodyMedium?.copyWith(
+                    color: context.onSurface.addOpacity(0.7),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: () async {
+                    try {
+                      // Show loading indicator
+                      showDialog<void>(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (context) => const Center(
+                          child: Card(
+                            child: Padding(
+                              padding: EdgeInsets.all(20),
+                              child: CircularProgressIndicator(),
+                            ),
+                          ),
+                        ),
+                      );
+                      
+                      await autoUpdaterService.checkForUpdates();
+                      
+                      if (mounted) {
+                        Navigator.pop(context); // Close loading dialog
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Checking for updates...'),
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        Navigator.pop(context); // Close loading dialog
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Failed to check for updates: $e'),
+                            backgroundColor: context.error,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Check for Updates'),
+                ),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 16),
+                Text(
+                  'Update Settings',
+                  style: context.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: context.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.schedule_rounded,
+                            size: 16,
+                            color: context.onSurface.addOpacity(0.6),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Automatic check interval: Every 6 hours',
+                            style: context.bodySmall?.copyWith(
+                              color: context.onSurface.addOpacity(0.6),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.cloud_download_rounded,
+                            size: 16,
+                            color: context.onSurface.addOpacity(0.6),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Updates are downloaded automatically and will be installed on next app restart',
+                              style: context.bodySmall?.copyWith(
+                                color: context.onSurface.addOpacity(0.6),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      color: context.primary,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'About',
+                      style: context.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _buildInfoRow(context, 'Version', '1.1.0'),
+                const SizedBox(height: 8),
+                _buildInfoRow(context, 'Platform', Platform.operatingSystem),
+                const SizedBox(height: 8),
+                _buildInfoRow(
+                  context, 
+                  'Update Channel', 
+                  'Stable',
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+  
+  Widget _buildInfoRow(BuildContext context, String label, String value) {
+    return Row(
+      children: [
+        Text(
+          '$label:',
+          style: context.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          value,
+          style: context.bodyMedium?.copyWith(
+            color: context.onSurface.addOpacity(0.7),
+          ),
         ),
       ],
     );

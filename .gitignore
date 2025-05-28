@@ -126,3 +126,8 @@ app.*.map.json
 !.idea/dictionaries/
 !.idea/runConfigurations/
 /pubspec.lock
+
+# Auto updater keys (keep private!)
+keys/
+*.pem
+*.key

@@ -1,0 +1,133 @@
+name: Generate Appcast
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  generate-appcast:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          fetch-depth: 0
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.0'
+
+      - name: Install dependencies
+        run: |
+          gem install nokogiri
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Generate appcast.xml
+        run: |
+          # Create gh-pages branch if it doesn't exist
+          git checkout gh-pages 2>/dev/null || git checkout -b gh-pages
+
+          # Create Ruby script to generate appcast.xml
+          cat > generate_appcast.rb << 'EOF'
+          require 'nokogiri'
+          require 'json'
+          require 'net/http'
+          require 'time'
+          
+          # Fetch releases from GitHub API
+          owner = ENV['GITHUB_REPOSITORY'].split('/')[0]
+          repo = ENV['GITHUB_REPOSITORY'].split('/')[1]
+          api_url = "https://api.github.com/repos/#{owner}/#{repo}/releases"
+          
+          uri = URI(api_url)
+          response = Net::HTTP.get(uri)
+          releases = JSON.parse(response)
+          
+          # Create XML structure
+          builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
+            xml.rss('version' => '2.0', 'xmlns:sparkle' => 'http://www.andymatuschak.org/xml-namespaces/sparkle') do
+              xml.channel do
+                xml.title "Context Collector Updates"
+                xml.link "https://#{owner}.github.io/#{repo}/appcast.xml"
+                xml.description "Most recent changes with links to updates."
+                xml.language "en"
+                
+                releases.each do |release|
+                  next if release['draft'] || release['prerelease']
+                  
+                  version = release['tag_name'].gsub(/^v/, '')
+                  
+                  xml.item do
+                    xml.title "Version #{version}"
+                    xml.pubDate Time.parse(release['published_at']).rfc2822
+                    
+                    if release['body'] && !release['body'].empty?
+                      xml.description do
+                        xml.cdata release['body']
+                      end
+                    end
+                    
+                    # Find macOS asset
+                    macos_asset = release['assets'].find { |a| a['name'].match(/macos|darwin|\.dmg$/i) }
+                    if macos_asset
+                      xml.enclosure(
+                        'url' => macos_asset['browser_download_url'],
+                        'sparkle:version' => version,
+                        'sparkle:shortVersionString' => version,
+                        'length' => macos_asset['size'].to_s,
+                        'type' => 'application/octet-stream',
+                        'sparkle:os' => 'macos'
+                      )
+                    end
+                    
+                    # Find Windows asset
+                    windows_asset = release['assets'].find { |a| a['name'].match(/windows|win|\.exe$/i) }
+                    if windows_asset
+                      xml.enclosure(
+                        'url' => windows_asset['browser_download_url'],
+                        'sparkle:version' => version,
+                        'sparkle:shortVersionString' => version,
+                        'length' => windows_asset['size'].to_s,
+                        'type' => 'application/octet-stream',
+                        'sparkle:os' => 'windows'
+                      )
+                    end
+                  end
+                end
+              end
+            end
+          end
+          
+          # Write appcast.xml
+          File.write('appcast.xml', builder.to_xml)
+          puts "Generated appcast.xml with #{releases.select { |r| !r['draft'] && !r['prerelease'] }.count} releases"
+          EOF
+
+          ruby generate_appcast.rb
+
+      - name: Commit and push
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add appcast.xml
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update appcast.xml" && git push origin gh-pages)
+
+  deploy-pages:
+    needs: generate-appcast
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v3

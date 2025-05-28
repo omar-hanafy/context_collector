@@ -12,6 +12,7 @@ import 'src/features/editor/services/monaco_editor_state.dart';
 import 'src/features/editor/utils/webview_platform_utils.dart';
 import 'src/features/scan/presentation/ui/home_screen.dart';
 import 'src/features/settings/presentation/state/theme_notifier.dart';
+import 'src/features/settings/services/auto_updater_service.dart';
 import 'src/shared/theme/app_theme.dart';
 
 void main() async {
@@ -57,6 +58,9 @@ void main() async {
 
   // 🚀 START EDITOR PRELOADING (will wait for assets automatically)
   _startEditorPreloading(container);
+
+  // 🔄 INITIALIZE AUTO UPDATER
+  _initializeAutoUpdater(container);
 
   // Run the main app normally - no loading screens!
   runApp(
@@ -111,6 +115,27 @@ void _startEditorPreloading(ProviderContainer container) {
   // Check initial state
   final initialStatus = container.read(monacoEditorStatusProvider);
   debugPrint('[ContextCollector] Initial editor status: ${initialStatus.state}');
+}
+
+/// Initialize auto updater for automatic updates
+void _initializeAutoUpdater(ProviderContainer container) {
+  // Only initialize on supported platforms
+  if (!Platform.isMacOS && !Platform.isWindows) {
+    debugPrint('[ContextCollector] Auto updater not supported on this platform');
+    return;
+  }
+  
+  debugPrint('[ContextCollector] 🔄 Initializing auto updater...');
+  
+  // Initialize auto updater service
+  container
+      .read(autoUpdaterServiceProvider)
+      .initialize()
+      .then((_) {
+    debugPrint('[ContextCollector] ✅ Auto updater initialized successfully');
+  }).catchError((dynamic error) {
+    debugPrint('[ContextCollector] ⚠️ Auto updater initialization failed: $error');
+  });
 }
 
 class WebView2MissingApp extends StatelessWidget {

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:context_collector/context_collector.dart';
 import 'package:context_collector/src/shared/consts.dart';
+import 'package:context_collector/src/shared/utils/drop_file_resolver.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -169,6 +170,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             if (entity == FileSystemEntityType.file) {
               files.add(file.path);
             } else if (entity == FileSystemEntityType.directory) {
+              // Check if this is a temporary drop file that was misidentified as a directory
+              if (DropFileResolver.isTemporaryDropFile(file.path)) {
+                // Sometimes desktop_drop temporary files are reported as directories
+                // Try to read it as a file first
+                try {
+                  final testFile = File(file.path);
+                  if (testFile.existsSync() && testFile.statSync().type == FileSystemEntityType.file) {
+                    files.add(file.path);
+                    continue;
+                  }
+                } catch (_) {
+                  // If it fails, treat it as a directory
+                }
+              }
               directories.add(file.path);
             }
           }

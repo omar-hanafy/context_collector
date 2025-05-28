@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../shared/shared.dart';
+import '../../../../shared/utils/drop_file_resolver.dart';
 import '../../../scan/presentation/state/selection_notifier.dart';
 import '../../../scan/presentation/ui/action_buttons_widget.dart';
 import '../../../scan/presentation/ui/file_list_widget.dart';
@@ -229,6 +230,20 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             if (entity == FileSystemEntityType.file) {
               files.add(file.path);
             } else if (entity == FileSystemEntityType.directory) {
+              // Check if this is a temporary drop file that was misidentified as a directory
+              if (DropFileResolver.isTemporaryDropFile(file.path)) {
+                // Sometimes desktop_drop temporary files are reported as directories
+                // Try to read it as a file first
+                try {
+                  final testFile = File(file.path);
+                  if (testFile.existsSync() && testFile.statSync().type == FileSystemEntityType.file) {
+                    files.add(file.path);
+                    continue;
+                  }
+                } catch (_) {
+                  // If it fails, treat it as a directory
+                }
+              }
               directories.add(file.path);
             }
           }
