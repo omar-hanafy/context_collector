@@ -6,6 +6,7 @@ import 'package:context_collector/src/shared/consts.dart';
 import 'package:context_collector/src/shared/utils/drop_file_resolver.dart';
 import 'package:context_collector/src/shared/utils/vscode_drop_detector.dart';
 import 'package:desktop_drop/desktop_drop.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -180,6 +181,65 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         onDragDone: (details) async {
           setState(() => _isDragging = false);
 
+          // Enhanced debug logging with ALL available metadata
+          if (kDebugMode) {
+            print('\n========== DROP EVENT DEBUG ==========');
+            print('Drop local position: ${details.localPosition}');
+            print('Drop global position: ${details.globalPosition}');
+            print('Number of items: ${details.files.length}');
+            
+            for (int i = 0; i < details.files.length; i++) {
+              final item = details.files[i];
+              print('\n--- Item $i ---');
+              print('Runtime type: ${item.runtimeType}');
+              print('Path: ${item.path}');
+              print('Name: ${item.name}');
+              
+              // Try to get async properties
+              try {
+                final mimeType = item.mimeType;
+                print('MIME type: $mimeType');
+              } catch (e) {
+                print('MIME type error: $e');
+              }
+              
+              try {
+                final length = await item.length();
+                print('File size: $length bytes');
+              } catch (e) {
+                print('File size error: $e');
+              }
+              
+              try {
+                final lastMod = await item.lastModified();
+                print('Last modified: $lastMod');
+              } catch (e) {
+                print('Last modified error: $e');
+              }
+              
+              // Check macOS-specific bookmark data
+              if (item is DropItemFile) {
+                print('Has Apple bookmark: ${item.extraAppleBookmark != null}');
+                if (item.extraAppleBookmark != null) {
+                  print('Bookmark size: ${item.extraAppleBookmark!.length} bytes');
+                }
+              }
+              
+              // Check actual filesystem type
+              final fsType = FileSystemEntity.typeSync(item.path);
+              print('Filesystem type: $fsType');
+              
+              // Check if it's a temporary file
+              print('Is temp file: ${item.path.contains('/tmp/') || item.path.contains('/var/folders/')}');
+              
+              // For directories, check children
+              if (item is DropItemDirectory) {
+                print('Children count: ${item.children.length}');
+              }
+            }
+            print('=====================================\n');
+          }
+
           final files = <String>[];
           final directories = <String>[];
 
@@ -208,10 +268,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               directories.add(filePath);
               await _processDropItemChildren(item.children, files, directories);
             } else if (item is DropItemFile) {
-              files.add(filePath);
+              // JetBrains workaround: Check if this "file" is actually a directory
+              // JetBrains incorrectly reports directories as DropItemFile
+              final checkType = FileSystemEntity.typeSync(filePath);
+              if (checkType == FileSystemEntityType.directory) {
+                directories.add(filePath);
+              } else {
+                files.add(filePath);
+              }
             } else {
               // Fallback for regular XFile - use filesystem check
               final entity = FileSystemEntity.typeSync(filePath);
+              
               if (entity == FileSystemEntityType.directory) {
                 directories.add(filePath);
               } else if (entity == FileSystemEntityType.file) {

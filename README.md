@@ -128,6 +128,17 @@ flutter run  # or flutter build macos / windows
 
 ---
 
+## ⚠️ Known Limitations
+
+### Drag & Drop
+
+| Application | Limitation | Workaround |
+|-------------|------------|------------|
+| **JetBrains IDEs** | Multi-file selection only drops the first file | Drop files one at a time or use finder/explorer
+| **VS Code** | Dropped files show only the filename | The full content is still processed correctly |
+
+---
+
 ## 🔮 Roadmap
 * ✅ ~~Add Windows support.~~ **Done!**
 * 📟 Export as file.

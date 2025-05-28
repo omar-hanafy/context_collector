@@ -251,7 +251,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             if (file is DropItemDirectory) {
               directories.add(filePath);
             } else if (file is DropItemFile) {
-              files.add(filePath);
+              // JetBrains workaround: Check if this "file" is actually a directory
+              // JetBrains incorrectly reports directories as DropItemFile
+              final checkType = FileSystemEntity.typeSync(filePath);
+              if (checkType == FileSystemEntityType.directory) {
+                directories.add(filePath);
+              } else {
+                files.add(filePath);
+              }
             } else {
               // Fallback for regular XFile - use filesystem check
               final entity = FileSystemEntity.typeSync(filePath);

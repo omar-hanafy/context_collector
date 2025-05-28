@@ -1,3 +1,6 @@
 - adding new file clears custom text added.
 - support for tree view.
 - support for custom text item in tree view.
+- support paste path or list of paths.
+- support paste content (this should be easily availalbe added after the custom text item feature).
+-
