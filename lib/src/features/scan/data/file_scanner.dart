@@ -33,7 +33,12 @@ class FileScanner {
         
         // Include files with supported extensions OR files without extensions
         // (which might be text files from desktop_drop temporary directory)
-        if (supportedExtensions.containsKey(extension) || extension.isEmpty) {
+        // Skip hidden files that start with a dot (like .DS_Store)
+        final fileName = path.basename(entity.path);
+        final isHiddenFile = fileName.startsWith('.') && extension.isEmpty;
+        
+        if (supportedExtensions.containsKey(extension) || 
+            (extension.isEmpty && !isHiddenFile)) {
           try {
             final scannedFile = ScannedFile.fromFile(entity);
             foundFiles.add(scannedFile);
