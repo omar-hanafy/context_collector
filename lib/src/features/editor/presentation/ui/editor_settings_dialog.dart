@@ -1,12 +1,11 @@
+import 'package:context_collector/src/features/editor/domain/editor_settings.dart';
+import 'package:context_collector/src/shared/theme/extensions.dart';
 import 'package:flutter/material.dart';
-
-import '../../../../shared/theme/extensions.dart';
-import '../../domain/editor_settings.dart';
 
 class EditorSettingsDialog extends StatefulWidget {
   const EditorSettingsDialog({
-    super.key,
     required this.settings,
+    super.key,
   });
 
   final EditorSettings settings;

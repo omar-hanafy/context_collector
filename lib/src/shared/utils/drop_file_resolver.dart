@@ -1,17 +1,19 @@
 import 'dart:io';
+
 import 'package:path/path.dart' as path;
 
 /// Utility class to handle desktop_drop temporary files
-/// 
+///
 /// When files are dragged from certain applications (like VSCode),
 /// desktop_drop creates temporary files in the app's sandboxed container
 /// that may lose their original extensions.
 class DropFileResolver {
   /// Check if a file path is a desktop_drop temporary file
   static bool isTemporaryDropFile(String filePath) {
-    return filePath.contains('/tmp/Drops/') || 
-           filePath.contains(r'\tmp\Drops\') ||
-           filePath.contains('/Containers/com.omarhanafy.context.collector/Data/tmp/Drops/');
+    return filePath.contains('/tmp/Drops/') ||
+        filePath.contains(r'\tmp\Drops\') ||
+        filePath.contains(
+            '/Containers/com.omarhanafy.context.collector/Data/tmp/Drops/');
   }
 
   /// Try to resolve the original file information from a temporary drop file
@@ -75,21 +77,21 @@ class DropFileResolver {
       'vite.config': '.js',
       'jest.config': '.js',
       'rollup.config': '.js',
-      
+
       // Common source files
       'index': '.js', // Could also be .ts, .tsx, .jsx, .html
       'main': '.dart', // In Flutter context
       'app': '.dart',
       'test': '.dart',
       'spec': '.js',
-      
+
       // Build files
       'makefile': '',
       'dockerfile': '',
       'readme': '.md',
       'changelog': '.md',
       'license': '',
-      
+
       // Shell scripts
       'build': '.sh',
       'deploy': '.sh',
@@ -118,7 +120,9 @@ class DropFileResolver {
       if (firstLine.startsWith('#!')) {
         if (firstLine.contains('python')) return '.py';
         if (firstLine.contains('node')) return '.js';
-        if (firstLine.contains('bash') || firstLine.contains('sh')) return '.sh';
+        if (firstLine.contains('bash') || firstLine.contains('sh')) {
+          return '.sh';
+        }
         if (firstLine.contains('ruby')) return '.rb';
         if (firstLine.contains('perl')) return '.pl';
         if (firstLine.contains('php')) return '.php';
@@ -148,58 +152,61 @@ class DropFileResolver {
 
   static bool _isDartCode(String content) {
     return content.contains("import 'dart:") ||
-           content.contains("import 'package:") ||
-           content.contains('class ') && content.contains(' extends ') ||
-           content.contains('void main()') ||
-           content.contains('Widget build(');
+        content.contains("import 'package:") ||
+        content.contains('class ') && content.contains(' extends ') ||
+        content.contains('void main()') ||
+        content.contains('Widget build(');
   }
 
   static bool _isJavaScriptCode(String content) {
     return content.contains('function ') ||
-           content.contains('const ') ||
-           content.contains('let ') ||
-           content.contains('var ') ||
-           content.contains('=>') ||
-           content.contains('require(') ||
-           content.contains('import ') && content.contains(' from ');
+        content.contains('const ') ||
+        content.contains('let ') ||
+        content.contains('var ') ||
+        content.contains('=>') ||
+        content.contains('require(') ||
+        content.contains('import ') && content.contains(' from ');
   }
 
   static bool _isPythonCode(String content) {
     return content.contains('def ') ||
-           content.contains('class ') && content.contains(':') ||
-           content.contains('import ') ||
-           content.contains('from ') && content.contains(' import ') ||
-           content.contains('if __name__');
+        content.contains('class ') && content.contains(':') ||
+        content.contains('import ') ||
+        content.contains('from ') && content.contains(' import ') ||
+        content.contains('if __name__');
   }
 
   static bool _isJavaCode(String content) {
     return content.contains('public class ') ||
-           content.contains('private ') ||
-           content.contains('protected ') ||
-           content.contains('package ') ||
-           content.contains('import java.');
+        content.contains('private ') ||
+        content.contains('protected ') ||
+        content.contains('package ') ||
+        content.contains('import java.');
   }
 
   static bool _isCppCode(String content) {
     return content.contains('#include ') ||
-           content.contains('using namespace ') ||
-           content.contains('int main(') ||
-           content.contains('std::');
+        content.contains('using namespace ') ||
+        content.contains('int main(') ||
+        content.contains('std::');
   }
 
   static bool _isHtmlCode(String content) {
     return content.contains('<!DOCTYPE') ||
-           content.contains('<html') ||
-           content.contains('<head>') ||
-           content.contains('<body>') ||
-           (content.contains('<div') && content.contains('</div>'));
+        content.contains('<html') ||
+        content.contains('<head>') ||
+        content.contains('<body>') ||
+        (content.contains('<div') && content.contains('</div>'));
   }
 
   static bool _isCssCode(String content) {
-    return (content.contains('{') && content.contains('}') && content.contains(':') && content.contains(';')) &&
-           (content.contains('color:') || 
-            content.contains('background:') || 
-            content.contains('margin:') || 
+    return (content.contains('{') &&
+            content.contains('}') &&
+            content.contains(':') &&
+            content.contains(';')) &&
+        (content.contains('color:') ||
+            content.contains('background:') ||
+            content.contains('margin:') ||
             content.contains('padding:') ||
             content.contains('font-'));
   }
@@ -207,36 +214,39 @@ class DropFileResolver {
   static bool _isJsonCode(String content) {
     final trimmed = content.trim();
     return (trimmed.startsWith('{') && trimmed.contains('}')) ||
-           (trimmed.startsWith('[') && trimmed.contains(']'));
+        (trimmed.startsWith('[') && trimmed.contains(']'));
   }
 
   static bool _isXmlCode(String content) {
     return content.contains('<?xml') ||
-           (content.contains('<') && content.contains('>') && content.contains('</'));
+        (content.contains('<') &&
+            content.contains('>') &&
+            content.contains('</'));
   }
 
   static bool _isMarkdownCode(String content) {
     return content.contains('# ') ||
-           content.contains('## ') ||
-           content.contains('```') ||
-           content.contains('- ') ||
-           content.contains('* ') ||
-           content.contains('[') && content.contains('](');
+        content.contains('## ') ||
+        content.contains('```') ||
+        content.contains('- ') ||
+        content.contains('* ') ||
+        content.contains('[') && content.contains('](');
   }
 
   static bool _isYamlCode(String content) {
-    return content.contains(':') && 
-           (content.contains('  ') || content.contains('\t')) &&
-           !content.contains('{') && !content.contains('}');
+    return content.contains(':') &&
+        (content.contains('  ') || content.contains('\t')) &&
+        !content.contains('{') &&
+        !content.contains('}');
   }
 
   static bool _isShellScript(String content) {
     return content.contains('#!/bin/') ||
-           content.contains('echo ') ||
-           content.contains('export ') ||
-           content.contains('if [') ||
-           content.contains('then') ||
-           content.contains('fi') ||
-           content.contains('for ') && content.contains('do');
+        content.contains('echo ') ||
+        content.contains('export ') ||
+        content.contains('if [') ||
+        content.contains('then') ||
+        content.contains('fi') ||
+        content.contains('for ') && content.contains('do');
   }
 }

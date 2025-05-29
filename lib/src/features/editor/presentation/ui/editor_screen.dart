@@ -1,24 +1,24 @@
 // lib/src/features/editor/presentation/ui/editor_screen.dart
 import 'dart:io';
 
+import 'package:context_collector/src/features/editor/domain/editor_settings.dart';
+import 'package:context_collector/src/features/editor/presentation/ui/enhanced_editor_settings_dialog.dart';
+import 'package:context_collector/src/features/editor/presentation/ui/monaco_editor_container.dart';
+import 'package:context_collector/src/features/editor/presentation/ui/monaco_editor_info_bar.dart';
+import 'package:context_collector/src/features/editor/services/monaco_editor_providers.dart';
+import 'package:context_collector/src/features/editor/services/monaco_editor_state.dart';
+import 'package:context_collector/src/features/scan/presentation/state/selection_notifier.dart';
+import 'package:context_collector/src/features/scan/presentation/ui/action_buttons_widget.dart';
+import 'package:context_collector/src/features/scan/presentation/ui/file_list_widget.dart';
+import 'package:context_collector/src/features/settings/presentation/ui/settings_screen.dart';
+import 'package:context_collector/src/shared/shared.dart';
+import 'package:context_collector/src/shared/utils/drop_file_resolver.dart';
+import 'package:context_collector/src/shared/utils/vscode_drop_detector.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:enefty_icons/enefty_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../../../../shared/shared.dart';
-import '../../../../shared/utils/drop_file_resolver.dart';
-import '../../../scan/presentation/state/selection_notifier.dart';
-import '../../../scan/presentation/ui/action_buttons_widget.dart';
-import '../../../scan/presentation/ui/file_list_widget.dart';
-import '../../../settings/presentation/ui/settings_screen.dart';
-import '../../domain/editor_settings.dart';
-import '../../services/monaco_editor_providers.dart';
-import '../../services/monaco_editor_state.dart';
-import 'enhanced_editor_settings_dialog.dart';
-import 'monaco_editor_container.dart';
-import 'monaco_editor_info_bar.dart';
 
 /// Complete editor screen with file list and Monaco editor
 /// This is the bottom layer in the layered architecture
@@ -226,25 +226,57 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           final directories = <String>[];
 
           for (final file in details.files) {
-            final entity = FileSystemEntity.typeSync(file.path);
-            if (entity == FileSystemEntityType.file) {
-              files.add(file.path);
-            } else if (entity == FileSystemEntityType.directory) {
-              // Check if this is a temporary drop file that was misidentified as a directory
-              if (DropFileResolver.isTemporaryDropFile(file.path)) {
-                // Sometimes desktop_drop temporary files are reported as directories
-                // Try to read it as a file first
+            final filePath = file.path;
+
+            // Check if this is a VS Code directory drop
+            if (filePath.contains('/tmp/Drops/')) {
+              try {
+                // Try to read as VS Code directory listing
+                final content = await File(filePath).readAsString();
+                final directoryPath =
+                    VSCodeDropDetector.extractDirectoryPath(content);
+
+                if (directoryPath != null) {
+                  // Just add the directory path and let normal error handling deal with permissions
+                  directories.add(directoryPath);
+                  continue;
+                }
+              } catch (_) {
+                // Not a VS Code directory listing, process normally
+              }
+            }
+
+            // Handle typed drops (desktop_drop 0.6.0+)
+            if (file is DropItemDirectory) {
+              directories.add(filePath);
+            } else if (file is DropItemFile) {
+              // JetBrains workaround: Check if this "file" is actually a directory
+              // JetBrains incorrectly reports directories as DropItemFile
+              final checkType = FileSystemEntity.typeSync(filePath);
+              if (checkType == FileSystemEntityType.directory) {
+                directories.add(filePath);
+              } else {
+                files.add(filePath);
+              }
+            } else {
+              // Fallback for regular XFile - use filesystem check
+              final entity = FileSystemEntity.typeSync(filePath);
+              if (entity == FileSystemEntityType.directory) {
+                directories.add(filePath);
+              } else if (entity == FileSystemEntityType.file) {
+                files.add(filePath);
+              } else if (DropFileResolver.isTemporaryDropFile(filePath)) {
+                // Handle other temporary drop files
                 try {
-                  final testFile = File(file.path);
-                  if (testFile.existsSync() && testFile.statSync().type == FileSystemEntityType.file) {
-                    files.add(file.path);
-                    continue;
+                  final testFile = File(filePath);
+                  if (testFile.existsSync() &&
+                      testFile.statSync().type == FileSystemEntityType.file) {
+                    files.add(filePath);
                   }
                 } catch (_) {
-                  // If it fails, treat it as a directory
+                  // Skip files that can't be accessed
                 }
               }
-              directories.add(file.path);
             }
           }
 
@@ -275,7 +307,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
               Expanded(
                 child: ResizableSplitter(
                   initialRatio: 0.35,
-                  minRatio: 0.2,
                   maxRatio: 0.6,
                   startPanel: Column(
                     children: [
@@ -604,9 +635,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   ),
                   borderRadius: BorderRadius.circular(8),
                   dropdownColor: context.surface,
-                  elevation: 8,
                   menuMaxHeight: 300,
-                  alignment: AlignmentDirectional.centerStart,
                   items: [
                     _buildThemeDropdownItem('vs', 'Light'),
                     _buildThemeDropdownItem('vs-dark', 'Dark'),

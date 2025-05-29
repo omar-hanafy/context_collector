@@ -10,28 +10,29 @@ final autoUpdaterServiceProvider = Provider<AutoUpdaterService>((ref) {
 /// Service to manage automatic updates
 class AutoUpdaterService {
   // Production update feed URL - hosted on GitHub Pages
-  static const String _productionFeedUrl = 'https://omar-hanafy.github.io/context_collector/appcast.xml';
-  
+  static const String _productionFeedUrl =
+      'https://omar-hanafy.github.io/context_collector/appcast.xml';
+
   // Development/testing feed URL
   static const String _developmentFeedUrl = 'http://localhost:5002/appcast.xml';
-  
+
   /// Initialize the auto updater
   Future<void> initialize() async {
     try {
       // Use development URL in debug mode, production URL in release mode
       const feedUrl = kDebugMode ? _developmentFeedUrl : _productionFeedUrl;
-      
+
       await autoUpdater.setFeedURL(feedUrl);
-      
+
       // Set automatic check interval to 6 hours (21600 seconds)
       await autoUpdater.setScheduledCheckInterval(21600);
-      
+
       debugPrint('Auto updater initialized with feed URL: $feedUrl');
     } catch (e) {
       debugPrint('Failed to initialize auto updater: $e');
     }
   }
-  
+
   /// Manually check for updates
   Future<void> checkForUpdates() async {
     try {
@@ -41,7 +42,7 @@ class AutoUpdaterService {
       rethrow;
     }
   }
-  
+
   /// Get the current feed URL
   Future<String?> getFeedURL() async {
     try {
@@ -53,7 +54,7 @@ class AutoUpdaterService {
       return null;
     }
   }
-  
+
   /// Set a custom feed URL
   Future<void> setFeedURL(String url) async {
     try {
@@ -64,7 +65,7 @@ class AutoUpdaterService {
       rethrow;
     }
   }
-  
+
   /// Set the automatic check interval in seconds
   /// Minimum: 3600 (1 hour), 0 to disable
   Future<void> setCheckInterval(int seconds) async {

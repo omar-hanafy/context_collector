@@ -17,7 +17,6 @@ class ActionButtonsWidget extends ConsumerWidget {
         border: BorderDirectional(
           bottom: BorderSide(
             color: context.outline.addOpacity(0.2),
-            width: 1,
           ),
         ),
       ),

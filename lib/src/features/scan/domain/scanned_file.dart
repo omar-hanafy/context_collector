@@ -1,11 +1,9 @@
 import 'dart:io';
 
+import 'package:context_collector/src/shared/utils/extension_catalog.dart';
+import 'package:context_collector/src/shared/utils/language_mapper.dart';
 import 'package:flutter/foundation.dart';
-import 'package:intl/intl.dart';
 import 'package:path/path.dart' as path;
-
-import '../../../shared/utils/extension_catalog.dart';
-import '../../../shared/utils/language_mapper.dart';
 
 /// Represents a file that has been scanned from the filesystem
 /// This is an immutable value object that only holds data
@@ -19,17 +17,28 @@ class ScannedFile {
     required this.lastModified,
     this.content,
     this.error,
+    this.displayPath,
   });
 
   /// Create a ScannedFile from a File system object
   factory ScannedFile.fromFile(File file) {
     final stat = file.statSync();
+    final filePath = file.path;
+    final fileName = path.basename(filePath);
+
+    // For VS Code temp files, use just the filename as display path
+    String? displayPath;
+    if (filePath.contains('/tmp/Drops/')) {
+      displayPath = fileName;
+    }
+
     return ScannedFile(
-      name: path.basename(file.path),
-      fullPath: file.path,
-      extension: path.extension(file.path).toLowerCase(),
+      name: fileName,
+      fullPath: filePath,
+      extension: path.extension(filePath).toLowerCase(),
       size: stat.size,
       lastModified: stat.modified,
+      displayPath: displayPath,
     );
   }
 
@@ -40,6 +49,12 @@ class ScannedFile {
   final DateTime lastModified;
   final String? content;
   final String? error;
+
+  /// Optional display path (for VS Code drops where the temp path isn't meaningful)
+  final String? displayPath;
+
+  /// Check if this file was dropped from VS Code (temporary file)
+  bool get isVSCodeDrop => fullPath.contains('/tmp/Drops/');
 
   /// Human-readable file size
   String get sizeFormatted {
@@ -74,13 +89,9 @@ class ScannedFile {
 
   /// Generate metadata reference for the combined content
   String generateReference() {
-    final dateFormat = DateFormat('yyyy-MM-dd HH:mm:ss');
-    // final formattedDate = dateFormat.format(lastModified);
-    // final category = getCategory()?.displayName ?? 'Unknown';
-    // final lines = lineCount > 0 ? ', Lines: $lineCount' : '';
-    // final displayLanguage = LanguageMapper.getLanguageDisplayName(language);
-
-    return '> **Path:** $fullPath  \n';
+    // Use display path if available (for VS Code drops)
+    final pathToShow = displayPath ?? fullPath;
+    return '> **Path:** $pathToShow  \n';
   }
 
   /// Create a copy with updated fields
@@ -92,6 +103,7 @@ class ScannedFile {
     DateTime? lastModified,
     String? content,
     String? error,
+    String? displayPath,
   }) {
     return ScannedFile(
       name: name ?? this.name,
@@ -101,6 +113,7 @@ class ScannedFile {
       lastModified: lastModified ?? this.lastModified,
       content: content ?? this.content,
       error: error ?? this.error,
+      displayPath: displayPath ?? this.displayPath,
     );
   }
 

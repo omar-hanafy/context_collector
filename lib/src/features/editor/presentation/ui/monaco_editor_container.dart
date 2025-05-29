@@ -1,14 +1,13 @@
 // lib/src/features/editor/presentation/ui/monaco_editor_container.dart
+import 'package:context_collector/src/features/editor/assets_manager/notifier.dart';
+import 'package:context_collector/src/features/editor/presentation/ui/monaco_editor_integrated.dart';
+import 'package:context_collector/src/features/editor/services/monaco_editor_providers.dart';
+import 'package:context_collector/src/features/editor/services/monaco_editor_service.dart';
+import 'package:context_collector/src/features/editor/services/monaco_editor_state.dart';
+import 'package:context_collector/src/features/scan/presentation/state/selection_notifier.dart';
+import 'package:context_collector/src/shared/theme/extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../../../../shared/theme/extensions.dart';
-import '../../../scan/presentation/state/selection_notifier.dart';
-import '../../assets_manager/notifier.dart';
-import '../../services/monaco_editor_providers.dart';
-import '../../services/monaco_editor_service.dart';
-import '../../services/monaco_editor_state.dart';
-import 'monaco_editor_integrated.dart';
 
 /// Monaco Editor Container - Always present in the editor screen
 class MonacoEditorContainer extends ConsumerStatefulWidget {
@@ -38,8 +37,6 @@ class _MonacoEditorContainerState extends ConsumerState<MonacoEditorContainer> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_hasInitialized) {
         _hasInitialized = true;
-        final editorService = ref.read(monacoEditorServiceProvider);
-        editorService.initialize();
       }
     });
   }
@@ -48,39 +45,40 @@ class _MonacoEditorContainerState extends ConsumerState<MonacoEditorContainer> {
   Widget build(BuildContext context) {
     final editorStatus = ref.watch(monacoEditorStatusProvider);
     final assetStatus = ref.watch(monacoAssetStatusProvider);
-    final selectionState = ref.watch(selectionProvider);
+    ref.watch(selectionProvider);
     final editorService = ref.watch(monacoEditorServiceProvider);
 
     // Listen for selection changes to update editor content
-    ref.listen<SelectionState>(selectionProvider, (previous, next) {
-      debugPrint(
-          '[MonacoEditorContainer] Selection changed - has content: ${next.combinedContent.isNotEmpty}');
+    ref
+      ..listen<SelectionState>(selectionProvider, (previous, next) {
+        debugPrint(
+            '[MonacoEditorContainer] Selection changed - has content: ${next.combinedContent.isNotEmpty}');
 
-      if (previous?.combinedContent != next.combinedContent) {
-        Future.microtask(() {
-          if (next.combinedContent.isNotEmpty) {
-            debugPrint('[MonacoEditorContainer] Setting editor content');
-            editorService.setContent(next.combinedContent);
-          } else {
-            debugPrint('[MonacoEditorContainer] Clearing editor content');
-            editorService.clearContent();
-          }
-        });
-      }
-    });
+        if (previous?.combinedContent != next.combinedContent) {
+          Future.microtask(() {
+            if (next.combinedContent.isNotEmpty) {
+              debugPrint('[MonacoEditorContainer] Setting editor content');
+              editorService.setContent(next.combinedContent);
+            } else {
+              debugPrint('[MonacoEditorContainer] Clearing editor content');
+              editorService.clearContent();
+            }
+          });
+        }
+      })
 
-    // Listen for status changes
-    ref.listen<MonacoEditorStatus>(monacoEditorStatusProvider,
-        (previous, next) {
-      debugPrint(
-          '[MonacoEditorContainer] Status changed: ${previous?.state} → ${next.state}');
+      // Listen for status changes
+      ..listen<MonacoEditorStatus>(monacoEditorStatusProvider,
+          (previous, next) {
+        debugPrint(
+            '[MonacoEditorContainer] Status changed: ${previous?.state} → ${next.state}');
 
-      // Notify ready callback once
-      if (!_hasNotifiedReady && next.isReady) {
-        _hasNotifiedReady = true;
-        widget.onReady?.call();
-      }
-    });
+        // Notify ready callback once
+        if (!_hasNotifiedReady && next.isReady) {
+          _hasNotifiedReady = true;
+          widget.onReady?.call();
+        }
+      });
 
     // Only show editor if assets are ready
     final shouldCreateEditor = assetStatus.state == MonacoAssetState.ready;
@@ -120,7 +118,7 @@ class _MonacoEditorContainerState extends ConsumerState<MonacoEditorContainer> {
   Widget _buildOverlay(MonacoEditorStatus status) {
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 300),
-      child: Container(
+      child: ColoredBox(
         key: ValueKey(status.state),
         color: context.surface.addOpacity(0.95),
         child: Center(

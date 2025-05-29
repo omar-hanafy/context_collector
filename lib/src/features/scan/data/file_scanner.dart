@@ -1,10 +1,9 @@
 import 'dart:io';
 
+import 'package:context_collector/src/features/scan/domain/scanned_file.dart';
+import 'package:context_collector/src/shared/utils/drop_file_resolver.dart';
+import 'package:context_collector/src/shared/utils/extension_catalog.dart';
 import 'package:path/path.dart' as path;
-
-import '../../../shared/utils/drop_file_resolver.dart';
-import '../../../shared/utils/extension_catalog.dart';
-import '../domain/scanned_file.dart';
 
 /// Service responsible for scanning directories and finding supported files
 class FileScanner {
@@ -24,16 +23,22 @@ class FileScanner {
         in directory.list(recursive: true, followLinks: false)) {
       if (entity is File) {
         var extension = path.extension(entity.path).toLowerCase();
-        
+
         // For temporary drop files without extensions, try to resolve the actual extension
-        if (extension.isEmpty && DropFileResolver.isTemporaryDropFile(entity.path)) {
+        if (extension.isEmpty &&
+            DropFileResolver.isTemporaryDropFile(entity.path)) {
           final fileInfo = DropFileResolver.resolveFileInfo(entity.path);
           extension = fileInfo['extension'] ?? '';
         }
-        
+
         // Include files with supported extensions OR files without extensions
         // (which might be text files from desktop_drop temporary directory)
-        if (supportedExtensions.containsKey(extension) || extension.isEmpty) {
+        // Skip hidden files that start with a dot (like .DS_Store)
+        final fileName = path.basename(entity.path);
+        final isHiddenFile = fileName.startsWith('.') && extension.isEmpty;
+
+        if (supportedExtensions.containsKey(extension) ||
+            (extension.isEmpty && !isHiddenFile)) {
           try {
             final scannedFile = ScannedFile.fromFile(entity);
             foundFiles.add(scannedFile);
@@ -66,7 +71,7 @@ class FileScanner {
         if (DropFileResolver.isTemporaryDropFile(file.fullPath)) {
           final fileInfo = DropFileResolver.resolveFileInfo(file.fullPath);
           resolvedExtension = fileInfo['extension'];
-          
+
           // If we resolved an extension, check if it's supported
           if (resolvedExtension != null && resolvedExtension.isNotEmpty) {
             if (!supportedExtensions.containsKey(resolvedExtension)) {
@@ -80,15 +85,14 @@ class FileScanner {
         // Try to read as text - if it's a text file, it should work
         final content = await fileEntity.readAsString();
         // If we successfully read it as text, return with content
-        return file.copyWith(content: content, error: null);
+        return file.copyWith(content: content);
       } catch (e) {
         return file.copyWith(
           error: 'Cannot read file: possibly binary or unsupported format',
-          content: null,
         );
       }
     }
-    
+
     if (!file.supportsText(supportedExtensions)) {
       return file.copyWith(
         error: 'File type not supported for text extraction',
@@ -102,11 +106,10 @@ class FileScanner {
       }
 
       final content = await fileEntity.readAsString();
-      return file.copyWith(content: content, error: null);
+      return file.copyWith(content: content);
     } catch (e) {
       return file.copyWith(
         error: 'Error reading file: $e',
-        content: null,
       );
     }
   }

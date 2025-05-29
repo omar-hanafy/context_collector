@@ -4,11 +4,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:context_collector/src/features/editor/bridge/platform_webview_controller.dart';
+import 'package:context_collector/src/features/editor/domain/editor_settings.dart';
 import 'package:dart_helper_utils/dart_helper_utils.dart';
 import 'package:flutter/foundation.dart';
-
-import '../domain/editor_settings.dart';
-import 'platform_webview_controller.dart';
 
 /// Enhanced Cross-Platform Monaco Bridge
 /// Works seamlessly with both webview_flutter and webview_windows
@@ -124,7 +123,7 @@ class MonacoBridgePlatform extends ChangeNotifier {
     if (message is String) {
       messageContent = message;
     } else if (message.runtimeType.toString().contains('JavaScriptMessage')) {
-      // Extract message from JavaScriptMessage object
+      // ignore: avoid_dynamic_calls
       messageContent = message.message as String;
     } else {
       messageContent = message.toString();
@@ -145,6 +144,7 @@ class MonacoBridgePlatform extends ChangeNotifier {
         ?.removeJavaScriptChannel(_statsChannelName)
         .catchError((dynamic e) {
       debugPrint('[MonacoBridgePlatform] Error removing JS channel: $e');
+      return null;
     });
     _webViewController = null;
     _isReady = false;
@@ -167,10 +167,13 @@ class MonacoBridgePlatform extends ChangeNotifier {
         if (window.editor) {
           console.log('  - editor model exists:', !!window.editor.getModel());
         }
-      ''').catchError((dynamic e) {
-        debugPrint(
-            '[MonacoBridgePlatform] Error checking Monaco readiness: $e');
-      });
+      ''').catchError(
+        (dynamic e) {
+          debugPrint(
+              '[MonacoBridgePlatform] Error checking Monaco readiness: $e');
+          return null;
+        },
+      );
 
       _pushContentToEditor();
       _pushSettingsToEditor();
@@ -641,7 +644,7 @@ class MonacoBridgePlatform extends ChangeNotifier {
     if (_webViewController == null || !_isReady) return;
 
     try {
-      final String escapedContent = json.encode(_content);
+      final escapedContent = json.encode(_content);
       await _webViewController!.runJavaScript(
         'window.setEditorContent($escapedContent)',
       );
@@ -656,7 +659,7 @@ class MonacoBridgePlatform extends ChangeNotifier {
 
     try {
       final options = _settings.toMonacoOptions();
-      final String optionsJson = json.encode(options);
+      final optionsJson = json.encode(options);
 
       await _webViewController!.runJavaScript(
         'window.setEditorOptions($optionsJson)',
@@ -674,7 +677,7 @@ class MonacoBridgePlatform extends ChangeNotifier {
 
     try {
       final options = languageSettings.toMonacoOptions();
-      final String optionsJson = json.encode(options);
+      final optionsJson = json.encode(options);
 
       await _webViewController!.runJavaScript(
         'window.setLanguageSpecificOptions && window.setLanguageSpecificOptions("$language", $optionsJson)',
@@ -688,7 +691,7 @@ class MonacoBridgePlatform extends ChangeNotifier {
   /// Save current editor state
   Future<void> _saveEditorState() async {
     try {
-      final stateJson = await _webViewController!.runJavaScriptReturningResult(
+      final stateJson = (await _webViewController!.runJavaScriptReturningResult(
         '''
 JSON.stringify({
   position: window.editor?.getPosition(),
@@ -697,7 +700,7 @@ JSON.stringify({
   scrollLeft: window.editor?.getScrollLeft(),
   viewState: window.editor?.saveViewState()
 })''',
-      ) as String;
+      ))! as String;
       _lastState = json.decode(stateJson) as Map<String, dynamic>?;
     } catch (e) {
       debugPrint('[MonacoBridgePlatform] Error saving editor state: $e');

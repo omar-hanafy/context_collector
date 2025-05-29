@@ -422,7 +422,7 @@ class ExtensionCatalog {
 
   /// Get extensions grouped by category
   static Map<FileCategory, List<String>> getGroupedExtensions() {
-    final Map<FileCategory, List<String>> grouped = {};
+    final grouped = <FileCategory, List<String>>{};
 
     for (final category in FileCategory.values) {
       final extensions = getExtensionsByCategory(category);

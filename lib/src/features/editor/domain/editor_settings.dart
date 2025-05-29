@@ -268,13 +268,13 @@ class EditorSettings extends Equatable {
       }
     }
 
-    final Map<String, LanguageConfig> parsedLanguageConfigs = {};
+    final parsedLanguageConfigs = <String, LanguageConfig>{};
     final langConfigsDynamic = json[keyLanguageConfigs];
     if (langConfigsDynamic != null) {
       try {
         // If it's a string, decode it first (like from SharedPreferences)
         // If it's already a map (like from direct JSON parsing), use it
-        Map<String, dynamic> langConfigsJson = {};
+        var langConfigsJson = <String, dynamic>{};
         if (langConfigsDynamic is String) {
           langConfigsJson =
               langConfigsDynamic.decode() as Map<String, dynamic>? ?? {};
@@ -479,52 +479,33 @@ class EditorSettings extends Equatable {
     switch (presetName.toLowerCase()) {
       case 'beginner':
         return const EditorSettings(
-          showLineNumbers: true,
           showMinimap: false,
           fontSize: 16,
-          wordWrap: WordWrap.on,
           formatOnSave: true,
           formatOnPaste: true,
           autoClosingBrackets: 'always',
           autoClosingQuotes: 'always',
-          quickSuggestions: true,
-          parameterHints: true,
-          hover: true,
         );
 
       case 'developer':
         return const EditorSettings(
-          showLineNumbers: true,
           showMinimap: true,
-          fontSize: 14,
           wordWrap: WordWrap.off,
           rulers: [80, 120],
           formatOnSave: true,
-          bracketPairColorization: true,
-          codeFolding: true,
-          quickSuggestions: true,
-          parameterHints: true,
-          hover: true,
           renderWhitespace: RenderWhitespace.boundary,
         );
 
       case 'poweruser':
         return const EditorSettings(
-          showLineNumbers: true,
           lineNumbersStyle: LineNumbersStyle.relative,
           showMinimap: true,
-          minimapRenderCharacters: false,
           fontSize: 13,
           wordWrap: WordWrap.off,
           rulers: [80, 100, 120],
           formatOnSave: true,
           formatOnType: true,
-          bracketPairColorization: true,
-          codeFolding: true,
           stickyScroll: true,
-          quickSuggestions: true,
-          parameterHints: true,
-          hover: true,
           renderWhitespace: RenderWhitespace.all,
           cursorBlinking: CursorBlinking.smooth,
           multiCursorModifier: MultiCursorModifier.alt,
@@ -534,9 +515,6 @@ class EditorSettings extends Equatable {
         return const EditorSettings(
           fontSize: 18,
           lineHeight: 1.6,
-          showLineNumbers: true,
-          showMinimap: false,
-          wordWrap: WordWrap.on,
           accessibilitySupport: AccessibilitySupport.on,
           renderWhitespace: RenderWhitespace.all,
           renderControlCharacters: true,
@@ -1289,7 +1267,7 @@ class EditorSettings extends Equatable {
     }
 
     // Parse language configs
-    final Map<String, LanguageConfig> parsedLanguageConfigs = {};
+    final parsedLanguageConfigs = <String, LanguageConfig>{};
     final langConfigsString = prefs.getString(keyLanguageConfigs);
     if (langConfigsString != null) {
       try {

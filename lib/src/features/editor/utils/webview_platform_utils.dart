@@ -319,9 +319,9 @@ class WebViewPlatformInfo {
   const WebViewPlatformInfo({
     required this.platform,
     required this.isSupported,
+    required this.engine,
     this.version,
     this.error,
-    required this.engine,
     this.requirements = const [],
   });
 

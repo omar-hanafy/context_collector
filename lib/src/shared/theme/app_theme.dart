@@ -22,10 +22,8 @@ class AppTheme {
         tertiary: _accentColor,
         surface: _surfaceColor,
         error: _errorColor,
-        onPrimary: Colors.white,
         onSecondary: Colors.white,
         onSurface: Color(0xFF1A1C1E),
-        onError: Colors.white,
         surfaceContainerHighest: Color(0xFFE8EDF5),
         outline: Color(0xFFE0E5ED),
         outlineVariant: Color(0xFFF0F3F7),
@@ -52,7 +50,6 @@ class AppTheme {
           borderRadius: BorderRadius.circular(16),
           side: const BorderSide(
             color: Color(0xFFE8EDF5),
-            width: 1,
           ),
         ),
         margin: const EdgeInsetsDirectional.all(6),
@@ -215,7 +212,6 @@ class AppTheme {
           borderRadius: BorderRadius.circular(16),
           side: const BorderSide(
             color: Color(0xFF3A3F47),
-            width: 1,
           ),
         ),
         margin: const EdgeInsetsDirectional.all(6),

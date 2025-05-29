@@ -1,7 +1,6 @@
+import 'package:context_collector/src/shared/theme/extensions.dart';
+import 'package:context_collector/src/shared/utils/extension_catalog.dart';
 import 'package:flutter/material.dart';
-
-import '../../../../shared/theme/extensions.dart';
-import '../../../../shared/utils/extension_catalog.dart';
 
 class DropZoneWidget extends StatelessWidget {
   const DropZoneWidget({super.key});
@@ -280,7 +279,6 @@ class DropZoneWidget extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: context.outline.addOpacity(0.2),
-          width: 1,
         ),
       ),
       child: Column(

@@ -1,14 +1,13 @@
 import 'dart:io';
 
+import 'package:context_collector/src/features/settings/presentation/state/preferences_notifier.dart';
+import 'package:context_collector/src/features/settings/presentation/state/theme_notifier.dart';
+import 'package:context_collector/src/features/settings/services/auto_updater_service.dart';
+import 'package:context_collector/src/shared/theme/extensions.dart';
+import 'package:context_collector/src/shared/utils/extension_catalog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../../../../shared/theme/extensions.dart';
-import '../../../../shared/utils/extension_catalog.dart';
-import '../../services/auto_updater_service.dart';
-import '../state/preferences_notifier.dart';
-import '../state/theme_notifier.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -478,7 +477,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   Widget _buildUpdatesSettings(BuildContext context) {
     final autoUpdaterService = ref.read(autoUpdaterServiceProvider);
-    
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -515,7 +514,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   onPressed: () async {
                     try {
                       // Show loading indicator
-                      showDialog<void>(
+                      await showDialog<void>(
                         context: context,
                         barrierDismissible: false,
                         builder: (context) => const Center(
@@ -527,9 +526,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                           ),
                         ),
                       );
-                      
+
                       await autoUpdaterService.checkForUpdates();
-                      
+
                       if (mounted) {
                         Navigator.pop(context); // Close loading dialog
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -642,8 +641,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 _buildInfoRow(context, 'Platform', Platform.operatingSystem),
                 const SizedBox(height: 8),
                 _buildInfoRow(
-                  context, 
-                  'Update Channel', 
+                  context,
+                  'Update Channel',
                   'Stable',
                 ),
               ],
@@ -653,7 +652,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       ],
     );
   }
-  
+
   Widget _buildInfoRow(BuildContext context, String label, String value) {
     return Row(
       children: [

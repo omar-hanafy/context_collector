@@ -1,10 +1,14 @@
-// lib/src/features/editor/presentation/ui/monaco_editor_integrated.dart
+// ignore_for_file: avoid_dynamic_calls
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:context_collector/src/features/editor/assets_manager/notifier.dart';
 import 'package:context_collector/src/features/editor/assets_manager/widget.dart';
+import 'package:context_collector/src/features/editor/bridge/monaco_bridge_platform.dart';
+import 'package:context_collector/src/features/editor/bridge/platform_webview_controller.dart';
+import 'package:context_collector/src/features/editor/utils/webview_debug_helper.dart';
+import 'package:context_collector/src/shared/theme/extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,16 +16,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_flutter/webview_flutter.dart' as wf;
 import 'package:webview_windows/webview_windows.dart' as ww;
 
-import '../../../../shared/theme/extensions.dart';
-import '../../bridge/monaco_bridge_platform.dart';
-import '../../bridge/platform_webview_controller.dart';
-import '../../utils/webview_debug_helper.dart';
-
 /// Monaco Editor that integrates with the asset management system
 class MonacoEditorIntegrated extends ConsumerStatefulWidget {
   const MonacoEditorIntegrated({
-    super.key,
     required this.bridge,
+    super.key,
     this.onReady,
     this.height,
     this.showAssetStatus = false,
@@ -280,7 +279,7 @@ class _MonacoEditorIntegratedState
 
       // Load the index.html template from assets
       const asset = 'assets/monaco/index.html';
-      String htmlContent = await rootBundle.loadString(asset);
+      var htmlContent = await rootBundle.loadString(asset);
 
       // For Windows, we need to handle paths carefully
       // Use absolute file paths without file:/// to avoid CORS issues

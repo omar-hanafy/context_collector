@@ -443,8 +443,8 @@ class MonacoAssetLoadingIndicator extends ConsumerWidget {
 /// Consumer wrapper that automatically initializes Monaco assets
 class MonacoAssetInitializer extends ConsumerStatefulWidget {
   const MonacoAssetInitializer({
-    super.key,
     required this.child,
+    super.key,
     this.loadingWidget,
     this.autoInitialize = true,
   });

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+  <channel>
+    <title>Context Collector Updates</title>
+    <link>https://omar-hanafy.github.io/context_collector/appcast.xml</link>
+    <description>Most recent changes with links to updates.</description>
+    <language>en</language>
+  </channel>
+</rss>

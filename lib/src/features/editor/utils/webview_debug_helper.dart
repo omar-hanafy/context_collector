@@ -14,16 +14,16 @@ class WebViewDebugHelper {
     }
 
     debugPrint('[WebViewDebugHelper] Testing basic WebView2...');
-    
+
     try {
       // Check version
       final version = await WebviewController.getWebViewVersion();
       debugPrint('[WebViewDebugHelper] WebView2 Version: $version');
-      
+
       // Create a test controller
       final controller = WebviewController();
       await controller.initialize();
-      
+
       // Load simple HTML
       await controller.loadStringContent('''
         <!DOCTYPE html>
@@ -37,11 +37,11 @@ class WebViewDebugHelper {
         </body>
         </html>
       ''');
-      
+
       debugPrint('[WebViewDebugHelper] Basic test completed successfully');
-      
+
       // Clean up
-      controller.dispose();
+      await controller.dispose();
     } catch (e) {
       debugPrint('[WebViewDebugHelper] Basic test failed: $e');
     }
@@ -51,30 +51,31 @@ class WebViewDebugHelper {
   static Future<void> testMonacoLoading(String assetPath) async {
     debugPrint('[WebViewDebugHelper] Testing Monaco loading...');
     debugPrint('[WebViewDebugHelper] Asset path: $assetPath');
-    
+
     // Check if VS directory exists
     final vsDir = Directory('$assetPath/monaco-editor/min/vs');
     if (!vsDir.existsSync()) {
-      debugPrint('[WebViewDebugHelper] ERROR: VS directory not found at: ${vsDir.path}');
+      debugPrint(
+          '[WebViewDebugHelper] ERROR: VS directory not found at: ${vsDir.path}');
       return;
     }
-    
+
     debugPrint('[WebViewDebugHelper] VS directory exists');
-    
+
     // Check essential files
     final essentialFiles = [
       'loader.js',
       'editor/editor.main.js',
       'editor/editor.main.css',
     ];
-    
+
     for (final file in essentialFiles) {
       final filePath = '${vsDir.path}/$file';
       final fileObj = File(filePath);
-      
+
       if (fileObj.existsSync()) {
         final size = await fileObj.length();
-        debugPrint('[WebViewDebugHelper] ✓ $file (${size} bytes)');
+        debugPrint('[WebViewDebugHelper] ✓ $file ($size bytes)');
       } else {
         debugPrint('[WebViewDebugHelper] ✗ $file NOT FOUND');
       }
@@ -89,26 +90,26 @@ class WebViewDebugHelper {
     }
 
     debugPrint('[WebViewDebugHelper] Testing file:/// URL access...');
-    
+
     try {
       final controller = WebviewController();
       await controller.initialize();
-      
+
       // Try loading a file URL
       final testFile = File('$assetPath/monaco-editor/min/vs/loader.js');
       if (!testFile.existsSync()) {
         debugPrint('[WebViewDebugHelper] Test file not found');
         return;
       }
-      
+
       final fileUrl = 'file:///${testFile.path.replaceAll(r'\', '/')}';
       debugPrint('[WebViewDebugHelper] Testing URL: $fileUrl');
-      
+
       await controller.loadUrl(fileUrl);
-      
+
       debugPrint('[WebViewDebugHelper] File URL loaded successfully');
-      
-      controller.dispose();
+
+      await controller.dispose();
     } catch (e) {
       debugPrint('[WebViewDebugHelper] File URL test failed: $e');
     }

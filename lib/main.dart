@@ -1,19 +1,18 @@
 // lib/main.dart
 import 'dart:io';
 
+import 'package:context_collector/src/features/editor/assets_manager/notifier.dart';
+import 'package:context_collector/src/features/editor/presentation/ui/global_monaco_container.dart';
+import 'package:context_collector/src/features/editor/services/monaco_editor_providers.dart';
+import 'package:context_collector/src/features/editor/services/monaco_editor_state.dart';
+import 'package:context_collector/src/features/editor/utils/webview_platform_utils.dart';
+import 'package:context_collector/src/features/scan/presentation/ui/home_screen.dart';
+import 'package:context_collector/src/features/settings/presentation/state/theme_notifier.dart';
+import 'package:context_collector/src/features/settings/services/auto_updater_service.dart';
+import 'package:context_collector/src/shared/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
-
-import 'src/features/editor/assets_manager/notifier.dart';
-import 'src/features/editor/presentation/ui/global_monaco_container.dart';
-import 'src/features/editor/services/monaco_editor_providers.dart';
-import 'src/features/editor/services/monaco_editor_state.dart';
-import 'src/features/editor/utils/webview_platform_utils.dart';
-import 'src/features/scan/presentation/ui/home_screen.dart';
-import 'src/features/settings/presentation/state/theme_notifier.dart';
-import 'src/features/settings/services/auto_updater_service.dart';
-import 'src/shared/theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,7 +20,7 @@ void main() async {
   // Configure window for desktop
   await windowManager.ensureInitialized();
 
-  const WindowOptions windowOptions = WindowOptions(
+  const windowOptions = WindowOptions(
     size: Size(1400, 850),
     minimumSize: Size(1400, 400),
     center: true,
@@ -93,48 +92,50 @@ void _startMonacoAssetsSilently(ProviderContainer container) {
 /// Start editor preloading - will automatically wait for assets
 void _startEditorPreloading(ProviderContainer container) {
   debugPrint('[ContextCollector] 🚀 Starting editor preloading...');
-  
+
   // The service provider will automatically listen to asset status
   // and initialize the editor when assets are ready
-  container.read(monacoEditorServiceProvider);
-  
-  // Also listen to status for debugging
-  container.listen<MonacoEditorStatus>(
-    monacoEditorStatusProvider,
-    (previous, next) {
-      debugPrint('[ContextCollector] Editor status changed: ${previous?.state} → ${next.state}');
-      debugPrint('  Progress: ${(next.progress * 100).toInt()}%');
-      debugPrint('  Is Visible: ${next.isVisible}');
-      debugPrint('  Has Content: ${next.hasContent}');
-      if (next.error != null) {
-        debugPrint('  Error: ${next.error}');
-      }
-    },
-  );
-  
+  container
+    ..read(monacoEditorServiceProvider)
+
+    // Also listen to status for debugging
+    ..listen<MonacoEditorStatus>(
+      monacoEditorStatusProvider,
+      (previous, next) {
+        debugPrint(
+            '[ContextCollector] Editor status changed: ${previous?.state} → ${next.state}');
+        debugPrint('  Progress: ${(next.progress * 100).toInt()}%');
+        debugPrint('  Is Visible: ${next.isVisible}');
+        debugPrint('  Has Content: ${next.hasContent}');
+        if (next.error != null) {
+          debugPrint('  Error: ${next.error}');
+        }
+      },
+    );
+
   // Check initial state
   final initialStatus = container.read(monacoEditorStatusProvider);
-  debugPrint('[ContextCollector] Initial editor status: ${initialStatus.state}');
+  debugPrint(
+      '[ContextCollector] Initial editor status: ${initialStatus.state}');
 }
 
 /// Initialize auto updater for automatic updates
 void _initializeAutoUpdater(ProviderContainer container) {
   // Only initialize on supported platforms
   if (!Platform.isMacOS && !Platform.isWindows) {
-    debugPrint('[ContextCollector] Auto updater not supported on this platform');
+    debugPrint(
+        '[ContextCollector] Auto updater not supported on this platform');
     return;
   }
-  
+
   debugPrint('[ContextCollector] 🔄 Initializing auto updater...');
-  
+
   // Initialize auto updater service
-  container
-      .read(autoUpdaterServiceProvider)
-      .initialize()
-      .then((_) {
+  container.read(autoUpdaterServiceProvider).initialize().then((_) {
     debugPrint('[ContextCollector] ✅ Auto updater initialized successfully');
   }).catchError((dynamic error) {
-    debugPrint('[ContextCollector] ⚠️ Auto updater initialization failed: $error');
+    debugPrint(
+        '[ContextCollector] ⚠️ Auto updater initialization failed: $error');
   });
 }
 
@@ -200,7 +201,7 @@ class ContextCollectorApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeProvider);
-    
+
     return MaterialApp(
       title: 'Context Collector',
       theme: AppTheme.lightTheme,
