@@ -8,6 +8,7 @@ import 'package:context_collector/src/shared/utils/extension_catalog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -22,6 +23,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   FileCategory _selectedCategory = FileCategory.other;
   final _formKey = GlobalKey<FormState>();
   late TabController _tabController;
+  PackageInfo? _packageInfo;
 
   @override
   void initState() {
@@ -29,6 +31,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     // Add Updates tab only on supported platforms
     final tabCount = (Platform.isMacOS || Platform.isWindows) ? 3 : 2;
     _tabController = TabController(length: tabCount, vsync: this);
+    _loadPackageInfo();
+  }
+  
+  Future<void> _loadPackageInfo() async {
+    final info = await PackageInfo.fromPlatform();
+    if (mounted) {
+      setState(() {
+        _packageInfo = info;
+      });
+    }
   }
 
   @override
@@ -636,7 +648,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   ],
                 ),
                 const SizedBox(height: 16),
-                _buildInfoRow(context, 'Version', '1.1.0'),
+                _buildInfoRow(
+                  context, 
+                  'Version', 
+                  _packageInfo == null 
+                    ? 'Loading...' 
+                    : '${_packageInfo!.version}${_packageInfo!.buildNumber.isNotEmpty ? '+${_packageInfo!.buildNumber}' : ''}'
+                ),
                 const SizedBox(height: 8),
                 _buildInfoRow(context, 'Platform', Platform.operatingSystem),
                 const SizedBox(height: 8),

@@ -32,6 +32,7 @@ dependencies:
   webview_flutter: ^4.13.0        # For macOS, iOS, Android
   webview_windows: ^0.4.0         # For Windows (keep your existing version)
   auto_updater: ^1.0.0
+  package_info_plus: ^8.3.0
 
 dev_dependencies:
   flutter_test:
