@@ -7,6 +7,7 @@
 - extract text from docx, pdf, excel. 
 - support for urls. (github, google docs, etc.)
 - support for images (OCR).
+- save sessions and reload them (handle not found files and other edge cases).
 
 ---
 Hints Section:
