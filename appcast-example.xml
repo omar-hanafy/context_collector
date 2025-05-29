@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+  <channel>
+    <title>Context Collector Updates</title>
+    <link>https://omar-hanafy.github.io/context_collector/appcast.xml</link>
+    <description>Most recent changes with links to updates.</description>
+    <language>en</language>
+    
+    <!-- macOS Update Item -->
+    <item>
+      <title>Version 1.0.0</title>
+      <sparkle:version>1</sparkle:version>
+      <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
+      <description><![CDATA[
+        <h2>First stable release</h2>
+        <ul>
+          <li>Initial release with all core features</li>
+          <li>Monaco editor integration</li>
+          <li>File scanning and merging</li>
+          <li>Dark/Light theme support</li>
+        </ul>
+      ]]></description>
+      <pubDate>Thu, 29 May 2025 02:53:30 +0000</pubDate>
+      <sparkle:minimumSystemVersion>10.13</sparkle:minimumSystemVersion>
+      <enclosure 
+        url="https://github.com/omar-hanafy/context_collector/releases/download/v1.0.0/context_collector-1.0.0-macos.zip"
+        sparkle:edSignature="YOUR_EDDSA_SIGNATURE_HERE"
+        sparkle:os="macos"
+        length="FILE_SIZE_IN_BYTES"
+        type="application/octet-stream" />
+    </item>
+    
+    <!-- Windows Update Item -->
+    <item>
+      <title>Version 1.0.0</title>
+      <sparkle:version>1.0.0+1</sparkle:version>
+      <description><![CDATA[
+        <h2>First stable release</h2>
+        <ul>
+          <li>Initial release with all core features</li>
+          <li>Monaco editor integration</li>
+          <li>File scanning and merging</li>
+          <li>Dark/Light theme support</li>
+        </ul>
+      ]]></description>
+      <pubDate>Thu, 29 May 2025 02:53:30 +0000</pubDate>
+      <enclosure 
+        url="https://github.com/omar-hanafy/context_collector/releases/download/v1.0.0/context_collector-1.0.0-windows-setup.exe"
+        sparkle:dsaSignature="YOUR_DSA_SIGNATURE_HERE"
+        sparkle:os="windows"
+        length="FILE_SIZE_IN_BYTES"
+        type="application/octet-stream" />
+    </item>
+  </channel>
+</rss>

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:context_collector/src/features/settings/presentation/state/preferences_notifier.dart';
@@ -525,11 +526,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 FilledButton.icon(
                   onPressed: () async {
                     try {
-                      // Show loading indicator
-                      await showDialog<void>(
+                      // Show loading indicator without awaiting it
+                      unawaited(showDialog<void>(
                         context: context,
                         barrierDismissible: false,
-                        builder: (context) => const Center(
+                        builder: (dialogContext) => const Center(
                           child: Card(
                             child: Padding(
                               padding: EdgeInsets.all(20),
@@ -537,7 +538,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                             ),
                           ),
                         ),
-                      );
+                      ));
 
                       await autoUpdaterService.checkForUpdates();
 
@@ -545,7 +546,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                         Navigator.pop(context); // Close loading dialog
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Checking for updates...'),
+                            content: Text('Update check complete! If an update is available, it will download automatically.'),
                           ),
                         );
                       }

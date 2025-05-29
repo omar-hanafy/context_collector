@@ -8,7 +8,7 @@ final autoUpdaterServiceProvider = Provider<AutoUpdaterService>((ref) {
 });
 
 /// Service to manage automatic updates
-class AutoUpdaterService {
+class AutoUpdaterService implements UpdaterListener {
   // Production update feed URL - hosted on GitHub Pages
   static const String _productionFeedUrl =
       'https://omar-hanafy.github.io/context_collector/appcast.xml';
@@ -19,6 +19,9 @@ class AutoUpdaterService {
   /// Initialize the auto updater
   Future<void> initialize() async {
     try {
+      // Add this service as a listener for update events
+      autoUpdater.addListener(this);
+      
       // Use development URL in debug mode, production URL in release mode
       const feedUrl = kDebugMode ? _developmentFeedUrl : _productionFeedUrl;
 
@@ -76,5 +79,50 @@ class AutoUpdaterService {
       debugPrint('Failed to set check interval: $e');
       rethrow;
     }
+  }
+  
+  // UpdaterListener implementation
+  @override
+  void onUpdaterError(UpdaterError? error) {
+    debugPrint('[AutoUpdater] Error: ${error?.message}');
+  }
+
+  @override
+  void onUpdaterCheckingForUpdate(Appcast? appcast) {
+    debugPrint('[AutoUpdater] Checking for update...');
+    if (appcast != null) {
+      debugPrint('[AutoUpdater] Appcast items: ${appcast.items.length}');
+    }
+  }
+
+  @override
+  void onUpdaterUpdateAvailable(AppcastItem? appcastItem) {
+    debugPrint('[AutoUpdater] Update available!');
+    if (appcastItem != null) {
+      debugPrint('[AutoUpdater] Version: ${appcastItem.versionString}');
+      debugPrint('[AutoUpdater] Title: ${appcastItem.title}');
+      debugPrint('[AutoUpdater] File URL: ${appcastItem.fileURL}');
+    }
+  }
+
+  @override
+  void onUpdaterUpdateNotAvailable(UpdaterError? error) {
+    debugPrint('[AutoUpdater] No update available');
+    if (error != null) {
+      debugPrint('[AutoUpdater] Reason: ${error.message}');
+    }
+  }
+
+  @override
+  void onUpdaterUpdateDownloaded(AppcastItem? appcastItem) {
+    debugPrint('[AutoUpdater] Update downloaded!');
+    if (appcastItem != null) {
+      debugPrint('[AutoUpdater] Ready to install: ${appcastItem.versionString}');
+    }
+  }
+
+  @override
+  void onUpdaterBeforeQuitForUpdate(AppcastItem? appcastItem) {
+    debugPrint('[AutoUpdater] About to quit for update installation');
   }
 }
