@@ -23,7 +23,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _isDragging = false;
-  
+
   // Helper method to process children of DropItemDirectory recursively
   Future<void> _processDropItemChildren(
     List<DropItem> children,
@@ -39,7 +39,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
     }
   }
-  
 
   @override
   void initState() {
@@ -187,14 +186,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             print('Drop local position: ${details.localPosition}');
             print('Drop global position: ${details.globalPosition}');
             print('Number of items: ${details.files.length}');
-            
-            for (int i = 0; i < details.files.length; i++) {
+
+            for (var i = 0; i < details.files.length; i++) {
               final item = details.files[i];
               print('\n--- Item $i ---');
               print('Runtime type: ${item.runtimeType}');
               print('Path: ${item.path}');
               print('Name: ${item.name}');
-              
+
               // Try to get async properties
               try {
                 final mimeType = item.mimeType;
@@ -202,36 +201,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               } catch (e) {
                 print('MIME type error: $e');
               }
-              
+
               try {
                 final length = await item.length();
                 print('File size: $length bytes');
               } catch (e) {
                 print('File size error: $e');
               }
-              
+
               try {
                 final lastMod = await item.lastModified();
                 print('Last modified: $lastMod');
               } catch (e) {
                 print('Last modified error: $e');
               }
-              
+
               // Check macOS-specific bookmark data
               if (item is DropItemFile) {
                 print('Has Apple bookmark: ${item.extraAppleBookmark != null}');
                 if (item.extraAppleBookmark != null) {
-                  print('Bookmark size: ${item.extraAppleBookmark!.length} bytes');
+                  print(
+                      'Bookmark size: ${item.extraAppleBookmark!.length} bytes');
                 }
               }
-              
+
               // Check actual filesystem type
               final fsType = FileSystemEntity.typeSync(item.path);
               print('Filesystem type: $fsType');
-              
+
               // Check if it's a temporary file
-              print('Is temp file: ${item.path.contains('/tmp/') || item.path.contains('/var/folders/')}');
-              
+              print(
+                  'Is temp file: ${item.path.contains('/tmp/') || item.path.contains('/var/folders/')}');
+
               // For directories, check children
               if (item is DropItemDirectory) {
                 print('Children count: ${item.children.length}');
@@ -245,14 +246,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
           for (final item in details.files) {
             final filePath = item.path;
-            
+
             // Check if this is a VS Code directory drop
             if (filePath.contains('/tmp/Drops/')) {
               try {
                 // Try to read as VS Code directory listing
                 final content = await File(filePath).readAsString();
-                final directoryPath = VSCodeDropDetector.extractDirectoryPath(content);
-                
+                final directoryPath =
+                    VSCodeDropDetector.extractDirectoryPath(content);
+
                 if (directoryPath != null) {
                   // Just add the directory path and let normal error handling deal with permissions
                   directories.add(directoryPath);
@@ -262,7 +264,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 // Not a VS Code directory listing, process normally
               }
             }
-            
+
             // Handle typed drops (desktop_drop 0.6.0+)
             if (item is DropItemDirectory) {
               directories.add(filePath);
@@ -279,7 +281,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             } else {
               // Fallback for regular XFile - use filesystem check
               final entity = FileSystemEntity.typeSync(filePath);
-              
+
               if (entity == FileSystemEntityType.directory) {
                 directories.add(filePath);
               } else if (entity == FileSystemEntityType.file) {
@@ -288,7 +290,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 // Handle other temporary drop files
                 try {
                   final testFile = File(filePath);
-                  if (testFile.existsSync() && testFile.statSync().type == FileSystemEntityType.file) {
+                  if (testFile.existsSync() &&
+                      testFile.statSync().type == FileSystemEntityType.file) {
                     files.add(filePath);
                   }
                 } catch (_) {

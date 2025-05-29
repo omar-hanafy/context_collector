@@ -1,15 +1,14 @@
 import 'dart:developer';
 
+import 'package:context_collector/src/shared/theme/extensions.dart';
 import 'package:flutter/material.dart';
-
-import '../theme/extensions.dart';
 
 /// A widget that allows resizing two panels with a draggable divider
 class ResizableSplitter extends StatefulWidget {
   const ResizableSplitter({
-    super.key,
     required this.startPanel,
     required this.endPanel,
+    super.key,
     this.initialRatio = 0.4,
     this.minRatio = 0.2,
     this.maxRatio = 0.8,

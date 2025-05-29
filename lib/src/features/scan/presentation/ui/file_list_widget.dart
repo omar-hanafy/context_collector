@@ -74,7 +74,9 @@ class _FileListItem extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           splashColor: Colors.transparent,
           highlightColor: Colors.transparent,
-          hoverColor: isSelected ? context.primary.addOpacity(0.02) : context.onSurface.addOpacity(0.02),
+          hoverColor: isSelected
+              ? context.primary.addOpacity(0.02)
+              : context.onSurface.addOpacity(0.02),
           child: Padding(
             padding: const EdgeInsetsDirectional.all(16),
             child: Row(
@@ -279,9 +281,9 @@ class _FileListItem extends StatelessWidget {
     }
 
     // Default values from category
-    IconData iconData = category.icon;
-    Color iconColor = context.primary;
-    Color bgColor = context.primary.addOpacity(0.1);
+    var iconData = category.icon;
+    var iconColor = context.primary;
+    var bgColor = context.primary.addOpacity(0.1);
 
     // Enhanced file type detection with proper branding
     final extension = file.extension.toLowerCase();

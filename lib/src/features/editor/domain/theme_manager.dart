@@ -150,7 +150,6 @@ class ThemeManager {
       name: 'Visual Studio Dark',
       category: ThemeCategory.dark,
       description: 'Classic dark theme inspired by Visual Studio',
-      base: 'vs-dark',
       isBuiltIn: true,
     ),
     EditorTheme(
@@ -167,7 +166,6 @@ class ThemeManager {
       category: ThemeCategory.dark,
       description: 'Popular dark theme inspired by Atom',
       author: 'binaryify',
-      base: 'vs-dark',
       isBuiltIn: true,
     ),
     EditorTheme(
@@ -176,7 +174,6 @@ class ThemeManager {
       category: ThemeCategory.dark,
       description: 'One Dark Pro with transparent background',
       author: 'binaryify',
-      base: 'vs-dark',
       isBuiltIn: true,
     ),
   ];

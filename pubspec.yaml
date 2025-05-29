@@ -31,7 +31,7 @@ dependencies:
   # Cross-platform WebView dependencies
   webview_flutter: ^4.13.0        # For macOS, iOS, Android
   webview_windows: ^0.4.0         # For Windows (keep your existing version)
-  auto_updater: ^0.2.0            # For automatic updates
+  auto_updater: ^1.0.0
 
 dev_dependencies:
   flutter_test:

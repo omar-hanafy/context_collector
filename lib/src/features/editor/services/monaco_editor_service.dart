@@ -1,13 +1,12 @@
 // lib/src/features/editor/services/monaco_editor_service.dart
 import 'dart:async';
 
+import 'package:context_collector/src/features/editor/bridge/monaco_bridge_platform.dart';
+import 'package:context_collector/src/features/editor/domain/editor_settings.dart';
 import 'package:context_collector/src/features/editor/services/monaco_editor_providers.dart';
+import 'package:context_collector/src/features/editor/services/monaco_editor_state.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../bridge/monaco_bridge_platform.dart';
-import '../domain/editor_settings.dart';
-import 'monaco_editor_state.dart';
 
 /// Global Monaco Editor Service
 /// Manages a single instance of Monaco Editor throughout the app lifecycle
@@ -23,7 +22,7 @@ class MonacoEditorService {
 
   Completer<void>? _initCompleter;
   Timer? _retryTimer;
-  StreamSubscription? _assetStatusSubscription;
+  StreamSubscription<dynamic>? _assetStatusSubscription;
 
   // Content management
   String? _currentContent;
@@ -149,7 +148,6 @@ class MonacoEditorService {
 
       _updateStatus(status.copyWith(
         hasContent: content.isNotEmpty,
-        queuedContent: null,
       ));
 
       // Process any content that was queued during update

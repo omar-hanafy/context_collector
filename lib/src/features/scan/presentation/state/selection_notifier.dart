@@ -90,7 +90,7 @@ class SelectionNotifier extends StateNotifier<SelectionState> {
   }
 
   Future<void> addFiles(List<String> filePaths) async {
-    bool newFilesAdded = false;
+    var newFilesAdded = false;
     final currentFiles = List<ScannedFile>.from(state.allFiles);
     final currentSelectedPaths = Set<String>.from(state.selectedFilePaths);
 
@@ -111,28 +111,26 @@ class SelectionNotifier extends StateNotifier<SelectionState> {
       state = state.copyWith(
         allFiles: currentFiles,
         selectedFilePaths: currentSelectedPaths,
-        error: null,
         clearError: true,
-        isProcessing: true,  // Show processing state
+        isProcessing: true, // Show processing state
       );
-      
+
       // Load file contents (this will also update combined content and set isProcessing to false)
       await loadFileContents();
     } else {
-      state = state.copyWith(
-          error: null, clearError: true); // Still clear error if any
+      state = state.copyWith(clearError: true); // Still clear error if any
     }
   }
 
   Future<void> addDirectory(String directoryPath) async {
-    state = state.copyWith(isProcessing: true, error: null, clearError: true);
+    state = state.copyWith(isProcessing: true, clearError: true);
     try {
       final effectiveSupportedExtensions =
           state.supportedExtensions ?? ExtensionCatalog.extensionCategories;
       final foundFiles = await _fileScanner.scanDirectory(
           directoryPath, effectiveSupportedExtensions);
 
-      bool newFilesAdded = false;
+      var newFilesAdded = false;
       final currentFiles = List<ScannedFile>.from(state.allFiles);
       final currentSelectedPaths = Set<String>.from(state.selectedFilePaths);
 
@@ -147,7 +145,7 @@ class SelectionNotifier extends StateNotifier<SelectionState> {
       state = state.copyWith(
           allFiles: currentFiles, selectedFilePaths: currentSelectedPaths);
       if (newFilesAdded) {
-        _updateCombinedContent();
+        await _updateCombinedContent();
         await loadFileContents();
       }
     } catch (e) {
@@ -172,7 +170,6 @@ class SelectionNotifier extends StateNotifier<SelectionState> {
       allFiles: [],
       selectedFilePaths: {},
       combinedContent: '',
-      error: null,
       clearError: true,
     );
   }
@@ -206,13 +203,13 @@ class SelectionNotifier extends StateNotifier<SelectionState> {
 
     if (filesToLoad.isEmpty) return;
 
-    state = state.copyWith(isProcessing: true, error: null, clearError: true);
+    state = state.copyWith(isProcessing: true, clearError: true);
     try {
       final effectiveSupportedExtensions =
           state.supportedExtensions ?? ExtensionCatalog.extensionCategories;
 
       final currentFiles = List<ScannedFile>.from(state.allFiles);
-      bool changed = false;
+      var changed = false;
 
       for (final file in filesToLoad) {
         final index =
@@ -228,7 +225,7 @@ class SelectionNotifier extends StateNotifier<SelectionState> {
         state = state.copyWith(
             allFiles: currentFiles); // Update state once after loop
       }
-      _updateCombinedContent(); // This will also update state with new combined content
+      await _updateCombinedContent(); // This will also update state with new combined content
     } catch (e) {
       state = state.copyWith(error: 'Error loading files: $e');
     } finally {
@@ -237,7 +234,7 @@ class SelectionNotifier extends StateNotifier<SelectionState> {
   }
 
   Future<void> copyToClipboard() async {
-    String contentToCopy = state.combinedContent;
+    var contentToCopy = state.combinedContent;
     if (contentToCopy.isEmpty && state.hasSelectedFiles) {
       state = state.copyWith(isProcessing: true);
       await loadFileContents(); // This will update state.combinedContent via _updateCombinedContent
@@ -258,7 +255,7 @@ class SelectionNotifier extends StateNotifier<SelectionState> {
   }
 
   Future<void> saveToFile() async {
-    String contentToSave = state.combinedContent;
+    var contentToSave = state.combinedContent;
     if (contentToSave.isEmpty && state.hasSelectedFiles) {
       state = state.copyWith(isProcessing: true);
       await loadFileContents();
@@ -290,9 +287,9 @@ class SelectionNotifier extends StateNotifier<SelectionState> {
   }
 
   Future<void> pickFiles() async {
-    state = state.copyWith(isProcessing: true, error: null, clearError: true);
+    state = state.copyWith(isProcessing: true, clearError: true);
     try {
-      final List<XFile> files = await openFiles(
+      final files = await openFiles(
         acceptedTypeGroups: [
           const XTypeGroup(
             label: 'Text files',
@@ -346,9 +343,9 @@ class SelectionNotifier extends StateNotifier<SelectionState> {
   }
 
   Future<void> pickDirectory() async {
-    state = state.copyWith(isProcessing: true, error: null, clearError: true);
+    state = state.copyWith(isProcessing: true, clearError: true);
     try {
-      final String? directoryPath = await getDirectoryPath();
+      final directoryPath = await getDirectoryPath();
       if (directoryPath != null) {
         // addDirectory will set processing to false.
         await addDirectory(directoryPath);
@@ -362,7 +359,7 @@ class SelectionNotifier extends StateNotifier<SelectionState> {
   }
 
   void clearError() {
-    state = state.copyWith(error: null, clearError: true);
+    state = state.copyWith(clearError: true);
   }
 
   // isFileSelected can be a getter on the state or a method here.

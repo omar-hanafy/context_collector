@@ -1,7 +1,6 @@
+import 'package:context_collector/src/shared/utils/extension_catalog.dart';
 import 'package:dart_helper_utils/dart_helper_utils.dart';
 import 'package:flutter/foundation.dart';
-
-import '../../../shared/utils/extension_catalog.dart';
 
 /// Immutable value object representing user extension preferences
 /// Renamed from ExtensionSettings for clarity

@@ -1,10 +1,9 @@
 // lib/src/features/editor/services/monaco_editor_providers.dart
+import 'package:context_collector/src/features/editor/assets_manager/notifier.dart';
+import 'package:context_collector/src/features/editor/services/monaco_editor_service.dart';
+import 'package:context_collector/src/features/editor/services/monaco_editor_state.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../assets_manager/notifier.dart';
-import 'monaco_editor_service.dart';
-import 'monaco_editor_state.dart';
 
 /// Provider for Monaco editor status
 final monacoEditorStatusProvider =

@@ -1,5 +1,5 @@
-import '../../../shared/utils/language_mapper.dart';
-import '../domain/scanned_file.dart';
+import 'package:context_collector/src/features/scan/domain/scanned_file.dart';
+import 'package:context_collector/src/shared/utils/language_mapper.dart';
 
 /// Service responsible for assembling content from multiple files into a combined format
 /// This separates disk I/O concerns from UI state management

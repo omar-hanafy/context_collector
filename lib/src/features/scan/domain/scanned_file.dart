@@ -1,10 +1,9 @@
 import 'dart:io';
 
+import 'package:context_collector/src/shared/utils/extension_catalog.dart';
+import 'package:context_collector/src/shared/utils/language_mapper.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
-
-import '../../../shared/utils/extension_catalog.dart';
-import '../../../shared/utils/language_mapper.dart';
 
 /// Represents a file that has been scanned from the filesystem
 /// This is an immutable value object that only holds data
@@ -26,13 +25,13 @@ class ScannedFile {
     final stat = file.statSync();
     final filePath = file.path;
     final fileName = path.basename(filePath);
-    
+
     // For VS Code temp files, use just the filename as display path
     String? displayPath;
     if (filePath.contains('/tmp/Drops/')) {
       displayPath = fileName;
     }
-    
+
     return ScannedFile(
       name: fileName,
       fullPath: filePath,
@@ -50,10 +49,10 @@ class ScannedFile {
   final DateTime lastModified;
   final String? content;
   final String? error;
-  
+
   /// Optional display path (for VS Code drops where the temp path isn't meaningful)
   final String? displayPath;
-  
+
   /// Check if this file was dropped from VS Code (temporary file)
   bool get isVSCodeDrop => fullPath.contains('/tmp/Drops/');
 

@@ -180,7 +180,8 @@ class MonacoAssetManager {
       return path.join(appDir.path, _cacheSubDir);
     } else {
       // Unsupported platform
-      throw UnsupportedError('Context Collector only supports macOS and Windows');
+      throw UnsupportedError(
+          'Context Collector only supports macOS and Windows');
     }
   }
 
@@ -263,15 +264,14 @@ class MonacoAssetManager {
       }
 
       // Copy assets with progress tracking
-      int copiedCount = 0;
+      var copiedCount = 0;
       const batchSize = 10;
 
-      for (int i = 0; i < monacoAssets.length; i += batchSize) {
+      for (var i = 0; i < monacoAssets.length; i += batchSize) {
         final batch = monacoAssets.skip(i).take(batchSize);
 
         await Future.wait(
           batch.map((assetKey) => _copyAssetFile(assetKey, targetDir)),
-          eagerError: false, // Continue even if some files fail
         );
 
         copiedCount += batch.length;

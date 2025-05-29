@@ -5,22 +5,22 @@ import 'package:flutter/foundation.dart';
 enum MonacoEditorServiceState {
   /// Initial state, editor not yet initialized
   idle,
-  
+
   /// Waiting for assets to be ready
   waitingForAssets,
-  
+
   /// Creating and initializing the editor instance
   initializing,
-  
+
   /// Loading Monaco and setting up the environment
   loading,
-  
+
   /// Editor is fully ready and can be shown instantly
   ready,
-  
+
   /// Error occurred during initialization
   error,
-  
+
   /// Retrying after an error
   retrying,
 }
@@ -75,16 +75,16 @@ class MonacoEditorStatus {
   }
 
   bool get isReady => state == MonacoEditorServiceState.ready;
-  
+
   bool get isLoading => [
-    MonacoEditorServiceState.waitingForAssets,
-    MonacoEditorServiceState.initializing,
-    MonacoEditorServiceState.loading,
-    MonacoEditorServiceState.retrying,
-  ].contains(state);
-  
+        MonacoEditorServiceState.waitingForAssets,
+        MonacoEditorServiceState.initializing,
+        MonacoEditorServiceState.loading,
+        MonacoEditorServiceState.retrying,
+      ].contains(state);
+
   bool get hasError => state == MonacoEditorServiceState.error;
-  
+
   bool get canShow => isReady && hasContent;
 
   @override

@@ -7,9 +7,9 @@ import 'package:flutter/material.dart';
 /// Enhanced info bar for Monaco editor with comprehensive controls
 class MonacoEditorInfoBar extends StatefulWidget {
   const MonacoEditorInfoBar({
-    super.key,
     required this.bridge,
     required this.onCopy,
+    super.key,
   });
 
   final MonacoBridgePlatform bridge;
@@ -302,8 +302,6 @@ class _MonacoEditorInfoBarState extends State<MonacoEditorInfoBar> {
               hint: _buildDropdownHint(icon, context),
               // Dropdown styling
               dropdownColor: context.surface,
-              elevation: 8,
-              alignment: AlignmentDirectional.centerStart,
               menuMaxHeight: 300, // Reduced to ensure it fits better
               style: context.labelMedium,
               borderRadius: BorderRadius.circular(8),
@@ -328,7 +326,6 @@ class _MonacoEditorInfoBarState extends State<MonacoEditorInfoBar> {
         ),
         const SizedBox(width: 6),
         Flexible(
-          fit: FlexFit.loose,
           child: Text(
             displayName,
             style: context.labelSmall?.copyWith(
@@ -465,7 +462,6 @@ class _MonacoEditorInfoBarState extends State<MonacoEditorInfoBar> {
                 ),
                 const SizedBox(width: 6),
                 Flexible(
-                  fit: FlexFit.loose,
                   child: Text(
                     displayNameBuilder(value),
                     style: context.labelSmall?.copyWith(

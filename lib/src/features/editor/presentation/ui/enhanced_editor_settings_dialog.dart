@@ -1,21 +1,20 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:context_collector/src/features/editor/domain/editor_settings.dart';
+import 'package:context_collector/src/features/editor/domain/keybinding_manager.dart';
 import 'package:context_collector/src/features/editor/domain/monaco_data.dart';
+import 'package:context_collector/src/features/editor/domain/theme_manager.dart';
+import 'package:context_collector/src/shared/theme/extensions.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../../shared/theme/extensions.dart';
-import '../../domain/editor_settings.dart';
-import '../../domain/keybinding_manager.dart';
-import '../../domain/theme_manager.dart';
-
 /// Enhanced settings dialog with tabbed interface and comprehensive options
 class EnhancedEditorSettingsDialog extends StatefulWidget {
   const EnhancedEditorSettingsDialog({
-    super.key,
     required this.settings,
+    super.key,
     this.customThemes = const [],
     this.customKeybindingPresets = const [],
   });
@@ -127,7 +126,6 @@ class _EnhancedEditorSettingsDialogState
         border: Border(
           bottom: BorderSide(
             color: context.onSurface.addOpacity(0.1),
-            width: 1,
           ),
         ),
       ),
@@ -180,7 +178,6 @@ class _EnhancedEditorSettingsDialogState
         border: Border(
           bottom: BorderSide(
             color: context.onSurface.addOpacity(0.1),
-            width: 1,
           ),
         ),
       ),
@@ -1167,9 +1164,9 @@ class _EnhancedEditorSettingsDialogState
     required FocusNode focusNode,
     required double min,
     required double max,
+    required void Function(double) onChanged,
     double step = 1.0,
     String? suffix,
-    required void Function(double) onChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1555,7 +1552,6 @@ class _EnhancedEditorSettingsDialogState
         border: Border(
           top: BorderSide(
             color: context.onSurface.addOpacity(0.1),
-            width: 1,
           ),
         ),
       ),
@@ -1687,7 +1683,7 @@ class _EnhancedEditorSettingsDialogState
   Future<void> _exportSettings() async {
     final settingsJson = jsonEncode(_settings.toMonacoOptions());
     try {
-      final String? outputFile = await FilePicker.platform.saveFile(
+      final outputFile = await FilePicker.platform.saveFile(
         dialogTitle: 'Export Editor Settings',
         fileName: 'editor_settings.json',
         type: FileType.custom,
@@ -1722,16 +1718,15 @@ class _EnhancedEditorSettingsDialogState
 
   Future<void> _importSettings() async {
     try {
-      final FilePickerResult? result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['json'],
       );
 
       if (result != null && result.files.single.path != null) {
         final file = File(result.files.single.path!);
-        final String content = await file.readAsString();
-        final Map<String, dynamic> jsonMap =
-            jsonDecode(content) as Map<String, dynamic>;
+        final content = await file.readAsString();
+        final jsonMap = jsonDecode(content) as Map<String, dynamic>;
 
         final newSettings = EditorSettings.fromJson(jsonMap);
 
@@ -1990,9 +1985,9 @@ class _LanguageSettingsDialogState extends State<_LanguageSettingsDialog> {
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
+    required ValueChanged<String> onChanged,
     TextInputType? keyboardType,
     List<TextInputFormatter>? inputFormatters,
-    required ValueChanged<String> onChanged,
   }) {
     return TextFormField(
       controller: controller,
@@ -2008,8 +2003,8 @@ class _LanguageSettingsDialogState extends State<_LanguageSettingsDialog> {
 
   Widget _buildSwitch({
     required String label,
-    bool? value, // Nullable for tri-state (default, true, false)
     required ValueChanged<bool?> onChanged,
+    bool? value, // Nullable for tri-state (default, true, false)
   }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2037,7 +2032,7 @@ class _LanguageSettingsDialogState extends State<_LanguageSettingsDialog> {
   Widget _buildDropdown<T>({
     required String label,
     T? value,
-    required List<T?> items, // Allow null for "Default"
+    required List<T?> items,
     required String Function(T?) itemBuilder,
     required void Function(T?)? onChanged,
   }) {
