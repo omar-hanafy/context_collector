@@ -5,5 +5,14 @@
     <link>https://omar-hanafy.github.io/context_collector/appcast.xml</link>
     <description>Most recent changes with links to updates.</description>
     <language>en</language>
+    <item>
+      <title>Version releases</title>
+      <pubDate>Thu, 29 May 2025 02:53:30 -0000</pubDate>
+      <description><![CDATA[*First stable release*
+
+MacOS: Universal
+Windows: 64/86
+]]></description>
+    </item>
   </channel>
 </rss>
