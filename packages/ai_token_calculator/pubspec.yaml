@@ -1,0 +1,14 @@
+name: ai_token_calculator
+description: A fast, offline token estimation library for multiple AI models with research-backed accuracy for Claude, GPT, Gemini, and more.
+version: 1.0.0
+homepage: https://github.com/omar-hanafy/ai_token_calculator
+repository: https://github.com/omar-hanafy/ai_token_calculator
+
+environment:
+  sdk: '^3.0.0'
+
+# No runtime dependencies needed - pure Dart implementation
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.26.2

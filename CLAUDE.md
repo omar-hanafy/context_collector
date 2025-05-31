@@ -12,9 +12,9 @@ flutter config --enable-macos-desktop --enable-windows-desktop --enable-linux-de
 
 ### Development
 ```bash
-flutter run                                        # Run app in debug mode
+flutter run                                       # Run app in debug mode
 flutter run -d macos                              # Run on macOS (currently stable)
-flutter run -d windows                            # Run on Windows (under development)
+flutter run -d windows                            # Run on Windows (currently stable)
 flutter run -d linux                              # Run on Linux (planned)
 ```
 
@@ -126,3 +126,4 @@ The Monaco editor (VS Code's editor) is embedded via WebView with a custom bridg
 
 6. **Residual Checks**
    Before finalizing, quickly scan for `export` statements in the package's `lib/` folder to see which APIs are publicly exposed.
+ 

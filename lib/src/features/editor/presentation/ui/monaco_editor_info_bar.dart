@@ -1,11 +1,16 @@
+import 'dart:async';
+
+import 'package:ai_token_calculator/ai_token_calculator.dart';
 import 'package:context_collector/src/features/editor/bridge/monaco_bridge_platform.dart';
 import 'package:context_collector/src/features/editor/domain/monaco_data.dart';
+import 'package:context_collector/src/features/editor/services/monaco_editor_providers.dart';
 import 'package:context_collector/src/shared/theme/extensions.dart';
 import 'package:enefty_icons/enefty_icons.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Enhanced info bar for Monaco editor with comprehensive controls
-class MonacoEditorInfoBar extends StatefulWidget {
+class MonacoEditorInfoBar extends ConsumerStatefulWidget {
   const MonacoEditorInfoBar({
     required this.bridge,
     required this.onCopy,
@@ -16,10 +21,11 @@ class MonacoEditorInfoBar extends StatefulWidget {
   final VoidCallback onCopy;
 
   @override
-  State<MonacoEditorInfoBar> createState() => _MonacoEditorInfoBarState();
+  ConsumerState<MonacoEditorInfoBar> createState() =>
+      _MonacoEditorInfoBarState();
 }
 
-class _MonacoEditorInfoBarState extends State<MonacoEditorInfoBar> {
+class _MonacoEditorInfoBarState extends ConsumerState<MonacoEditorInfoBar> {
   final List<Map<String, String>> _availableLanguages =
       MonacoData.availableLanguages;
 
@@ -109,18 +115,39 @@ class _MonacoEditorInfoBarState extends State<MonacoEditorInfoBar> {
     return ValueListenableBuilder<Map<String, int>>(
       valueListenable: widget.bridge.liveStats,
       builder: (context, stats, _) {
-        final statsText = _formatStatsText(stats);
+        final chars = stats['chars'] ?? 0;
+        final parts = _formatStatsText(stats).split(' | ');
 
         return ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 300),
-          // Prevent excessive width
-          child: Text(
-            statsText,
-            style: context.labelSmall?.copyWith(
-              color: context.onSurface.addOpacity(0.7),
-            ),
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Regular stats
+              Text(
+                parts[0],
+                style: context.labelSmall?.copyWith(
+                  color: context.onSurface.addOpacity(0.7),
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (parts.length > 1 && chars > 0) ...[
+                Text(
+                  ' | ',
+                  style: context.labelSmall?.copyWith(
+                    color: context.onSurface.addOpacity(0.4),
+                  ),
+                ),
+                // Ultra-compact token count
+                _TokenCountChip(
+                  content: widget.bridge.content,
+                  calculator: ref.read(tokenCalculatorProvider),
+                  selectedModel: ref.watch(selectedAIModelProvider),
+                  onModelChanged: (model) =>
+                      ref.read(selectedAIModelProvider.notifier).state = model,
+                ),
+              ],
+            ],
           ),
         );
       },
@@ -140,7 +167,10 @@ class _MonacoEditorInfoBarState extends State<MonacoEditorInfoBar> {
 
     final cursorInfo = cursors > 1 ? ' — $cursors cursors' : '';
 
-    return 'Ln: $lines Ch: $chars$selectionInfo$cursorInfo';
+    // Add separator for token count (will be rendered separately)
+    final tokenSeparator = chars > 0 ? ' | ' : '';
+
+    return 'Ln: $lines Ch: $chars$selectionInfo$cursorInfo$tokenSeparator';
   }
 
   DropdownMenuItem<String> _buildLanguageMenuItem(
@@ -481,6 +511,312 @@ class _MonacoEditorInfoBarState extends State<MonacoEditorInfoBar> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Ultra-compact token count display
+class _TokenCountChip extends StatefulWidget {
+  const _TokenCountChip({
+    required this.content,
+    required this.calculator,
+    required this.selectedModel,
+    required this.onModelChanged,
+  });
+
+  final String content;
+  final AITokenCalculator calculator;
+  final AIModel selectedModel;
+  final ValueChanged<AIModel> onModelChanged;
+
+  @override
+  State<_TokenCountChip> createState() => _TokenCountChipState();
+}
+
+class _TokenCountChipState extends State<_TokenCountChip> {
+  TokenEstimate? _lastEstimate;
+  String _lastContent = '';
+  Timer? _debounceTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _calculateTokens();
+  }
+
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    super.dispose();
+  }
+
+  void _calculateTokens() {
+    if (_lastContent != widget.content) {
+      _lastContent = widget.content;
+
+      // Cancel previous timer
+      _debounceTimer?.cancel();
+
+      // For small content, calculate immediately
+      if (widget.content.length < 5000) {
+        _lastEstimate = widget.calculator.estimateTokens(
+          widget.content,
+          model: widget.selectedModel,
+        );
+        if (mounted) setState(() {});
+      } else {
+        // For larger content, debounce
+        _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+          if (mounted) {
+            setState(() {
+              _lastEstimate = widget.calculator.estimateTokens(
+                widget.content,
+                model: widget.selectedModel,
+              );
+            });
+          }
+        });
+      }
+    }
+  }
+
+  @override
+  void didUpdateWidget(_TokenCountChip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.content != widget.content ||
+        oldWidget.selectedModel != widget.selectedModel) {
+      _calculateTokens();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_lastEstimate == null) return const SizedBox.shrink();
+
+    final tokens = _lastEstimate!.tokens;
+    final usage = tokens /
+        AITokenCalculator.modelSpecs[widget.selectedModel]!.contextWindow;
+
+    return Theme(
+      data: Theme.of(context).copyWith(
+        tooltipTheme: TooltipThemeData(
+          decoration: BoxDecoration(
+            color: context.surface,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: context.onSurface.addOpacity(0.1),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.addOpacity(0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+        ),
+      ),
+      child: Tooltip(
+        richMessage: WidgetSpan(
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            constraints: const BoxConstraints(maxWidth: 200),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  AITokenCalculator
+                      .modelSpecs[widget.selectedModel]!.displayName,
+                  style: context.labelMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '~${_formatFullNumber(tokens)} tokens',
+                  style: context.labelSmall,
+                ),
+                const SizedBox(height: 8),
+                LinearProgressIndicator(
+                  value: usage.clamp(0.0, 1.0),
+                  backgroundColor: context.onSurface.addOpacity(0.1),
+                  color: _getUsageColor(usage),
+                  minHeight: 3,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${(usage * 100).toStringAsFixed(1)}% of context window',
+                  style: context.labelSmall?.copyWith(
+                    color: context.onSurface.addOpacity(0.6),
+                    fontSize: 11,
+                  ),
+                ),
+                const Divider(height: 16),
+                Text(
+                  'Click to compare models',
+                  style: context.labelSmall?.copyWith(
+                    color: context.primary,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        child: InkWell(
+          onTap: () => _showModelMenu(context),
+          borderRadius: BorderRadius.circular(4),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            child: AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeInOut,
+              style: context.labelSmall?.copyWith(
+                    color: _getTokenColor(context, usage),
+                    fontWeight: FontWeight.w500,
+                  ) ??
+                  const TextStyle(),
+              child: Text('~${_formatCompactNumber(tokens)}↯'),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color _getTokenColor(BuildContext context, double usage) {
+    if (usage > 0.9) return context.error;
+    if (usage > 0.75) return Colors.orange;
+    return context.onSurface.addOpacity(0.7);
+  }
+
+  Color _getUsageColor(double usage) {
+    if (usage > 0.9) return Colors.red;
+    if (usage > 0.75) return Colors.orange;
+    return Colors.green;
+  }
+
+  String _formatCompactNumber(int number) {
+    if (number < 1000) return '$number';
+    if (number < 10000) return '${(number / 1000).toStringAsFixed(1)}k';
+    if (number < 1000000) return '${(number / 1000).toStringAsFixed(0)}k';
+    return '${(number / 1000000).toStringAsFixed(1)}M';
+  }
+
+  String _formatFullNumber(int number) {
+    return number.toString().replaceAllMapped(
+          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+          (Match m) => '${m[1]},',
+        );
+  }
+
+  void _showModelMenu(BuildContext context) {
+    final RenderBox button = context.findRenderObject()! as RenderBox;
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final position = RelativeRect.fromRect(
+      Rect.fromPoints(
+        button.localToGlobal(Offset.zero, ancestor: overlay),
+        button.localToGlobal(button.size.bottomRight(Offset.zero),
+            ancestor: overlay),
+      ),
+      Offset.zero & overlay.size,
+    );
+
+    final theme = Theme.of(context);
+    showMenu<AIModel>(
+      context: context,
+      position: position,
+      color: theme.colorScheme.surface,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.black.addOpacity(0.2),
+      elevation: 8,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(
+          color: theme.colorScheme.onSurface.addOpacity(0.1),
+        ),
+      ),
+      constraints: const BoxConstraints(maxWidth: 220),
+      items: [
+        // Popular models for quick access
+        for (final model in [
+          AIModel.claudeSonnet,
+          AIModel.claudeOpus,
+          AIModel.gpt4,
+          AIModel.gpt35Turbo,
+          AIModel.geminiPro,
+          AIModel.grok,
+        ])
+          PopupMenuItem<AIModel>(
+            value: model,
+            height: 36,
+            child: _buildModelMenuItem(context, model),
+          ),
+        const PopupMenuDivider(height: 1),
+        PopupMenuItem<AIModel>(
+          enabled: false,
+          height: 32,
+          child: Center(
+            child: Text(
+              'Estimates are ±5-10% accurate',
+              style: context.labelSmall?.copyWith(
+                color: context.onSurface.addOpacity(0.5),
+                fontSize: 11,
+              ),
+            ),
+          ),
+        ),
+      ],
+    ).then((model) {
+      if (model != null) {
+        widget.onModelChanged(model);
+      }
+    });
+  }
+
+  Widget _buildModelMenuItem(BuildContext context, AIModel model) {
+    final estimate =
+        widget.calculator.estimateTokens(widget.content, model: model);
+    final spec = AITokenCalculator.modelSpecs[model]!;
+    final isSelected = model == widget.selectedModel;
+    final usage = estimate.tokens / spec.contextWindow;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Row(
+        children: [
+          if (isSelected)
+            Icon(Icons.check, size: 14, color: context.primary)
+          else
+            const SizedBox(width: 14),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              spec.displayName,
+              style: context.labelSmall?.copyWith(
+                fontWeight: isSelected ? FontWeight.w600 : null,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: _getUsageColor(usage).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              '~${_formatCompactNumber(estimate.tokens)}',
+              style: context.labelSmall?.copyWith(
+                color: _getUsageColor(usage),
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

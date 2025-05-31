@@ -1,4 +1,5 @@
 // lib/src/features/editor/services/monaco_editor_providers.dart
+import 'package:ai_token_calculator/ai_token_calculator.dart';
 import 'package:context_collector/src/features/editor/assets_manager/notifier.dart';
 import 'package:context_collector/src/features/editor/services/monaco_editor_service.dart';
 import 'package:context_collector/src/features/editor/services/monaco_editor_state.dart';
@@ -71,4 +72,13 @@ final monacoEditorCanShowProvider = Provider<bool>((ref) {
 final monacoEditorProgressProvider = Provider<double>((ref) {
   final status = ref.watch(monacoEditorStatusProvider);
   return status.progress;
+});
+
+/// Provider for AI token calculator
+final tokenCalculatorProvider =
+    Provider<AITokenCalculator>((ref) => AITokenCalculator());
+
+/// Provider for selected AI model (persisted in session)
+final selectedAIModelProvider = StateProvider<AIModel>((ref) {
+  return AIModel.claudeSonnet; // Default to Claude for Context Collector
 });

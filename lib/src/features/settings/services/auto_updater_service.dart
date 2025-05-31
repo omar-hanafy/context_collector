@@ -21,7 +21,7 @@ class AutoUpdaterService implements UpdaterListener {
     try {
       // Add this service as a listener for update events
       autoUpdater.addListener(this);
-      
+
       // Use development URL in debug mode, production URL in release mode
       const feedUrl = kDebugMode ? _developmentFeedUrl : _productionFeedUrl;
 
@@ -80,7 +80,7 @@ class AutoUpdaterService implements UpdaterListener {
       rethrow;
     }
   }
-  
+
   // UpdaterListener implementation
   @override
   void onUpdaterError(UpdaterError? error) {
@@ -117,7 +117,8 @@ class AutoUpdaterService implements UpdaterListener {
   void onUpdaterUpdateDownloaded(AppcastItem? appcastItem) {
     debugPrint('[AutoUpdater] Update downloaded!');
     if (appcastItem != null) {
-      debugPrint('[AutoUpdater] Ready to install: ${appcastItem.versionString}');
+      debugPrint(
+          '[AutoUpdater] Ready to install: ${appcastItem.versionString}');
     }
   }
 

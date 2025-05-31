@@ -34,7 +34,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     _tabController = TabController(length: tabCount, vsync: this);
     _loadPackageInfo();
   }
-  
+
   Future<void> _loadPackageInfo() async {
     final info = await PackageInfo.fromPlatform();
     if (mounted) {
@@ -546,7 +546,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                         Navigator.pop(context); // Close loading dialog
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Update check complete! If an update is available, it will download automatically.'),
+                            content: Text(
+                                'Update check complete! If an update is available, it will download automatically.'),
                           ),
                         );
                       }
@@ -650,12 +651,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
                 const SizedBox(height: 16),
                 _buildInfoRow(
-                  context, 
-                  'Version', 
-                  _packageInfo == null 
-                    ? 'Loading...' 
-                    : '${_packageInfo!.version}${_packageInfo!.buildNumber.isNotEmpty ? '+${_packageInfo!.buildNumber}' : ''}'
-                ),
+                    context,
+                    'Version',
+                    _packageInfo == null
+                        ? 'Loading...'
+                        : '${_packageInfo!.version}${_packageInfo!.buildNumber.isNotEmpty ? '+${_packageInfo!.buildNumber}' : ''}'),
                 const SizedBox(height: 8),
                 _buildInfoRow(context, 'Platform', Platform.operatingSystem),
                 const SizedBox(height: 8),

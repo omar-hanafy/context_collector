@@ -753,13 +753,14 @@ class _FileListItem extends StatelessWidget {
       );
     }
 
+    // File is pending to be loaded
     return Chip(
-      label: const Text('Ready'),
-      labelStyle: context.labelSmall,
-      backgroundColor: context.surface,
-      side: BorderSide(
-        color: context.onSurface.addOpacity(0.2),
+      label: const Text('Pending'),
+      labelStyle: context.labelSmall?.copyWith(
+        color: context.onSurface.addOpacity(0.8),
       ),
+      backgroundColor: context.surfaceContainerHighest,
+      side: BorderSide.none,
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       visualDensity: VisualDensity.compact,
     );
