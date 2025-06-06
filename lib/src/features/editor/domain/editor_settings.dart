@@ -1469,18 +1469,6 @@ class EditorSettings extends Equatable {
   }
 
   @override
-  String toString() => 'EditorSettings('
-      'theme: $theme, '
-      'fontSize: $fontSize, '
-      'fontFamily: $fontFamily, '
-      'showLineNumbers: $showLineNumbers, '
-      'showMinimap: $showMinimap, '
-      'wordWrap: $wordWrap, '
-      'tabSize: $tabSize, '
-      'readOnly: $readOnly'
-      ')';
-
-  @override
   List<Object?> get props => [
         theme,
         fontSize,
