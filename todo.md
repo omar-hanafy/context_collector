@@ -1,603 +1,539 @@
-- Fix auto update issue.
-- adding a new file clears custom text added.
-- support for tree view.
-- support for custom text item in tree view.
-- support paste path or list of paths.
-- support paste content (this should be easily available added after the custom text item feature).
-- extract text from docx, pdf, excel. 
-- support for urls. (github, google docs, etc.)
-- support for images (OCR).
-- save sessions and reload them (handle not found files and other edge cases).
+Of course. Here is the General Implementation Plan for ContextCollector 2.0.
+
+This document serves as the high-level roadmap and architectural blueprint for the entire team. It outlines our core
+strategy, technical architecture, and development phases to ensure we are all aligned as we build the next version of
+the application.
 
 ---
-Hints Section:
 
-```yaml
-dependencies:
-  # Document processing
-  archive: ^1.0.1 # to uncompress docx file.
-  xml: ^6.0.1 # to parse xml files in docx to md.
+## 🚀 ContextCollector 2.0: General Implementation Plan
 
-  # Excel handling
-  excel: ^4.0.6 # to convert excel files to md
+### 1. Project Vision & Guiding Principles
 
-  # PDF handling
-  syncfusion_flutter_pdf: ^0.3.1 # to extract text from pdf files.
+Our goal is to build the ultimate developer scratchpad for AI interactions. Every decision we make should serve the core
+workflow: **Aggregate Context → Organize & Refine → Copy Formatted Output**.
 
-  # OCR
-  google_mlkit_text_recognition: ^0.15.0 # tried to extract text from images or complex pdfs.
-```
+To achieve this, we will adhere to the following principles:
 
-# ContextCollector 2.0 - Final Requirements Document
+* **Modularity Over Monolith:** Features will be broken down into discrete, testable services. The `Workspace` (data and
+  state) will be independent of the `Editor` (presentation).
+* **State-Driven UI:** We will use Riverpod to its full potential. The UI will be a direct reflection of the application
+  state. We don't "tell" the UI to change; we change the state, and the UI reacts.
+* **Single Source of Truth:** **Hive** will be our one and only persistence layer. All session data, user settings, and
+  tab information will be stored in Hive boxes. This prevents state conflicts and simplifies data management.
+* **Pragmatic & Focused:** We will strictly follow the requirements document, prioritizing the core workflow above all
+  else. Features not in the scope will be deferred to future versions.
 
-## 🎯 Core Philosophy
+### 2. High-Level Architecture
 
-**Primary Purpose**: Collect files and notes → Format nicely → Copy to AI
+We will rebuild the application from the ground up using a clean, feature-driven folder structure and a
+services-oriented architecture.
 
-**NOT**: A full-featured code editor or IDE
- **IS**: A smart scratch pad with file organization
-
-## 📋 Primary Workflow (MUST BE PERFECT)
-
-```
-Open app → Drag project files → Create/add notes → Copy formatted content → Paste to AI
-```
-
-## 🏗️ Architecture Overview
-
-### 1. **Tree-Based File Organization**
-
-- Use `file_tree_view` package for file/folder display
-- Virtual root system for mixed-location files
-- In-place file/folder creation
-- No separate "Notes" directory - custom files live naturally in the tree
-
-### 2. **Tabbed Workspace**
-
-- Multiple context collections via tabs
-- Lightweight persistence using Hive
-- Session restoration on app restart
-- Each tab = independent collection task
-
-### 3. **Smart Content Management**
-
-- In-memory file editing (no disk writes)
-- Dirty state tracking
-- Monaco editor integration for viewing combined output
-- Popup editor for individual files
-
-## 📑 Detailed Requirements
-
-### Feature 1: Tree View Management
-
-#### Scenarios:
-
-1. **Single Directory Drop**
-
-   - User drags `/project/src`
-   - Shows exact folder structure
-   - Can create files at any level
-
-2. **Mixed Location Handling**
-
-   ```
-   Initial: User drags /home/user/projectA/src/
-   projectA/
-   └── src/
-       └── index.js
-   
-   Then: User drags /home/user/projectB/lib/
-   Virtual Root/
-   ├── projectA/
-   │   └── src/
-   └── projectB/
-       └── lib/
-   ```
-
-3. **Smart Path Reconciliation**
-
-   - If new drop contains existing paths, merge intelligently
-   - Example: Dropping `/home/user/` when `/home/user/projectA` exists
-
-   ```
-   Before:
-   projectA/
-   
-   After:
-   home/user/
-   └── projectA/
-   ```
-
-#### Edge Cases:
-
-- Circular symlinks → Skip with warning
-- Binary files → Reject with message
-- Files > 10MB → Warning but allow
-- Non-existent paths → Show error indicator
-
-### Feature 2: File Operations
-
-#### Scenarios:
-
-1. **Create Custom File**
-   - Right-click in tree → "New File"
-   - Default name: `untitled-1.md`
-   - Can create anywhere in tree
-   - Stored in memory with special indicator (✨)
-2. **Edit File**
-   - Double-click → Opens popup editor
-   - Changes tracked in memory only
-   - File marked as dirty (📝)
-   - Original disk content preserved
-3. **Delete/Remove**
-   - Dirty files → Confirmation dialog
-   - Custom files → Simple removal
-   - Disk files → Remove from collection only
-4. **Refresh**
-   - Single file: Reload from disk (loses edits with warning)
-   - All files: Batch refresh with progress
-
-#### Status Indicators:
-
-- 📝 Edited (dirty)
-- ❌ Not found on disk
-- ✨ Custom (created in-app)
-- 📄 Normal file
-
-### Feature 3: Input Methods
-
-#### Scenarios:
-
-1. **Drag & Drop**
-
-   - Files/folders from explorer
-   - Multiple items at once
-   - VS Code file drops supported
-
-2. **Paste Paths**
-
-   ```
-   /path/to/file1.js
-   /path/to/file2.ts
-   C:\Users\project\src
-   ```
-
-   - Parse line by line
-   - Add to current tree
-   - Invalid paths → Show errors
-
-3. **Paste Content**
-
-   - Detect raw code/text paste
-   - Create file at selected location
-   - Default: `/pasted-{timestamp}.txt`
-   - Can rename immediately
-
-### Feature 4: Tab System
-
-#### Scenarios:
-
-1. **Tab Management**
-
-   - "+" button for new tab
-   - Tab names: "Collection 1", "Collection 2", etc.
-   - Can rename tabs
-   - Close with dirty files → Warning
-
-2. **Persistence**
-
-   ```json
-   {
-     "tabs": [{
-       "id": "tab-1",
-       "name": "Feature X Context",
-       "paths": ["/project/src", "/docs/api.md"],
-       "customFiles": {
-         "Virtual Root/notes.md": "content here"
-       },
-       "dirtyFiles": {
-         "/project/src/index.js": "edited content"
-       }
-     }]
-   }
-   ```
-
-3. **Restoration**
-
-   - On app start: Restore all tabs
-   - Missing files: Show with ❌ indicator
-   - Custom files: Fully restored
-   - Dirty edits: Restored with 📝 indicator
-
-### Feature 5: Content Assembly
-
-#### Scenarios:
-
-1. **Combined Output Format**
-
-   ~~~markdown
-   # Context Collection
-   
-   ## notes.md
-   > **Path:** Virtual Root/notes.md
-   
-   ```md
-   [content]
-   ~~~
-
-   ## index.js
-
-   > **Path:** /project/src/index.js
-
-   ```javascript
-   [content]
-   ```
-
-   ```
-   
-   ```
-
-2. **Copy Operations**
-
-   - Button in toolbar
-   - Keyboard shortcut (Ctrl/Cmd+C)
-   - Include all selected files
-   - Respect tree order
-
-### Feature 6: Editor Integration
-
-#### Scenarios:
-
-1. **Monaco (Right Panel)**
-   - Always visible
-   - Shows combined content
-   - Read-only by default
-   - Syntax highlighting
-2. **Popup Editor**
-   - For individual file editing
-   - Modal dialog
-   - Save/Cancel buttons
-   - If Monaco is simple to reuse → Use it
-   - Otherwise → Use re_editor package
-
-## 🚫 Out of Scope
-
-- Writing changes to disk
-- File system operations (move, rename on disk)
-- Git integration
-- Multi-user collaboration
-- Cloud sync
-- Advanced search/replace
-- File diffing
-- Terminal integration
-- Plugin system
-
-## ✅ Test Cases
-
-### Basic Flow
-
-1. Open app → Empty state with welcome message
-2. Drag folder → Tree appears with structure
-3. Right-click → Create `prompt.md`
-4. Type content → Auto-saved in memory
-5. Click copy → Formatted content in clipboard
-
-### Mixed Paths
-
-1. Drag `/projectA/src`
-2. Drag `/projectB/lib`
-3. Verify virtual root created
-4. Create file at root level
-5. Copy → Verify all paths correct
-
-### Tab Persistence
-
-1. Create 2 tabs with different content
-2. Add custom files to each
-3. Edit some disk files
-4. Close app
-5. Reopen → Verify everything restored
-
-### Error Handling
-
-1. Add file, then delete from disk → Shows ❌
-2. Drop binary file → Shows rejection message
-3. Paste invalid paths → Shows error list
-4. Close tab with dirty files → Shows warning
-
-### Performance
-
-1. Drop folder with 1000 files → Shows progress
-2. Copy 100 files → Completes in < 2 seconds
-3. Switch between tabs → Instant
-4. Create 10 custom files → No lag
-
-------
-
-**Remember**: Every feature should make the primary workflow smoother without adding complexity. When in doubt, choose the simpler implementation.
-
----
-
-## 🏛️ High-Level Architecture & Strategy
-
-Your core philosophy is perfect: a "smart scratch pad." We'll design the architecture around this principle, ensuring that every decision serves the primary workflow.
-
-* **State Management**: We will continue to use **Riverpod**, as it's already in the project and is perfectly suited for managing the increased complexity of tabs and tree state. The new state model will be hierarchical:
-    * `WorkspaceState` (the entire app session)
-        * `List<TabState>` (a list of all open tabs)
-            * `FileTree` (the virtual file tree for a single tab)
-                * `TreeNode` (wraps a file, its status, and children)
-* **Persistence**: We will use the **Hive** package as specified. It's a fast, native Dart database ideal for storing the session state (`WorkspaceState`) as a single object. A simple `HiveService` will manage serialization and deserialization.
-* **Core Packages**:
-    * `file_tree_view`: For the primary file visualization.
-    * `hive` / `hive_flutter`: For session persistence.
-    * `re_editor`: As a pragmatic choice for the initial popup editor to accelerate Phase 1. We can evaluate upgrading it to a reusable Monaco instance in the polish phase.
-    * `flutter_riverpod`: To manage all application state.
-
----
-
-Of course. Let's craft a comprehensive implementation plan to refactor `ContextCollector 2.0` from scratch, aligning with your new requirements and setting up your two developers for success on parallel tracks.
-
-This plan establishes a clear architecture, divides responsibilities, and provides detailed notes on key changes.
-
-***
-
-## 🚀 ContextCollector 2.0: Refactor & Implementation Plan
-
-This document outlines the strategy, folder structure, and task breakdown for rebuilding the Context Collector application according to the final requirements.
-
-### Core Strategy
-
-The refactor will pivot from the current structure to a more robust and modular architecture centered around three key concepts:
-
-1.  **Workspace-Centric State:** The application's core state will be managed by a `WorkspaceService`, which oversees a collection of `TabState` objects. Each tab is a self-contained collection task with its own virtual file tree and state.
-2.  **Virtual File System (VFS):** We will move away from a flat list of `ScannedFile`. The new system will use a hierarchical tree of `VirtualNode` objects (`VirtualFile`, `VirtualDirectory`). This makes handling mixed-path drops and in-tree file creation natural and robust.
-3.  **Single Source of Truth (Hive):** All session and settings data will be persisted in Hive. This includes tab structures, dirty file content, notes, and user settings (like theme and editor preferences). **SharedPreferences will be completely removed** to avoid state fragmentation.
-
-### 📂 Proposed Folder Structure
-
-This structure promotes a clear separation of concerns, making it easier for your team to work in parallel.
+#### **Proposed Folder Structure**
 
 ```plaintext
 lib/
-├── core/
+├── core/                  # App-wide, foundational code
 │   ├── persistence/
-│   │   └── hive_service.dart     # Handles all Hive box operations (setup, read, write)
 │   └── models/
-│       ├── virtual_node.dart     # Abstract base class for files/folders
-│       ├── virtual_file.dart     # Represents a file (from disk or in-memory)
-│       └── virtual_directory.dart# Represents a folder in the VFS
-│
-├── features/
-│   ├── workspace/
-│   │   ├── data/
-│   │   │   ├── models/
-│   │   │   │   └── tab_state.dart  # Model for a single tab's state (Hive-adaptable)
-│   │   │   └── workspace_repository.dart # Data layer for saving/loading workspace from Hive
-│   │   ├── service/
-│   │   │   └── workspace_service.dart  # Manages all tabs, VFS logic, and persistence
-│   │   └── ui/
-│   │       ├── widgets/
-│   │       │   ├── file_tree.dart        # The file_tree_view widget implementation
-│   │       │   └── file_context_menu.dart # Right-click menu for the tree
-│   │       └── workspace_view.dart       # The main left-panel UI (tabs + tree)
-│
-│   ├── editor/
-│   │   ├── service/
-│   │   │   ├── content_assembler.dart # Builds the final Markdown string
-│   │   │   └── editor_service.dart      # Manages Monaco instances and interactions
-│   │   └── ui/
-│   │       ├── widgets/
-│   │       │   ├── combined_output_view.dart # Read-only Monaco view for combined output
-│   │       │   └── popup_editor.dart         # Monaco-based popup for editing single files
-│   │       └── editor_panel.dart           # The main right-panel UI
-│
-│   └── app/
-│       ├── app.dart                    # MaterialApp and root providers
-│       └── home_screen.dart            # Main screen, stitches Workspace and Editor panels
-│
-├── shared/
-│   ├── theme/
-│   │   ├── app_theme.dart
-│   │   └── theme_provider.dart       # Manages app theme (light/dark/system)
-│   ├── utils/
-│   │   ├── language_mapper.dart
-│   │   └── path_utils.dart           # Helpers for path manipulation
-│   └── widgets/
-│       ├── resizable_splitter.dart
-│       └── status_indicators.dart    # UI for ✨, 📝, ❌
-│
-└── main.dart                         # App entry point, initializes services
+├── features/              # Individual feature domains
+│   ├── workspace/         # Manages tabs, file tree, and state (Dev A)
+│   ├── editor/            # Manages Monaco and content display (Dev B)
+│   └── app/               # Main app shell and screen layout (Team Lead)
+├── shared/                # Widgets, utils, and themes used across features
+└── main.dart              # Application entry point
 ```
 
-### 📝 Key Refactoring & Implementation Notes
+#### **Core Services & Data Models**
 
-* **State Management (Riverpod):** We will have a primary `workspaceProvider` that exposes the `WorkspaceService`. UI components will listen to this provider to get the current state of all tabs and the active tab's file tree.
-* **Virtual File System:** The `VirtualNode` models are central.
-    * `VirtualFile` will contain fields for `path`, `originalContent` (from disk), `editedContent`, a `isDirty` flag, and a `isCustom` flag (for files created in-app). This perfectly matches the requirements.
-    * `VirtualDirectory` will contain a list of `VirtualNode` children.
-    * The `WorkspaceService` will manage the logic for creating the "Virtual Root" when files from different parent directories are dropped.
-* **Persistence with Hive:**
-    * The `TabState` model will be designed with Hive in mind, using `@HiveType` and `@HiveField` annotations. It will store the list of root paths, custom file content, and dirty file content.
-    * The `WorkspaceRepository` will be the only class that directly interacts with the Hive "workspace" box.
-    * **Editor settings**, previously in SharedPreferences, will now be part of a `Settings` object also stored in a separate Hive box. This centralizes all persistence.
-* **Editor Management:** The `EditorService` will manage the lifecycle of the Monaco editor instances.
-    * **Main View:** The `CombinedOutputView` will be a read-only Monaco instance. It will react to changes in the active tab's selected files and re-render the formatted content from the `ContentAssembler`.
-    * **Popup Editor:** When a user double-clicks a file, the `WorkspaceService` will provide the `EditorService` with the file's content. The `PopupEditor` will open with this content. On "Save," the `EditorService` will notify the `WorkspaceService` to update the `VirtualFile`'s `editedContent` and `isDirty` flag in memory. **No disk writes will occur.**
+* **`HiveService` (`lib/core/persistence`)**: A simple wrapper around Hive responsible for initializing boxes and
+  providing a clean API (`read`, `write`) for repositories.
+* **`VirtualNode` Models (`lib/core/models`)**: These are the atoms of our application.
+    * `VirtualFile`: Represents any file, whether from disk, pasted, or created in-app. It holds its path, status (
+      `isDirty`, `isCustom`), and content (`originalContent`, `editedContent`).
+    * `VirtualDirectory`: A container for other `VirtualNode`s, forming the tree structure.
+* **`WorkspaceService` (`lib/features/workspace/service`)**: The **brain** of the application.
+    * Manages the list of open tabs (`TabState`).
+    * Holds the VFS tree for the currently active tab.
+    * Contains all business logic for adding, removing, and modifying nodes in the tree.
+    * Orchestrates persistence by communicating with `WorkspaceRepository`.
+* **`EditorService` (`lib/features/editor/service`)**: The liaison to the Monaco editor.
+    * Manages the lifecycle of Monaco instances (both the main view and popups).
+    * Provides a simple Dart API to interact with the JavaScript world of the editor (e.g., `setContent`,
+      `formatDocument`).
+* **`ContentAssembler` (`lib/features/editor/service`)**: A pure, stateless utility.
+    * Its only job is to take a list of selected `VirtualFile`s and produce the final, perfectly formatted Markdown
+      string for the output view and clipboard.
 
----
+### 3. Phased Development Roadmap
 
-### 📋 Implementation Plan & Task Breakdown
+We will build the application in three distinct phases.
 
-Here is a phased plan, with tasks clearly assigned to each developer.
+#### **Phase 1: Core Workflow Foundation (Week 1)**
 
-#### Phase 0: Core Setup (Both Developers)
+**Goal:** A user can drag a single folder, see its file tree, and copy the formatted content of one file.
 
-* **Task:** Initialize the new Flutter project.
-* **Task:** Set up the new folder structure.
-* **Task:** Implement the `HiveService` to initialize all necessary Hive boxes on app startup (`workspace`, `settings`).
-* **Task:** Create the `VirtualNode`, `VirtualFile`, and `VirtualDirectory` data models in `lib/core/models/`.
-* **Task:** Set up the basic `MaterialApp`, theme provider, and a placeholder `HomeScreen` that uses the `ResizableSplitter`.
+* **Milestones:**
+    * Basic Virtual File System (VFS) is functional for a single directory.
+    * `file_tree_view` is implemented and displays the VFS.
+    * A read-only Monaco editor can display content from a single selected file.
+    * The "Copy" button works for a single file's content.
 
----
+#### **Phase 2: Full Feature Implementation (Week 2)**
 
-#### Phase 1: Core Functionality (Week 1)
+**Goal:** Implement the complete feature set as defined in the requirements.
 
-**Developer A (Workspace & State)**
+* **Milestones:**
+    * **Tab System:** Multi-tab management is fully functional.
+    * **Persistence:** Sessions (tabs, files, edits) are saved to Hive and restored on app launch.
+    * **All Input Methods:** Mixed-path drag-and-drop, path pasting, and content pasting are implemented.
+    * **In-Memory Editing:** The popup editor is functional, and the "dirty" state (📝) is correctly managed and
+      persisted.
+    * **Content Extraction:** Support for `.docx`, `.pdf`, and `.xlsx` is added.
 
-* **Focus:** Implement the Virtual File System and basic file management.
-* **`WorkspaceService`:** Create the initial service. Implement the `addFromPath` method to handle a **single directory drop**. This involves creating the `VirtualNode` tree from the directory structure.
-* **`FileTreeView`:** Use the `file_tree_view` package to display the `VirtualNode` tree from the `WorkspaceService`.
-* **In-Memory Operations:** Implement the logic for creating (`New File`) and removing nodes from the tree. These operations should only affect the in-memory state within the `WorkspaceService`. Mark newly created files as "custom".
-* **State:** Use a `StateNotifierProvider` to expose the `WorkspaceService`. The `FileTreeView` should rebuild when the tree changes.
+#### **Phase 3: Polish, Performance & Edge Cases (Week 3)**
 
-**Developer B (Editor & Assembly)**
+**Goal:** Make the application robust, performant, and delightful to use.
 
-* **Focus:** Get a basic, functional editor and content assembly pipeline working.
-* **`ContentAssembler`:** Create the service. Implement the `buildMerged` method as per the requirements, but initially just for a **single file**.
-* **`EditorService` & `EditorPanel`:** Set up the right-hand panel. Get a basic Monaco editor instance running inside the `CombinedOutputView`. It should be **read-only** for now.
-* **"Copy to Clipboard":** Implement the copy button. When clicked, it should take the content from a *hard-coded sample file*, process it through the `ContentAssembler`, and copy it to the clipboard. This tests the assembly and copy part of the workflow.
+* **Milestones:**
+    * **Error Handling:** All specified edge cases (binary files, large files, symlinks, etc.) are handled gracefully.
+    * **Performance:** Progress indicators are implemented for long-running operations. The UI remains responsive under
+      load.
+    * **Advanced Features:** URL and Image (OCR) ingestion are implemented.
+    * **UI/UX Polish:** All UI elements are refined, animations are smooth, and the application feels cohesive and
+      professional.
+    * **Auto-Updater**: The update mechanism is tested and confirmed to be working reliably.
 
-**End of Phase 1 Goal:** A user can drag a single project folder, see the file tree, and the app can format and copy the content of a single file from that tree.
+### 4. Team Collaboration & Workflow
 
----
+* **Git Strategy:**
+    * `main`: Production releases only.
+    * `develop`: The primary integration branch. All feature branches merge into `develop`.
+    * `feature/workspace`: Branch for Dev A's work.
+    * `feature/editor`: Branch for Dev B's work.
+    * `feature/shared`: Branch for the Team Lead's work on shared components.
+* **Communication:** We will have a brief daily stand-up to discuss progress and blockers. Any changes to the "API"
+  between services (e.g., a new method needed in `WorkspaceService`) must be communicated immediately.
+* **Code Reviews:** All pull requests into the `develop` branch must be reviewed by at least one other team member. The
+  Team Lead has the final approval for merging. This ensures code quality and shared knowledge of the codebase.
+  Excellent. Here is the detailed, phased implementation plan specifically for the developer responsible for the *
+  *Editor and Content Presentation (Dev B)**.
 
-#### Phase 2: Enhancements (Week 2)
-
-**Developer A (Workspace & State)**
-
-* **Focus:** Implement the full tab system, persistence, and all input methods.
-* **Tab Management:**
-    * Implement the full `TabState` model (`@HiveType`).
-    * Enhance `WorkspaceService` to manage a list of `TabState` objects. Implement `addTab`, `removeTab`, `switchToTab`.
-    * Create the `WorkspaceRepository` to save and load the entire workspace state (list of `TabState` objects) from Hive.
-    * Implement session restoration on app startup.
-* **Input Methods:**
-    * Enhance the VFS logic to handle **mixed-location drops** (creating a Virtual Root).
-    * Implement "Smart Path Reconciliation."
-    * Implement the `pastePaths` and `pasteContent` features.
-* **State & UI:**
-    * Implement the UI for the tab bar.
-    * Implement the status indicators (✨, 📝, ❌) in the `FileTreeView` based on file state.
-    * Implement the "dirty" state warnings when closing a tab or removing a file with unsaved in-memory changes.
-
-**Developer B (Editor & Assembly)**
-
-* **Focus:** Connect the editor to the state and implement the full editing workflow.
-* **Connecting Editor to State:**
-    * The `CombinedOutputView` should now listen to the active tab in the `WorkspaceService`.
-    * When the selection in the `FileTreeView` changes, the `ContentAssembler` should be triggered to rebuild the combined output, which is then displayed in the read-only Monaco view.
-* **Popup Editor:**
-    * Create the `PopupEditor` widget, using a separate Monaco instance.
-    * On double-click in the `FileTreeView`, the `WorkspaceService` should notify the `EditorService` to show the popup with the file's content (either `editedContent` or `originalContent`).
-    * When the user saves in the popup, the `EditorService` updates the file's `editedContent` and `isDirty` flag in the `WorkspaceService`. **No disk I/O occurs.**
-* **Refresh Logic:** Implement the "Refresh" functionality. When triggered, it should discard in-memory edits (with a warning) and reload the content from disk for the selected file(s).
-
-**End of Phase 2 Goal:** The full core workflow is functional. Users can manage multiple collections in tabs, add files from any source, see the combined output, and edit individual files in-memory. The session is saved and restored on restart.
+This plan outlines your core responsibilities, tasks for each phase, and the specific APIs you will need from and
+provide to the rest of the team.
 
 ---
 
-#### Phase 3: Polish & Finalize (Week 3)
+### 📋 Plan for Developer B: Editor & Content Presentation
 
-**Developer A (Workspace & State)**
+Your mission is to create a flawless and intuitive editing and viewing experience. You are the owner of the Monaco
+editor integration, the final formatted output, and the mechanisms for content extraction from complex file types. Your
+world is primarily within `lib/features/editor/`.
 
-* **Focus:** Error handling and performance.
-* **Error Handling:** Implement robust handling for edge cases: binary files (reject with message), large files (>10MB warning), circular symlinks (skip with warning), non-existent paths on paste.
-* **Performance:** Implement progress indicators for dropping large folders. Ensure the UI remains responsive during large operations.
-* **Final Touches:** Refine the right-click context menu logic and ensure all actions are smooth.
+#### Your Core Responsibilities:
 
-**Developer B (Editor & Assembly)**
-
-* **Focus:** Polishing the editor experience and UI.
-* **Editor Polish:**
-    * Integrate Monaco for the popup editor if it's more performant and feature-rich than the alternative (`re_editor`).
-    * Implement all required keyboard shortcuts for actions like "Copy Content."
-* **UI Polish:**
-    * Ensure syntax highlighting is correctly mapped for all languages using `LanguageMapper`.
-    * Finalize the look and feel of the `EditorPanel` and `PopupEditor`, ensuring they match the app's theme.
-    * Ensure the `ContentAssembler` output format is pixel-perfect according to the requirements.
-
-**End of Phase 3 Goal:** The application is feature-complete, robust, performant, and polished, matching all requirements laid out in the document.
-Of course. Here is a comprehensive, three-part implementation plan designed for your team. Each plan details the responsibilities, phases, and collaboration points for each developer, ensuring everyone is aligned on the architecture and APIs from day one.
+* **Monaco Editor Integration**: Implementing and managing all Monaco editor instances (the main read-only view and the
+  editing popup).
+* **Content Assembly**: Building the service that takes raw file data and transforms it into the final, beautifully
+  formatted Markdown output.
+* **Advanced Content Extraction**: Handling the logic for parsing files like `.docx`, `.pdf`, `.xlsx`, and extracting
+  text from images via OCR.
 
 ---
 
-### 📋 Plan for Dev A: Workspace & State Management
+### Phase 1: The Monaco Core & Assembly Pipeline
 
-Your primary responsibility is the **application's brain**. You will own the entire data model, state management, and persistence layer. Your world revolves around the `WorkspaceService`, the Virtual File System (VFS), and Hive.
+**Goal:** Get a working, read-only editor on screen that can display perfectly formatted content from a test data set.
+This phase focuses on building your core components in isolation.
 
-#### Phase 1: The Virtual File Tree
+* **Task 1: Build the `ContentAssembler` Service.**
+    * Create the `ContentAssembler` class in `lib/features/editor/service/`.
+    * Implement its primary method: `String assemble(List<VirtualFile> files)`.
+    * **For now, create your own dummy `VirtualFile` objects for testing.** This decouples you from the Workspace team's
+      progress.
+    * Focus on perfecting the output format as per the requirements:
+        ```markdown
+        ## filename.ext
+        > Path: /path/to/file.ext
 
-**Focus:** Establish the core data structure and get a visual, interactive file tree on screen.
+        ```language
+        ... file content ...
+        ```
+        ---
+        ```
+    * Use the `LanguageMapper` (provided by the Team Lead in `lib/shared/utils/`) to get the correct language identifier
+      for the code block.
 
-* **Models:**
-    * Implement the abstract `VirtualNode` class.
-    * Create `VirtualFile` with fields for `path`, `content`, `isDirty`, and `isCustom`.
-    * Create `VirtualDirectory` with a `List<VirtualNode>` for its children.
-* **Service (`WorkspaceService`):**
-    * Create the initial service using Riverpod (`StateNotifier`). It will manage the state for a **single tab** for now.
-    * Implement `addDirectory(String path)`: Scans a directory and builds a VFS tree of `VirtualNode`s.
-    * Implement `createFile(String name, [VirtualDirectory parent])`: Creates a new, empty `VirtualFile` in the tree, marked as custom (✨).
-    * Implement `removeNode(VirtualNode node)`: Removes a file or folder from the in-memory tree.
-* **UI (`FileTreeView`):**
-    * Use the `file_tree_view` package to render the VFS tree from the `WorkspaceService`.
-    * Ensure the view is read-only and simply reflects the state. Clicks and interactions can be placeholders for now.
+* **Task 2: Implement the `CombinedOutputView` Widget.**
+    * Create this widget in `lib/features/editor/ui/widgets/`.
+    * Integrate a **read-only** Monaco editor instance. You can refactor the existing WebView implementation for this.
+    * The widget should accept a `String` of content.
+    * In a parent `EditorPanel` widget, feed the output of your `ContentAssembler` (using your dummy data) into this
+      view to see a live preview.
 
-**API & Collaboration:**
-* You will expose a `workspaceProvider` that Dev B and the Team Lead can watch.
-* Your service will expose a stream or value of the current VFS tree (`List<VirtualNode>`).
-* **For Dev B:** Provide a way to get a specific `VirtualFile` by its path to be used for testing the `ContentAssembler`.
+* **Task 3: Implement Core "Copy" Functionality.**
+    * In the main UI (the Team Lead will provide a placeholder), add the "Copy to Clipboard" button logic.
+    * On press, it should trigger your `ContentAssembler` and copy the resulting string to the system clipboard. This
+      validates the entire output pipeline.
 
----
+**API & Collaboration Contracts (Phase 1):**
 
-### 🎨 Plan for Dev B: Editor & Content Presentation
-
-Your primary responsibility is the **application's hands and eyes**. You will own everything the user sees and interacts with concerning code and text, including the Monaco editor integration and the final output assembly.
-
-#### Phase 1: The Monaco Core
-
-**Focus:** Get a working Monaco editor on screen and establish the content formatting pipeline.
-
-* **Service (`ContentAssembler`):**
-    * Implement the service that takes a `List<VirtualFile>` and builds the final, formatted Markdown string as specified in the requirements.
-    * For this phase, you can create dummy `VirtualFile` objects for testing. Focus on getting the `## FileName`, `> Path: ...`, and ```language ... ``` formatting perfect.
-* **UI (`CombinedOutputView`):**
-    * Integrate a **read-only** Monaco editor instance.
-    * Load it with a hardcoded example generated by your `ContentAssembler` to verify the output and syntax highlighting.
-* **Core Action (`Copy to Clipboard`):**
-    * Implement the copy functionality. A button click should trigger the `ContentAssembler` (with your dummy data) and copy the result to the clipboard.
-
-**API & Collaboration:**
-* You will create an `EditorService` that will eventually manage all Monaco instances.
-* **For Dev A:** You need the `VirtualFile` model to build your `ContentAssembler`. You will consume the `isDirty` and `isCustom` flags in a later phase to show status indicators.
-* **For Team Lead:** You will provide the `CombinedOutputView` widget to be placed in the right-hand panel of the main UI.
+* **You Provide:**
+    * To the Team Lead: The `EditorPanel` widget, which contains your `CombinedOutputView`, ready to be placed in the
+      right-hand side of the `ResizableSplitter`.
+* **You Need:**
+    * From Dev A (Workspace): The final class definition for `VirtualFile` so you can replace your dummy objects.
+    * From Team Lead: The shared `LanguageMapper` utility.
 
 ---
 
-### 🧩 My Plan (Team Lead): Integration & Shared Components
+### Phase 2: Integration, Interaction & Advanced Parsing
 
-My role is to be the **architect and integrator**. I will build the application shell, create shared utilities, and ensure that the work from Dev A and Dev B merges seamlessly at each stage.
+**Goal:** Connect your editor components to the live application state from Dev A, implement the file editing workflow,
+and add support for complex document types.
 
-#### Phase 1: Building the Scaffold
+* **Task 1: Connect to the Live Workspace.**
+    * Modify your `EditorPanel` to be a `ConsumerWidget`.
+    * Watch the `workspaceProvider` from Dev A to get the list of currently selected files from the active tab.
+    * Whenever the selection changes, automatically re-run your `ContentAssembler` and update the `CombinedOutputView`
+      with the new content.
 
-**Focus:** Create the application's structure and provide the sandboxes for the other developers to work in.
+* **Task 2: Implement the `PopupEditor`.**
+    * Create a new stateful widget, `PopupEditor`, which will contain a **writable** Monaco instance.
+    * Expose a method in your `EditorService` like `Future<void> showEditorFor(VirtualFile file)`. This method will be
+      called by the `WorkspaceService` when a file is double-clicked.
+    * The popup should display the file's content (prefer `editedContent` if it exists, otherwise `originalContent`).
+    * **Implement the Save Flow:**
+        * On "Save", the popup calls a method like `editorService.updateFile(file.id, newContent)`.
+        * Your `EditorService` then calls the method provided by Dev A:
+          `workspaceService.updateFileContent(file.id, newContent)`. This marks the file as dirty (📝) in the central
+          state.
+    * **Note:** You are not responsible for the disk I/O, only for updating the state via the `WorkspaceService`.
 
-* **Project Setup:**
-    * Initialize the new Git repository with a `main`, `develop`, and feature branches (`feature/workspace`, `feature/editor`).
-    * Set up the complete folder structure as defined in the plan.
-    * Configure `main.dart` and the `app.dart` to initialize core services.
-* **Core Services (`lib/core`):**
-    * Implement the `HiveService` and initialize it in `main.dart`. This service will provide a simple API for other services to get Hive boxes (`getWorkspaceBox()`, `getSettingsBox()`).
-* **UI Shell (`lib/features/app`):**
-    * Create the main `HomeScreen` widget.
-    * Implement the `ResizableSplitter` to create the two-panel layout.
-    * Provide placeholder `Container`s where `FileTreeView` (from Dev A) and `EditorPanel` (from Dev B) will go.
-    * Build the main `AppBar`.
-* **Integration:**
-    * At the end of the week, I will merge `feature/workspace` and `feature/editor` into `develop`.
-    * I will connect Dev A's `FileTreeView` to the left panel and Dev B's `CombinedOutputView` to the right panel.
+* **Task 3: Implement Advanced Content Parsers.**
+    * Integrate the document processing libraries (`archive`, `xml`, `syncfusion_flutter_pdf`, `excel`) into a new or
+      existing service (e.g., `FileContentExtractor`).
+    * Update the file loading logic: when a file with a `.docx`, `.pdf`, or `.xlsx` extension is encountered, use the
+      appropriate library to convert its content to Markdown or plain text before it's stored in the `VirtualFile`'s
+      content field.
 
-**Key Refactoring Note for the Team:**
-* **Hive is King:** I will remove **all** instances of `shared_preferences`. The `EditorSettings` and `ThemeMode` will be refactored to use a new `SettingsService` that is backed by our `HiveService`. This ensures a single, reliable source for all persisted data.
+**API & Collaboration Contracts (Phase 2):**
 
-By following these parallel plans, we can ensure modular development while staying aligned on the final architecture. Regular check-ins will be key to making sure our API contracts remain solid. Let's get started!
+* **You Provide:**
+    * An `EditorService` with a public method `showEditorFor(VirtualFile file)` that the `WorkspaceService` can call.
+* **You Need:**
+    * From Dev A (Workspace):
+        * A stream/notifier of the `List<VirtualFile>` that are currently selected in the active tab.
+        * A method `workspaceService.updateFileContent(String fileId, String newContent)` to call when saving an edit.
+        * A method `workspaceService.revertFile(String fileId)` to call for the "Refresh" action.
+
+---
+
+### Phase 3: Polish & Future-Forward Features
+
+**Goal:** Refine the editor experience, implement OCR and URL ingestion, and ensure all features are robust and
+polished.
+
+* **Task 1: Implement URL and Image (OCR) Ingestion.**
+    * Extend your content extraction logic.
+    * For nodes identified as URLs, use an HTTP client to fetch the raw content. Work with Dev A to handle different URL
+      types (e.g., raw GitHub links vs. general web pages).
+    * For nodes identified as images, use the `google_ml_kit_text_recognition` package to perform OCR and populate the
+      `VirtualFile`'s content with the extracted text.
+
+* **Task 2: Polish the Editor Experience.**
+    * Implement keyboard shortcuts for essential actions like "Copy Content".
+    * Finalize the UI/UX of the `PopupEditor`, ensuring it has clear Save/Cancel buttons and provides a good editing
+      experience.
+    * Rigorously test the `LanguageMapper` integration to ensure a wide variety of code files have correct syntax
+      highlighting in the final output.
+
+* **Task 3: Performance & Error Handling.**
+    * Ensure that parsing large or complex files (like a 100-page PDF) shows a loading indicator and doesn't freeze the
+      UI.
+    * If a parser fails (e.g., for a corrupted `.docx` or an encrypted `.pdf`), gracefully store an error message in the
+      `VirtualFile`'s `error` field, which should be displayed to the user.
+
+**API & Collaboration Contracts (Phase 3):**
+
+* **You Need:**
+    * From Dev A (Workspace): A way to identify if a `VirtualNode` is a URL or an image so your services can apply the
+      correct ingestion logic.
+      Excellent. Here is the detailed, phased implementation plan for the developer responsible for the **Workspace &
+      State Management (Dev A)**.
+
+This plan outlines your core responsibilities, a clear path from foundation to full features, and the specific APIs you
+will provide to the rest ofthe team.
+
+---
+
+### 📋 Plan for Developer A: Workspace & State Management
+
+Your mission is to be the **architect of the application's memory and logic**. You are responsible for the entire data
+layer, state management, and persistence. Your world revolves around the `WorkspaceService`, the Virtual File System (
+VFS) models, and the `WorkspaceRepository` that communicates with Hive.
+
+#### Your Core Responsibilities:
+
+* **Data Modeling**: Designing the `VirtualNode` hierarchy and the `TabState` model for persistence.
+* **State Management**: Building the `WorkspaceService` (using Riverpod) as the central brain that manages all
+  application state.
+* **VFS Logic**: Implementing all rules for adding, removing, and merging files and directories in the virtual tree.
+* **Persistence**: Creating the repository layer to reliably save and restore the entire user session using Hive.
+
+---
+
+### Phase 1: The Virtual File Tree Foundation
+
+**Goal:** Establish the core data structure and get a visual, interactive file tree on screen for a single,
+non-persistent tab. This phase is about building a solid foundation.
+
+* **Task 1: Design the Core Data Models (`lib/core/models`).**
+    * Create an `abstract class VirtualNode` with common properties (`id`, `name`, `parent`).
+    * Implement `class VirtualDirectory extends VirtualNode` which contains a `List<VirtualNode> children`.
+    * Implement `class VirtualFile extends VirtualNode` with the following fields:
+        * `String originalPath` (the path on disk, can be empty for custom files)
+        * `String? originalContent` (loaded from disk)
+        * `String? editedContent` (in-memory changes)
+        * `bool isDirty` (defaults to `false`)
+        * `bool isCustom` (defaults to `false`, `true` for files made in-app)
+
+* **Task 2: Build the Initial `WorkspaceService`.**
+    * Create your service as a `StateNotifier` that manages a state object containing a `List<VirtualNode>` (the VFS
+      tree). For this phase, you will manage only one tree (a single tab).
+    * Implement `Future<void> addDirectory(String path)`: This method will scan the given directory path, create the
+      corresponding `VirtualNode` tree structure, and update the service's state. It does *not* need to read file
+      content yet.
+    * Implement `void createFileInTree()`: Adds a new, empty `VirtualFile` to the tree with `isCustom: true`.
+    * Implement `void removeNodeFromTree(String nodeId)`: Removes a node and its children from the VFS.
+
+* **Task 3: Implement the `FileTreeView` Widget (`lib/features/workspace/ui/widgets`).**
+    * As a `ConsumerWidget`, watch your `workspaceProvider`.
+    * Use the `file_tree_view` package to render the VFS tree from the service.
+    * Implement `onNodeTap` to update a `selectedNodeId` in your service's state.
+    * Lay the groundwork for a right-click context menu (e.g., using `InkWell`'s `onSecondaryTap`). Implement the "New
+      File" and "Remove" actions, which call the corresponding methods in your service.
+
+**API & Collaboration Contracts (Phase 1):**
+
+* **You Provide:**
+    * To the Team Lead: The main `workspaceProvider` and the `FileTreeView` widget to be placed in the left UI panel.
+    * To Dev B: The `VirtualFile` class definition, and a way for them to get a single file's state to begin testing
+      their `ContentAssembler`.
+* **You Need:**
+    * From Team Lead: The initialized project with Riverpod and the Hive service stub.
+
+---
+
+### Phase 2: Full State, Persistence & Advanced Inputs
+
+**Goal:** Evolve the service to manage multiple tabs, persist the entire session to disk using Hive, and handle all
+specified input methods. This is the most intensive phase.
+
+* **Task 1: Implement Full Tab Management.**
+    * Create the `TabState` model in `lib/features/workspace/data/models/`. It should contain the VFS tree, tab name,
+      ID, etc. **Annotate it for Hive (`@HiveType`, `@HiveField`).**
+    * Refactor your `WorkspaceService` to manage a `List<TabState>` and an `activeTabId`.
+    * Implement the public API for tab management: `addTab()`, `closeTab(tabId)`, `switchToTab(tabId)`,
+      `renameTab(tabId, newName)`.
+
+* **Task 2: Build the Persistence Layer.**
+    * Create the `WorkspaceRepository` in `lib/features/workspace/data/`.
+    * This repository will have two methods: `saveWorkspace(List<TabState> tabs)` and
+      `Future<List<TabState>> loadWorkspace()`. It will use the `HiveService` provided by the Team Lead.
+    * Integrate this into your `WorkspaceService`:
+        * On initialization, call `loadWorkspace()` to restore the previous session.
+        * After any significant state change (adding/removing files, switching tabs, editing content), call
+          `saveWorkspace()`. Use a debouncer to avoid excessive writes.
+
+* **Task 3: Implement Advanced Input & VFS Logic.**
+    * **Mixed-Location Drops**: Modify your file-adding logic to detect when files/folders from different parent
+      directories are added. When this happens, create a "Virtual Root" directory at the top of your VFS tree to contain
+      them.
+    * **Smart Path Reconciliation**: Implement the logic to correctly merge trees when a parent directory is dropped
+      over an existing child.
+    * **Paste Handling**: Implement `addFromPastedPaths(String text)` and `addFromPastedContent(String text)` in your
+      `WorkspaceService`.
+
+* **Task 4: Implement State & Status Indicators.**
+    * Your `VirtualFile` model already has the necessary flags (`isDirty`, `isCustom`).
+    * Expose this state through your provider.
+    * In your `FileTreeView`, work with the Team Lead to render the UI icons (✨, 📝, ❌) based on the state of each node.
+      The `isNotFound` status (`❌`) will be determined during session restoration if a file path no longer exists.
+    * Implement the "dirty" state warnings when `closeTab` is called for a tab that contains dirty files.
+
+**API & Collaboration Contracts (Phase 2):**
+
+* **You Provide:**
+    * A `workspaceProvider` that now exposes the full list of tabs and the active tab's state.
+    * A stream/notifier of the `List<VirtualFile>` that are currently *selected* in the `FileTreeView` of the active
+      tab. Dev B needs this for the `CombinedOutputView`.
+    * A public method `updateFileContent(String fileId, String newContent)` for Dev B's popup editor to call on save.
+    * A public method `revertFile(String fileId)` for Dev B's refresh action.
+
+---
+
+### Phase 3: Robustness, Performance & Advanced Ingestion
+
+**Goal:** Make your services bulletproof by handling all edge cases and performance bottlenecks. Add support for new
+content types.
+
+* **Task 1: Implement Edge Case Handling.**
+    * **Binary/Large Files:** In your file scanning/adding logic, check file sizes and types. For unsupported binaries,
+      create a `VirtualFile` but set an error message in its `error` field instead of loading content. For large files,
+      populate the content but perhaps also set a warning flag.
+    * **Symbolic Links:** When recursively scanning directories, use `dart:io`'s `Link` class to check
+      `Link.resolveSymbolicLinks()` and maintain a set of visited paths to detect and break cycles.
+    * **Error Indicator (`❌`):** Ensure this is fully implemented for files that are missing on session restoration.
+
+* **Task 2: Add Support for URL & Image Nodes.**
+    * Collaborate with Dev B on a system to handle new content types. A good approach is to add a `FileType` enum to
+      `VirtualFile` (e.g., `local`, `custom`, `url`, `image`).
+    * When a URL or image is added (via paste or future UI), create a `VirtualFile` with the appropriate type and its
+      path set to the URL or image location. You are responsible for adding the node to the tree; Dev B is responsible
+      for fetching/parsing its content.
+
+* **Task 3: Performance Optimization.**
+    * For large directory drops or path pastes, update the state of the `WorkspaceService` with a progress indicator
+      object (e.g., `double progress`, `String currentAction`).
+    * The Team Lead will use this to display a progress bar in the UI. Ensure your file scanning and processing happen
+      in isolates or are chunked to avoid freezing the UI.
+
+**API & Collaboration Contracts (Phase 3):**
+
+* **You Provide:**
+    * A robust `VirtualFile` model that can represent any type of content and its state (including errors).
+    * A progress stream/notifier that the UI can listen to during heavy operations.
+
+Excellent. Here is the detailed, phased implementation plan for your role as the **Team Lead, Integrator, and Owner of
+Shared Components**.
+
+This plan outlines your responsibilities, which focus on building the application's foundation, creating shared services
+and widgets, and weaving together the features developed by Dev A and Dev B into a cohesive, polished final product.
+
+---
+
+### 📋 My Plan (Team Lead): Integration, Shared Components & Final Polish
+
+My mission is to act as the **project architect and integrator**. I will build the application shell, create the shared
+services and utilities that empower the other developers, and be responsible for the final integration, quality
+assurance, and release of the product.
+
+#### My Core Responsibilities:
+
+* **Project Scaffolding**: Setting up the project, folder structure, and Git workflow.
+* **Core Services**: Implementing foundational services like persistence (`Hive`) and settings management.
+* **UI Shell**: Building the main application window, tab bar, and panel layout.
+* **Shared Components**: Creating reusable widgets and utilities that are used across multiple features.
+* **Integration & Code Review**: Merging feature branches and ensuring all parts of the application work together
+  seamlessly.
+* **Release Management**: Handling the build, packaging, and auto-updater configuration.
+
+---
+
+### Phase 1: Building the Scaffold & Foundation
+
+**Goal:** Create a functional application shell and all foundational components, providing a clear and stable platform
+for Dev A and Dev B to begin their work.
+
+* **Task 1: Project & Repository Setup.**
+    * Initialize the new Git repository.
+    * Establish the branching strategy:
+        * `main`: For tagged releases only.
+        * `develop`: The primary integration branch where features are merged.
+        * `feature/workspace`: For Dev A.
+        * `feature/editor`: For Dev B.
+    * Create the complete folder structure as defined in the General Plan. This provides a clear home for everyone's
+      code.
+
+* **Task 2: Implement Core Services (`lib/core`).**
+    * Implement the `HiveService`. This will involve:
+        * Adding `hive` and `hive_flutter` to `pubspec.yaml`.
+        * Writing an `init()` method in `main.dart` to set up Hive, register all `HiveType` adapters (which Dev A will
+          create for `TabState`), and open the required boxes (`workspace`, `settings`).
+        * Providing a clean, app-wide service for accessing the opened boxes.
+
+* **Task 3: Build the UI Shell (`lib/features/app`).**
+    * Create the main `HomeScreen` widget which will serve as the top-level UI.
+    * Implement the main `AppBar`, including the title and placeholder action buttons.
+    * Implement the `ResizableSplitter` widget (`lib/shared/widgets`) to create the two-panel layout.
+    * Inside the splitter, place named `Container` placeholders for `WorkspaceView` (left) and `EditorPanel` (right).
+
+* **Task 4: Create Shared Utilities (`lib/shared/utils`).**
+    * Implement the `LanguageMapper` and `ExtensionCatalog` classes. These are critical, shared resources needed by both
+      Dev A (for file filtering) and Dev B (for syntax highlighting) and should be managed centrally by you.
+
+* **Task 5: End-of-Phase Integration.**
+    * Review and merge Dev A's `feature/workspace` branch into `develop`.
+    * Review and merge Dev B's `feature/editor` branch into `develop`.
+    * Replace the placeholder containers in `HomeScreen` with the actual `FileTreeView` from Dev A and the `EditorPanel`
+      from Dev B.
+    * **Result:** A running app with a visible (but disconnected) file tree on the left and a read-only editor on the
+      right.
+
+---
+
+### Phase 2: Weaving Features Together
+
+**Goal:** Connect the core components, implement the tabbed interface, and build out the application's settings and
+global input mechanisms.
+
+* **Task 1: Implement the Tab Bar UI.**
+    * In `WorkspaceView` (Dev A's primary panel), build the UI for the tab bar.
+    * This UI will be a `ConsumerWidget` that watches Dev A's `workspaceProvider`.
+    * It will display the list of tabs, highlight the active one, and provide UI controls (+) for adding a new tab.
+    * Connect the UI controls to the methods on the `WorkspaceService` (`addTab`, `switchToTab`, `renameTab`,
+      `closeTab`).
+
+* **Task 2: Build the Settings Service & Screen.**
+    * **Crucial Refactor:** Create a new `SettingsService` backed by your `HiveService`.
+    * This service will manage loading and saving the `EditorSettings` and `ThemeMode`. This officially replaces all
+      usage of `shared_preferences`.
+    * Build the `SettingsScreen` UI, allowing users to modify the theme.
+    * Expose the settings via a new `settingsProvider` so that Dev B's editor components can react to changes in font
+      size, theme, etc.
+
+* **Task 3: Implement Global Input Handling.**
+    * Wrap the `HomeScreen` with the `DropTarget` widget.
+    * In the `onDragDone` callback, you will call the methods on Dev A's `WorkspaceService` (e.g., `addFromPaths()`).
+    * Implement a global key listener (e.g., `Focus` or `RawKeyboardListener`) to detect `Ctrl+V` pastes. When detected,
+      you will analyze the clipboard content and call the appropriate `WorkspaceService` method (`addFromPastedPaths` or
+      `addFromPastedContent`).
+
+**API & Collaboration Contracts (Phase 2):**
+
+* **You Provide:**
+    * A fully functional `SettingsScreen` and a `settingsProvider` for app-wide configuration.
+    * A UI shell that correctly routes user input (drops, pastes) to the `WorkspaceService`.
+* **You Need:**
+    * From Dev A: The complete API on `WorkspaceService` for managing tabs and handling all input types.
+    * From Dev B: The `PopupEditor` widget, which you can help integrate into the main app overlay if needed.
+
+---
+
+### Phase 3: Final Polish, Shipping & Beyond
+
+**Goal:** Finalize all UI/UX details, implement the auto-updater, and prepare the application for release.
+
+* **Task 1: Implement the Auto-Updater UI & Logic.**
+    * Build the "Updates" tab within the `SettingsScreen`.
+    * Provide a "Check for Updates" button that calls the `autoUpdaterService`.
+    * Listen to events from the `autoUpdaterService` to show user-facing notifications (e.g., "An update has been
+      downloaded and will be installed on restart.").
+
+* **Task 2: App-wide UI/UX Polish.**
+    * Conduct a full review of the application, ensuring consistent design, padding, and behavior.
+    * Add any final animations or transitions to make the app feel responsive and modern.
+    * Implement the final application icons for both macOS and Windows.
+
+* **Task 3: Quality Assurance & Final Integration.**
+    * Lead the testing effort, running through all test cases outlined in the requirements document on both platforms.
+    * Perform the final code reviews for all feature branches before merging into `main` for release. Resolve any final
+      merge conflicts.
+
+* **Task 4: Build & Release.**
+    * Manage the release build process using `flutter build`.
+    * Create the `appcast.xml` file required for the auto-updater to function. Host it on GitHub Pages as specified.
+    * Create a new release on GitHub, attaching the built application installers (`.dmg` or `.zip` for macOS, `.msi` or
+      `.zip` for Windows).
+    * Write the release notes, celebrating the launch of ContextCollector 2.0!
