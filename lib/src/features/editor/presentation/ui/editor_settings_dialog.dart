@@ -1,4 +1,5 @@
 import 'package:context_collector/src/features/editor/domain/editor_settings.dart';
+import 'package:context_collector/src/features/editor/services/editor_settings_service.dart';
 import 'package:context_collector/src/shared/theme/extensions.dart';
 import 'package:flutter/material.dart';
 
@@ -204,7 +205,7 @@ class _EditorSettingsDialogState extends State<EditorSettingsDialog> {
                 const SizedBox(width: 8),
                 FilledButton(
                   onPressed: () async {
-                    await _settings.save();
+                    await EditorSettingsService.save(_settings);
                     if (mounted) {
                       Navigator.of(context).pop(_settings);
                     }

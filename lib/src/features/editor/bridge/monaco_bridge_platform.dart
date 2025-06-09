@@ -6,6 +6,8 @@ import 'dart:io';
 
 import 'package:context_collector/src/features/editor/bridge/platform_webview_controller.dart';
 import 'package:context_collector/src/features/editor/domain/editor_settings.dart';
+import 'package:context_collector/src/features/editor/domain/monaco_scripts.dart';
+import 'package:context_collector/src/features/editor/utils/monaco_settings_converter.dart';
 import 'package:dart_helper_utils/dart_helper_utils.dart';
 import 'package:flutter/foundation.dart';
 
@@ -158,16 +160,7 @@ class MonacoBridgePlatform extends ChangeNotifier {
 
     if (_webViewController != null) {
       // Add debugging to check Monaco initialization
-      _webViewController!.runJavaScript('''
-        console.log('[MonacoBridge] Editor ready check:');
-        console.log('  - window.editor exists:', !!window.editor);
-        console.log('  - setEditorContent exists:', !!window.setEditorContent);
-        console.log('  - setEditorLanguage exists:', !!window.setEditorLanguage);
-        console.log('  - setEditorOptions exists:', !!window.setEditorOptions);
-        if (window.editor) {
-          console.log('  - editor model exists:', !!window.editor.getModel());
-        }
-      ''').catchError(
+      _webViewController!.runJavaScript(MonacoScripts.editorReadyCheck).catchError(
         (dynamic e) {
           debugPrint(
               '[MonacoBridgePlatform] Error checking Monaco readiness: $e');
@@ -193,40 +186,7 @@ class MonacoBridgePlatform extends ChangeNotifier {
       return;
     }
 
-    const script = '''
-      console.log('[Stats Script] Injecting live stats monitoring');
-      if (window.__liveStatsHooked) {
-        console.log('[Stats Script] Already hooked');
-      } else {
-        window.__liveStatsHooked = true;
-        if (window.editor) {
-          const sendStats = () => {
-            const model = window.editor.getModel();
-            const selection = window.editor.getSelection();
-            const selections = window.editor.getSelections() || [];
-            
-            if (!model || !selection) return;
-            
-            const stats = {
-              event: 'stats',
-              lineCount: model.getLineCount(),
-              charCount: model.getValueLength(),
-              selLines: selection.isEmpty() ? 0 : selection.endLineNumber - selection.startLineNumber + 1,
-              selChars: selection.isEmpty() ? 0 : model.getValueInRange(selection).length,
-              caretCount: selections.length
-            };
-            
-            if (window.flutterChannel && window.flutterChannel.postMessage) {
-              window.flutterChannel.postMessage(JSON.stringify(stats));
-            }
-          };
-          
-          window.editor.onDidChangeModelContent(sendStats);
-          window.editor.onDidChangeCursorSelection(sendStats);
-          sendStats(); // Initial call
-        }
-      }
-    ''';
+    const script = MonacoScripts.liveStatsMonitoring;
 
     try {
       await _webViewController!.runJavaScript(script);
@@ -295,15 +255,9 @@ class MonacoBridgePlatform extends ChangeNotifier {
     if (_webViewController != null) {
       try {
         // First, check if Monaco is properly initialized
-        await _webViewController!.runJavaScript('''
-          if (!window.editor) {
-            console.error('[MonacoBridge] Editor not found when setting language');
-          } else if (!window.setEditorLanguage) {
-            console.error('[MonacoBridge] setEditorLanguage function not found');
-          } else {
-            console.log('[MonacoBridge] Setting language to: $language');
-          }
-        ''');
+        await _webViewController!.runJavaScript(
+          MonacoScripts.languageCheckScript(language),
+        );
 
         await _webViewController!.runJavaScript(
           'window.setEditorLanguage && window.setEditorLanguage("$language")',
@@ -311,12 +265,7 @@ class MonacoBridgePlatform extends ChangeNotifier {
         debugPrint('[MonacoBridgePlatform] Language set to: $language');
 
         // Verify the language was set
-        await _webViewController!.runJavaScript('''
-          if (window.editor && window.editor.getModel()) {
-            const currentLang = window.editor.getModel().getLanguageId();
-            console.log('[MonacoBridge] Current language after setting: ' + currentLang);
-          }
-        ''');
+        await _webViewController!.runJavaScript(MonacoScripts.verifyLanguageScript);
       } catch (e) {
         debugPrint('[MonacoBridgePlatform] Error setting language: $e');
       }
@@ -422,83 +371,51 @@ class MonacoBridgePlatform extends ChangeNotifier {
   // EDITOR ACTIONS
   // ========================================
 
-  /// Formats the document
-  Future<void> format() async {
+  /// Helper method to execute Monaco editor actions
+  Future<void> _executeEditorAction(String actionId) async {
     if (_webViewController != null && _isReady) {
       await _webViewController!.runJavaScript(
-        'window.editor?.getAction("editor.action.formatDocument")?.run()',
+        MonacoScripts.executeActionScript(actionId),
       );
     }
   }
+
+  /// Formats the document
+  Future<void> format() async => _executeEditorAction('editor.action.formatDocument');
 
   /// Finds text in the editor
-  Future<void> find() async {
-    if (_webViewController != null && _isReady) {
-      await _webViewController!.runJavaScript(
-        'window.editor?.getAction("actions.find")?.run()',
-      );
-    }
-  }
+  Future<void> find() async => _executeEditorAction('actions.find');
 
   /// Replace text in the editor
-  Future<void> findAndReplace() async {
-    if (_webViewController != null && _isReady) {
-      await _webViewController!.runJavaScript(
-        'window.editor?.getAction("editor.action.startFindReplaceAction")?.run()',
-      );
-    }
-  }
+  Future<void> findAndReplace() async => 
+      _executeEditorAction('editor.action.startFindReplaceAction');
 
   /// Goes to a specific line
   Future<void> goToLine([int? line]) async {
     if (_webViewController != null && _isReady) {
       if (line != null) {
-        await _webViewController!.runJavaScript(
-          'if (window.editor) { window.editor.revealLineInCenter($line); window.editor.setPosition({ lineNumber: $line, column: 1 }); }',
-        );
+        await _webViewController!.runJavaScript(MonacoScripts.goToLineScript(line));
       } else {
-        await _webViewController!.runJavaScript(
-          'window.editor?.getAction("editor.action.gotoLine")?.run()',
-        );
+        await _executeEditorAction('editor.action.gotoLine');
       }
     }
   }
 
   /// Toggles line comments
-  Future<void> toggleLineComment() async {
-    if (_webViewController != null && _isReady) {
-      await _webViewController!.runJavaScript(
-        'window.editor?.getAction("editor.action.commentLine")?.run()',
-      );
-    }
-  }
+  Future<void> toggleLineComment() async => 
+      _executeEditorAction('editor.action.commentLine');
 
   /// Toggles block comments
-  Future<void> toggleBlockComment() async {
-    if (_webViewController != null && _isReady) {
-      await _webViewController!.runJavaScript(
-        'window.editor?.getAction("editor.action.blockComment")?.run()',
-      );
-    }
-  }
+  Future<void> toggleBlockComment() async => 
+      _executeEditorAction('editor.action.blockComment');
 
   /// Triggers auto-completion
-  Future<void> triggerSuggest() async {
-    if (_webViewController != null && _isReady) {
-      await _webViewController!.runJavaScript(
-        'window.editor?.getAction("editor.action.triggerSuggest")?.run()',
-      );
-    }
-  }
+  Future<void> triggerSuggest() async => 
+      _executeEditorAction('editor.action.triggerSuggest');
 
   /// Shows the command palette
-  Future<void> showCommandPalette() async {
-    if (_webViewController != null && _isReady) {
-      await _webViewController!.runJavaScript(
-        'window.editor?.getAction("editor.action.quickCommand")?.run()',
-      );
-    }
-  }
+  Future<void> showCommandPalette() async => 
+      _executeEditorAction('editor.action.quickCommand');
 
   /// Scrolls to top
   Future<void> scrollToTop() async {
@@ -512,52 +429,21 @@ class MonacoBridgePlatform extends ChangeNotifier {
   /// Scrolls to bottom
   Future<void> scrollToBottom() async {
     if (_webViewController != null && _isReady) {
-      await _webViewController!.runJavaScript(
-        '''
-        if (window.editor) {
-          const lineCount = window.editor.getModel()?.getLineCount() || 1;
-          window.editor.revealLine(lineCount);
-        }
-        ''',
-      );
+      await _webViewController!.runJavaScript(MonacoScripts.scrollToBottomScript);
     }
   }
 
   /// Fold all code blocks
-  Future<void> foldAll() async {
-    if (_webViewController != null && _isReady) {
-      await _webViewController!.runJavaScript(
-        'window.editor?.getAction("editor.foldAll")?.run()',
-      );
-    }
-  }
+  Future<void> foldAll() async => _executeEditorAction('editor.foldAll');
 
   /// Unfold all code blocks
-  Future<void> unfoldAll() async {
-    if (_webViewController != null && _isReady) {
-      await _webViewController!.runJavaScript(
-        'window.editor?.getAction("editor.unfoldAll")?.run()',
-      );
-    }
-  }
+  Future<void> unfoldAll() async => _executeEditorAction('editor.unfoldAll');
 
   /// Select all content
-  Future<void> selectAll() async {
-    if (_webViewController != null && _isReady) {
-      await _webViewController!.runJavaScript(
-        'window.editor?.getAction("editor.action.selectAll")?.run()',
-      );
-    }
-  }
+  Future<void> selectAll() async => _executeEditorAction('editor.action.selectAll');
 
   /// Execute a custom Monaco action by ID
-  Future<void> executeAction(String actionId) async {
-    if (_webViewController != null && _isReady) {
-      await _webViewController!.runJavaScript(
-        'window.editor?.getAction("$actionId")?.run()',
-      );
-    }
-  }
+  Future<void> executeAction(String actionId) async => _executeEditorAction(actionId);
 
   /// Execute a custom keybinding
   Future<void> executeKeybinding(String keybinding) async {
@@ -572,25 +458,8 @@ class MonacoBridgePlatform extends ChangeNotifier {
   Future<Map<String, dynamic>> getEditorStats() async {
     if (_webViewController != null && _isReady) {
       try {
-        final result =
-            await _webViewController!.runJavaScriptReturningResult(r"""
-          JSON.stringify({
-            lineCount: window.editor?.getModel()?.getLineCount() || 0,
-            characterCount: window.editor?.getValue()?.length || 0,
-            wordCount: (window.editor?.getValue()?.match(/\b\w+\b/g) || []).length,
-            selectedText: window.editor?.getSelection()?.isEmpty() === false,
-            language: window.editor?.getModel()?.getLanguageId() || 'unknown',
-            cursorPosition: window.editor?.getPosition(),
-            viewState: {
-              scrollTop: window.editor?.getScrollTop() || 0,
-              scrollLeft: window.editor?.getScrollLeft() || 0
-            },
-            selectedLineCount: window.editor?.getSelection()?.isEmpty()
-              ? 0
-              : (window.editor?.getSelection()?.endLineNumber || 0) - (window.editor?.getSelection()?.startLineNumber || 0) + 1,
-            selectedCharCount: window.editor?.getModel()?.getValueInRange(window.editor?.getSelection())?.length || 0
-          })
-        """);
+        final result = await _webViewController!
+            .runJavaScriptReturningResult(MonacoScripts.getEditorStatsScript);
 
         if (result is String) {
           return json.decode(result) as Map<String, dynamic>;
@@ -606,22 +475,8 @@ class MonacoBridgePlatform extends ChangeNotifier {
   Future<Map<String, dynamic>> getDebugInfo() async {
     if (_webViewController != null && _isReady) {
       try {
-        final result =
-            await _webViewController!.runJavaScriptReturningResult("""
-          JSON.stringify({
-            editorExists: !!window.editor,
-            editorReady: !!(window.editor && window.editor.getModel()),
-            currentLanguage: window.editor?.getModel()?.getLanguageId() || 'none',
-            availableLanguages: window.monaco?.languages?.getLanguages?.()?.map(l => l.id) || [],
-            functionsAvailable: {
-              setEditorContent: !!window.setEditorContent,
-              setEditorLanguage: !!window.setEditorLanguage,
-              setEditorOptions: !!window.setEditorOptions,
-              setEditorTheme: !!window.setEditorTheme
-            },
-            monacoVersion: window.monaco?.editor?.VERSION || 'unknown'
-          })
-        """);
+        final result = await _webViewController!
+            .runJavaScriptReturningResult(MonacoScripts.getDebugInfoScript);
 
         if (result is String) {
           final debugInfo = json.decode(result) as Map<String, dynamic>;
@@ -658,7 +513,7 @@ class MonacoBridgePlatform extends ChangeNotifier {
     if (_webViewController == null || !_isReady) return;
 
     try {
-      final options = _settings.toMonacoOptions();
+      final options = MonacoSettingsConverter.toMonacoOptions(_settings);
       final optionsJson = json.encode(options);
 
       await _webViewController!.runJavaScript(
@@ -676,7 +531,7 @@ class MonacoBridgePlatform extends ChangeNotifier {
     if (_webViewController == null || !_isReady) return;
 
     try {
-      final options = languageSettings.toMonacoOptions();
+      final options = MonacoSettingsConverter.toMonacoOptions(languageSettings);
       final optionsJson = json.encode(options);
 
       await _webViewController!.runJavaScript(
@@ -691,16 +546,9 @@ class MonacoBridgePlatform extends ChangeNotifier {
   /// Save current editor state
   Future<void> _saveEditorState() async {
     try {
-      final stateJson = (await _webViewController!.runJavaScriptReturningResult(
-        '''
-JSON.stringify({
-  position: window.editor?.getPosition(),
-  selection: window.editor?.getSelection(),
-  scrollTop: window.editor?.getScrollTop(),
-  scrollLeft: window.editor?.getScrollLeft(),
-  viewState: window.editor?.saveViewState()
-})''',
-      ))! as String;
+      final stateJson = (await _webViewController!
+              .runJavaScriptReturningResult(MonacoScripts.saveEditorStateScript))!
+          as String;
       _lastState = json.decode(stateJson) as Map<String, dynamic>?;
     } catch (e) {
       debugPrint('[MonacoBridgePlatform] Error saving editor state: $e');
@@ -713,27 +561,9 @@ JSON.stringify({
     if (_lastState == null || _webViewController == null || !_isReady) return;
 
     try {
-      await _webViewController!.runJavaScript('''
-        if (window.editor) {
-          const state = ${json.encode(_lastState)};
-          if (state.viewState) {
-            window.editor.restoreViewState(state.viewState);
-          } else {
-            if (state.position) {
-              window.editor.setPosition(state.position);
-            }
-            if (state.selection) {
-              window.editor.setSelection(state.selection);
-            }
-            if (state.scrollTop !== undefined) {
-              window.editor.setScrollPosition({
-                scrollTop: state.scrollTop,
-                scrollLeft: state.scrollLeft || 0
-              });
-            }
-          }
-        }
-      ''');
+      await _webViewController!.runJavaScript(
+        MonacoScripts.restoreEditorStateScript(json.encode(_lastState)),
+      );
     } catch (e) {
       debugPrint('[MonacoBridgePlatform] Error restoring editor state: $e');
     }

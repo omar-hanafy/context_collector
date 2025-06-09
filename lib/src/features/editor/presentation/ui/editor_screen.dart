@@ -5,6 +5,7 @@ import 'package:context_collector/src/features/editor/domain/editor_settings.dar
 import 'package:context_collector/src/features/editor/presentation/ui/enhanced_editor_settings_dialog.dart';
 import 'package:context_collector/src/features/editor/presentation/ui/monaco_editor_container.dart';
 import 'package:context_collector/src/features/editor/presentation/ui/monaco_editor_info_bar.dart';
+import 'package:context_collector/src/features/editor/services/editor_settings_service.dart';
 import 'package:context_collector/src/features/editor/services/monaco_editor_providers.dart';
 import 'package:context_collector/src/features/editor/services/monaco_editor_state.dart';
 import 'package:context_collector/src/features/scan/presentation/state/selection_notifier.dart';
@@ -69,7 +70,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   }
 
   Future<void> _loadEditorSettings() async {
-    final settings = await EditorSettings.load();
+    final settings = await EditorSettingsService.load();
     if (mounted) {
       setState(() {
         _editorSettings = settings;
@@ -86,7 +87,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     setState(() {
       _editorSettings = newSettings;
     });
-    await newSettings.save();
+    await EditorSettingsService.save(newSettings);
     await _applySettingsToEditor();
   }
 

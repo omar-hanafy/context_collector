@@ -1,7 +1,6 @@
 import 'package:dart_helper_utils/dart_helper_utils.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 /// Enums for better type safety
 enum WordWrap {
@@ -152,7 +151,7 @@ class LanguageConfig {
       );
 }
 
-/// Enhanced Editor configuration settings with comprehensive options
+/// Editor configuration settings with comprehensive options
 @immutable
 class EditorSettings extends Equatable {
   const EditorSettings({
@@ -259,218 +258,231 @@ class EditorSettings extends Equatable {
   });
 
   factory EditorSettings.fromJson(Map<String, dynamic> json) {
+    // Helper to parse enum values with dart_helper_utils
     T? parseEnum<T extends Enum>(String? value, List<T> values) {
       if (value == null) return null;
-      try {
-        return values.firstWhere((e) => e.name == value);
-      } catch (e) {
-        return null; // Or throw an error, or return a default
-      }
+      return values.firstWhereOrNull((e) => e.name == value);
     }
 
+    // Parse language configs
     final parsedLanguageConfigs = <String, LanguageConfig>{};
-    final langConfigsDynamic = json[keyLanguageConfigs];
-    if (langConfigsDynamic != null) {
-      try {
-        // If it's a string, decode it first (like from SharedPreferences)
-        // If it's already a map (like from direct JSON parsing), use it
-        var langConfigsJson = <String, dynamic>{};
-        if (langConfigsDynamic is String) {
-          langConfigsJson =
-              langConfigsDynamic.decode() as Map<String, dynamic>? ?? {};
-        } else if (langConfigsDynamic is Map) {
-          langConfigsJson = Map<String, dynamic>.from(langConfigsDynamic);
-        }
+    final langConfigsMap =
+        ConvertObject.toMap<String, dynamic>(json['editor_language_configs']);
+    for (final entry in langConfigsMap.entries) {
+      final configMap = ConvertObject.toMap<String, dynamic>(entry.value);
+      parsedLanguageConfigs[entry.key] = LanguageConfig.fromJson(configMap);
+    }
 
-        for (final entry in langConfigsJson.entries) {
-          if (entry.value is Map<String, dynamic>) {
-            parsedLanguageConfigs[entry.key] =
-                LanguageConfig.fromJson(entry.value as Map<String, dynamic>);
-          }
-        }
-      } catch (e) {
-        // Log error or handle as needed
-        if (kDebugMode) {
-          print('Error parsing language configs from JSON: $e');
-        }
+    // Parse rulers list - handle both int and string lists
+    List<int> parseRulers(dynamic rulersData) {
+      if (rulersData == null) return defaultRulers;
+      if (rulersData is List) {
+        return rulersData
+            .map(ConvertObject.toInt)
+            .whereType<int>()
+            .where((i) => i > 0)
+            .toList();
       }
+      return defaultRulers;
     }
 
     return EditorSettings(
-      theme: json.tryGetString(keyTheme) ?? defaultTheme,
-      fontSize: json.tryGetDouble(keyFontSize) ?? defaultFontSize,
-      fontFamily: json.tryGetString(keyFontFamily) ?? defaultFontFamily,
-      lineHeight: json.tryGetDouble(keyLineHeight) ?? defaultLineHeight,
+      // General
+      theme: json.tryGetString('editor_theme') ?? defaultTheme,
+      fontSize: json.tryGetDouble('editor_font_size') ?? defaultFontSize,
+      fontFamily: json.tryGetString('editor_font_family') ?? defaultFontFamily,
+      lineHeight: json.tryGetDouble('editor_line_height') ?? defaultLineHeight,
       letterSpacing:
-          json.tryGetDouble(keyLetterSpacing) ?? defaultLetterSpacing,
+          json.tryGetDouble('editor_letter_spacing') ?? defaultLetterSpacing,
+
+      // Display
       showLineNumbers:
-          json.tryGetBool(keyShowLineNumbers) ?? defaultShowLineNumbers,
-      lineNumbersStyle: parseEnum(json.tryGetString(keyLineNumbersStyle),
+          json.tryGetBool('editor_show_line_numbers') ?? defaultShowLineNumbers,
+      lineNumbersStyle: parseEnum(
+              json.tryGetString('editor_line_numbers_style'),
               LineNumbersStyle.values) ??
           defaultLineNumbersStyle,
-      showMinimap: json.tryGetBool(keyShowMinimap) ?? defaultShowMinimap,
-      minimapSide:
-          parseEnum(json.tryGetString(keyMinimapSide), MinimapSide.values) ??
-              defaultMinimapSide,
-      minimapRenderCharacters: json.tryGetBool(keyMinimapRenderCharacters) ??
-          defaultMinimapRenderCharacters,
-      minimapSize: json.tryGetInt(keyMinimapSize) ?? defaultMinimapSize,
-      showIndentGuides:
-          json.tryGetBool(keyShowIndentGuides) ?? defaultShowIndentGuides,
-      renderWhitespace: parseEnum(json.tryGetString(keyRenderWhitespace),
+      showMinimap: json.tryGetBool('editor_show_minimap') ?? defaultShowMinimap,
+      minimapSide: parseEnum(
+              json.tryGetString('editor_minimap_side'), MinimapSide.values) ??
+          defaultMinimapSide,
+      minimapRenderCharacters:
+          json.tryGetBool('editor_minimap_render_characters') ??
+              defaultMinimapRenderCharacters,
+      minimapSize: json.tryGetInt('editor_minimap_size') ?? defaultMinimapSize,
+      showIndentGuides: json.tryGetBool('editor_show_indent_guides') ??
+          defaultShowIndentGuides,
+      renderWhitespace: parseEnum(json.tryGetString('editor_render_whitespace'),
               RenderWhitespace.values) ??
           defaultRenderWhitespace,
-      rulers: json
-              .tryGetList<String>(keyRulers)
-              ?.map((s) => int.tryParse(s) ?? 0)
-              .where((i) => i > 0)
-              .toList() ??
-          defaultRulers,
-      stickyScroll: json.tryGetBool(keyStickyScroll) ?? defaultStickyScroll,
-      showFoldingControls: json.tryGetString(keyShowFoldingControls) ??
+      rulers: parseRulers(json['editor_rulers']),
+      stickyScroll:
+          json.tryGetBool('editor_sticky_scroll') ?? defaultStickyScroll,
+      showFoldingControls: json.tryGetString('editor_show_folding_controls') ??
           defaultShowFoldingControls,
-      glyphMargin: json.tryGetBool(keyGlyphMargin) ?? defaultGlyphMargin,
-      renderLineHighlight: json.tryGetString(keyRenderLineHighlight) ??
+      glyphMargin: json.tryGetBool('editor_glyph_margin') ?? defaultGlyphMargin,
+      renderLineHighlight: json.tryGetString('editor_render_line_highlight') ??
           defaultRenderLineHighlight,
-      wordWrap: parseEnum(json.tryGetString(keyWordWrap), WordWrap.values) ??
-          defaultWordWrap,
+
+      // Editor Behavior
+      wordWrap:
+          parseEnum(json.tryGetString('editor_word_wrap'), WordWrap.values) ??
+              defaultWordWrap,
       wordWrapColumn:
-          json.tryGetInt(keyWordWrapColumn) ?? defaultWordWrapColumn,
-      tabSize: json.tryGetInt(keyTabSize) ?? defaultTabSize,
-      insertSpaces: json.tryGetBool(keyInsertSpaces) ?? defaultInsertSpaces,
-      autoIndent: json.tryGetString(keyAutoIndent) ?? defaultAutoIndent,
-      autoClosingBrackets: json.tryGetString(keyAutoClosingBrackets) ??
+          json.tryGetInt('editor_word_wrap_column') ?? defaultWordWrapColumn,
+      tabSize: json.tryGetInt('editor_tab_size') ?? defaultTabSize,
+      insertSpaces:
+          json.tryGetBool('editor_insert_spaces') ?? defaultInsertSpaces,
+      autoIndent: json.tryGetString('editor_auto_indent') ?? defaultAutoIndent,
+      autoClosingBrackets: json.tryGetString('editor_auto_closing_brackets') ??
           defaultAutoClosingBrackets,
-      autoClosingQuotes:
-          json.tryGetString(keyAutoClosingQuotes) ?? defaultAutoClosingQuotes,
-      autoSurround: json.tryGetString(keyAutoSurround) ?? defaultAutoSurround,
-      bracketPairColorization: json.tryGetBool(keyBracketPairColorization) ??
-          defaultBracketPairColorization,
-      codeFolding: json.tryGetBool(keyCodeFolding) ?? defaultCodeFolding,
-      scrollBeyondLastLine: json.tryGetBool(keyScrollBeyondLastLine) ??
+      autoClosingQuotes: json.tryGetString('editor_auto_closing_quotes') ??
+          defaultAutoClosingQuotes,
+      autoSurround:
+          json.tryGetString('editor_auto_surround') ?? defaultAutoSurround,
+      bracketPairColorization:
+          json.tryGetBool('editor_bracket_pair_colorization') ??
+              defaultBracketPairColorization,
+      codeFolding: json.tryGetBool('editor_code_folding') ?? defaultCodeFolding,
+      scrollBeyondLastLine: json.tryGetBool('editor_scroll_beyond_last_line') ??
           defaultScrollBeyondLastLine,
       smoothScrolling:
-          json.tryGetBool(keySmoothScrolling) ?? defaultSmoothScrolling,
-      fastScrollSensitivity: json.tryGetDouble(keyFastScrollSensitivity) ??
-          defaultFastScrollSensitivity,
-      scrollPredominantAxis: json.tryGetBool(keyScrollPredominantAxis) ??
-          defaultScrollPredominantAxis,
-      cursorBlinking: parseEnum(
-              json.tryGetString(keyCursorBlinking), CursorBlinking.values) ??
+          json.tryGetBool('editor_smooth_scrolling') ?? defaultSmoothScrolling,
+      fastScrollSensitivity:
+          json.tryGetDouble('editor_fast_scroll_sensitivity') ??
+              defaultFastScrollSensitivity,
+      scrollPredominantAxis:
+          json.tryGetBool('editor_scroll_predominant_axis') ??
+              defaultScrollPredominantAxis,
+
+      // Cursor
+      cursorBlinking: parseEnum(json.tryGetString('editor_cursor_blinking'),
+              CursorBlinking.values) ??
           defaultCursorBlinking,
       cursorSmoothCaretAnimation:
-          json.tryGetString(keyCursorSmoothCaretAnimation) ??
+          json.tryGetString('editor_cursor_smooth_caret_animation') ??
               defaultCursorSmoothCaretAnimation,
-      cursorStyle:
-          parseEnum(json.tryGetString(keyCursorStyle), CursorStyle.values) ??
-              defaultCursorStyle,
-      cursorWidth: json.tryGetInt(keyCursorWidth) ?? defaultCursorWidth,
-      multiCursorModifier: parseEnum(json.tryGetString(keyMultiCursorModifier),
+      cursorStyle: parseEnum(
+              json.tryGetString('editor_cursor_style'), CursorStyle.values) ??
+          defaultCursorStyle,
+      cursorWidth: json.tryGetInt('editor_cursor_width') ?? defaultCursorWidth,
+      multiCursorModifier: parseEnum(
+              json.tryGetString('editor_multi_cursor_modifier'),
               MultiCursorModifier.values) ??
           defaultMultiCursorModifier,
       multiCursorMergeOverlapping:
-          json.tryGetBool(keyMultiCursorMergeOverlapping) ??
+          json.tryGetBool('editor_multi_cursor_merge_overlapping') ??
               defaultMultiCursorMergeOverlapping,
-      formatOnSave: json.tryGetBool(keyFormatOnSave) ?? defaultFormatOnSave,
-      formatOnPaste: json.tryGetBool(keyFormatOnPaste) ?? defaultFormatOnPaste,
-      formatOnType: json.tryGetBool(keyFormatOnType) ?? defaultFormatOnType,
-      quickSuggestions:
-          json.tryGetBool(keyQuickSuggestions) ?? defaultQuickSuggestions,
-      quickSuggestionsDelay: json.tryGetInt(keyQuickSuggestionsDelay) ??
+
+      // Editing Features
+      formatOnSave:
+          json.tryGetBool('editor_format_on_save') ?? defaultFormatOnSave,
+      formatOnPaste:
+          json.tryGetBool('editor_format_on_paste') ?? defaultFormatOnPaste,
+      formatOnType:
+          json.tryGetBool('editor_format_on_type') ?? defaultFormatOnType,
+      quickSuggestions: json.tryGetBool('editor_quick_suggestions') ??
+          defaultQuickSuggestions,
+      quickSuggestionsDelay: json.tryGetInt('editor_quick_suggestions_delay') ??
           defaultQuickSuggestionsDelay,
       suggestOnTriggerCharacters:
-          json.tryGetBool(keySuggestOnTriggerCharacters) ??
+          json.tryGetBool('editor_suggest_on_trigger_characters') ??
               defaultSuggestOnTriggerCharacters,
       acceptSuggestionOnEnter: parseEnum(
-              json.tryGetString(keyAcceptSuggestionOnEnter),
+              json.tryGetString('editor_accept_suggestion_on_enter'),
               AcceptSuggestionOnEnter.values) ??
           defaultAcceptSuggestionOnEnter,
       acceptSuggestionOnCommitCharacter:
-          json.tryGetBool(keyAcceptSuggestionOnCommitCharacter) ??
+          json.tryGetBool('editor_accept_suggestion_on_commit_character') ??
               defaultAcceptSuggestionOnCommitCharacter,
-      snippetSuggestions: parseEnum(json.tryGetString(keySnippetSuggestions),
+      snippetSuggestions: parseEnum(
+              json.tryGetString('editor_snippet_suggestions'),
               SnippetSuggestions.values) ??
           defaultSnippetSuggestions,
       wordBasedSuggestions: parseEnum(
-              json.tryGetString(keyWordBasedSuggestions),
+              json.tryGetString('editor_word_based_suggestions'),
               WordBasedSuggestions.values) ??
           defaultWordBasedSuggestions,
       parameterHints:
-          json.tryGetBool(keyParameterHints) ?? defaultParameterHints,
-      hover: json.tryGetBool(keyHover) ?? defaultHover,
-      contextMenu: json.tryGetBool(keyContextMenu) ?? defaultContextMenu,
-      find: json.tryGetBool(keyFind) ?? defaultFind,
+          json.tryGetBool('editor_parameter_hints') ?? defaultParameterHints,
+      hover: json.tryGetBool('editor_hover') ?? defaultHover,
+      contextMenu: json.tryGetBool('editor_context_menu') ?? defaultContextMenu,
+
+      // Find & Replace
+      find: json.tryGetBool('editor_find') ?? defaultFind,
       seedSearchStringFromSelection:
-          json.tryGetString(keySeedSearchStringFromSelection) ??
+          json.tryGetString('editor_seed_search_string_from_selection') ??
               defaultSeedSearchStringFromSelection,
+
+      // Accessibility
       accessibilitySupport: parseEnum(
-              json.tryGetString(keyAccessibilitySupport),
+              json.tryGetString('editor_accessibility_support'),
               AccessibilitySupport.values) ??
           defaultAccessibilitySupport,
-      accessibilityPageSize: json.tryGetInt(keyAccessibilityPageSize) ??
+      accessibilityPageSize: json.tryGetInt('editor_accessibility_page_size') ??
           defaultAccessibilityPageSize,
+
+      // Performance
       renderValidationDecorations:
-          json.tryGetString(keyRenderValidationDecorations) ??
+          json.tryGetString('editor_render_validation_decorations') ??
               defaultRenderValidationDecorations,
-      renderControlCharacters: json.tryGetBool(keyRenderControlCharacters) ??
-          defaultRenderControlCharacters,
-      disableLayerHinting:
-          json.tryGetBool(keyDisableLayerHinting) ?? defaultDisableLayerHinting,
+      renderControlCharacters:
+          json.tryGetBool('editor_render_control_characters') ??
+              defaultRenderControlCharacters,
+      disableLayerHinting: json.tryGetBool('editor_disable_layer_hinting') ??
+          defaultDisableLayerHinting,
       disableMonospaceOptimizations:
-          json.tryGetBool(keyDisableMonospaceOptimizations) ??
+          json.tryGetBool('editor_disable_monospace_optimizations') ??
               defaultDisableMonospaceOptimizations,
-      maxTokenizationLineLength: json.tryGetInt(keyMaxTokenizationLineLength) ??
-          defaultMaxTokenizationLineLength,
+      maxTokenizationLineLength:
+          json.tryGetInt('editor_max_tokenization_line_length') ??
+              defaultMaxTokenizationLineLength,
+
+      // Language Configs
       languageConfigs: parsedLanguageConfigs,
-      keybindingPreset: parseEnum(json.tryGetString(keyKeybindingPreset),
+
+      // Keybindings
+      keybindingPreset: parseEnum(json.tryGetString('editor_keybinding_preset'),
               KeybindingPresetEnum.values) ??
           defaultKeybindingPreset,
-      customKeybindings: (json[keyCustomKeybindings] is String
-              ? (json.tryGetString(keyCustomKeybindings)?.decode()
-                      as Map<String, dynamic>?)
-                  ?.map((key, value) => MapEntry(key, value.toString()))
-              : Map<String, String>.from(
-                  json[keyCustomKeybindings] as Map? ?? {})) ??
-          {},
-      readOnly: json.tryGetBool(keyReadOnly) ?? defaultReadOnly,
-      domReadOnly: json.tryGetBool(keyDomReadOnly) ?? defaultDomReadOnly,
-      dragAndDrop: json.tryGetBool(keyDragAndDrop) ?? defaultDragAndDrop,
-      links: json.tryGetBool(keyLinks) ?? defaultLinks,
+      customKeybindings: ConvertObject.toMap<String, String>(
+          json['editor_custom_keybindings']),
+
+      // Advanced
+      readOnly: json.tryGetBool('editor_read_only') ?? defaultReadOnly,
+      domReadOnly:
+          json.tryGetBool('editor_dom_read_only') ?? defaultDomReadOnly,
+      dragAndDrop:
+          json.tryGetBool('editor_drag_and_drop') ?? defaultDragAndDrop,
+      links: json.tryGetBool('editor_links') ?? defaultLinks,
       mouseWheelZoom:
-          json.tryGetBool(keyMouseWheelZoom) ?? defaultMouseWheelZoom,
+          json.tryGetBool('editor_mouse_wheel_zoom') ?? defaultMouseWheelZoom,
       mouseWheelScrollSensitivity:
-          json.tryGetDouble(keyMouseWheelScrollSensitivity) ??
+          json.tryGetDouble('editor_mouse_wheel_scroll_sensitivity') ??
               defaultMouseWheelScrollSensitivity,
       automaticLayout:
-          json.tryGetBool(keyAutomaticLayout) ?? defaultAutomaticLayout,
-      padding: (json[keyPadding] is String
-              ? (json.tryGetString(keyPadding)?.decode()
-                      as Map<String, dynamic>?)
-                  ?.cast<String, int>()
-              : Map<String, int>.from(json[keyPadding] as Map? ?? {})) ??
-          defaultPadding,
-      roundedSelection:
-          json.tryGetBool(keyRoundedSelection) ?? defaultRoundedSelection,
-      selectionHighlight:
-          json.tryGetBool(keySelectionHighlight) ?? defaultSelectionHighlight,
-      occurrencesHighlight: json.tryGetString(keyOccurrencesHighlight) ??
+          json.tryGetBool('editor_automatic_layout') ?? defaultAutomaticLayout,
+      padding:
+          ConvertObject.toMap<String, int>(json['editor_padding']).isNotEmpty
+              ? ConvertObject.toMap<String, int>(json['editor_padding'])
+              : defaultPadding,
+      roundedSelection: json.tryGetBool('editor_rounded_selection') ??
+          defaultRoundedSelection,
+      selectionHighlight: json.tryGetBool('editor_selection_highlight') ??
+          defaultSelectionHighlight,
+      occurrencesHighlight: json.tryGetString('editor_occurrences_highlight') ??
           defaultOccurrencesHighlight,
-      overviewRulerBorder:
-          json.tryGetBool(keyOverviewRulerBorder) ?? defaultOverviewRulerBorder,
+      overviewRulerBorder: json.tryGetBool('editor_overview_ruler_border') ??
+          defaultOverviewRulerBorder,
       hideCursorInOverviewRuler:
-          json.tryGetBool(keyHideCursorInOverviewRuler) ??
+          json.tryGetBool('editor_hide_cursor_in_overview_ruler') ??
               defaultHideCursorInOverviewRuler,
-      scrollbar: (json[keyScrollbar] is String
-              ? json.tryGetString(keyScrollbar)?.decode()
-                  as Map<String, dynamic>?
-              : Map<String, dynamic>.from(json[keyScrollbar] as Map? ?? {})) ??
-          defaultScrollbar,
-      experimentalFeatures: (json[keyExperimentalFeatures] is String
-              ? json.tryGetString(keyExperimentalFeatures)?.decode()
-                  as Map<String, dynamic>?
-              : Map<String, dynamic>.from(
-                  json[keyExperimentalFeatures] as Map? ?? {})) ??
-          {},
+      scrollbar: ConvertObject.toMap<String, dynamic>(json['editor_scrollbar'])
+              .isNotEmpty
+          ? ConvertObject.toMap<String, dynamic>(json['editor_scrollbar'])
+          : defaultScrollbar,
+      experimentalFeatures: ConvertObject.toMap<String, dynamic>(
+          json['editor_experimental_features']),
     );
   }
 
@@ -646,108 +658,7 @@ class EditorSettings extends Equatable {
     'scrollByPage': false,
   };
 
-  // === STORAGE KEYS ===
-  static const String keyTheme = 'editor_theme';
-  static const String keyFontSize = 'editor_font_size';
-  static const String keyFontFamily = 'editor_font_family';
-  static const String keyLineHeight = 'editor_line_height';
-  static const String keyLetterSpacing = 'editor_letter_spacing';
-  static const String keyShowLineNumbers = 'editor_show_line_numbers';
-  static const String keyLineNumbersStyle = 'editor_line_numbers_style';
-  static const String keyShowMinimap = 'editor_show_minimap';
-  static const String keyMinimapSide = 'editor_minimap_side';
-  static const String keyMinimapRenderCharacters =
-      'editor_minimap_render_characters';
-  static const String keyMinimapSize = 'editor_minimap_size';
-  static const String keyShowIndentGuides = 'editor_show_indent_guides';
-  static const String keyRenderWhitespace = 'editor_render_whitespace';
-  static const String keyRulers = 'editor_rulers';
-  static const String keyStickyScroll = 'editor_sticky_scroll';
-  static const String keyShowFoldingControls = 'editor_show_folding_controls';
-  static const String keyGlyphMargin = 'editor_glyph_margin';
-  static const String keyRenderLineHighlight = 'editor_render_line_highlight';
-  static const String keyWordWrap = 'editor_word_wrap';
-  static const String keyWordWrapColumn = 'editor_word_wrap_column';
-  static const String keyTabSize = 'editor_tab_size';
-  static const String keyInsertSpaces = 'editor_insert_spaces';
-  static const String keyAutoIndent = 'editor_auto_indent';
-  static const String keyAutoClosingBrackets = 'editor_auto_closing_brackets';
-  static const String keyAutoClosingQuotes = 'editor_auto_closing_quotes';
-  static const String keyAutoSurround = 'editor_auto_surround';
-  static const String keyBracketPairColorization =
-      'editor_bracket_pair_colorization';
-  static const String keyCodeFolding = 'editor_code_folding';
-  static const String keyScrollBeyondLastLine =
-      'editor_scroll_beyond_last_line';
-  static const String keySmoothScrolling = 'editor_smooth_scrolling';
-  static const String keyFastScrollSensitivity =
-      'editor_fast_scroll_sensitivity';
-  static const String keyScrollPredominantAxis =
-      'editor_scroll_predominant_axis';
-  static const String keyCursorBlinking = 'editor_cursor_blinking';
-  static const String keyCursorSmoothCaretAnimation =
-      'editor_cursor_smooth_caret_animation';
-  static const String keyCursorStyle = 'editor_cursor_style';
-  static const String keyCursorWidth = 'editor_cursor_width';
-  static const String keyMultiCursorModifier = 'editor_multi_cursor_modifier';
-  static const String keyMultiCursorMergeOverlapping =
-      'editor_multi_cursor_merge_overlapping';
-  static const String keyFormatOnSave = 'editor_format_on_save';
-  static const String keyFormatOnPaste = 'editor_format_on_paste';
-  static const String keyFormatOnType = 'editor_format_on_type';
-  static const String keyQuickSuggestions = 'editor_quick_suggestions';
-  static const String keyQuickSuggestionsDelay =
-      'editor_quick_suggestions_delay';
-  static const String keySuggestOnTriggerCharacters =
-      'editor_suggest_on_trigger_characters';
-  static const String keyAcceptSuggestionOnEnter =
-      'editor_accept_suggestion_on_enter';
-  static const String keyAcceptSuggestionOnCommitCharacter =
-      'editor_accept_suggestion_on_commit_character';
-  static const String keySnippetSuggestions = 'editor_snippet_suggestions';
-  static const String keyWordBasedSuggestions = 'editor_word_based_suggestions';
-  static const String keyParameterHints = 'editor_parameter_hints';
-  static const String keyHover = 'editor_hover';
-  static const String keyContextMenu = 'editor_context_menu';
-  static const String keyFind = 'editor_find';
-  static const String keySeedSearchStringFromSelection =
-      'editor_seed_search_string_from_selection';
-  static const String keyAccessibilitySupport = 'editor_accessibility_support';
-  static const String keyAccessibilityPageSize =
-      'editor_accessibility_page_size';
-  static const String keyRenderValidationDecorations =
-      'editor_render_validation_decorations';
-  static const String keyRenderControlCharacters =
-      'editor_render_control_characters';
-  static const String keyDisableLayerHinting = 'editor_disable_layer_hinting';
-  static const String keyDisableMonospaceOptimizations =
-      'editor_disable_monospace_optimizations';
-  static const String keyMaxTokenizationLineLength =
-      'editor_max_tokenization_line_length';
-  static const String keyLanguageConfigs = 'editor_language_configs';
-  static const String keyKeybindingPreset = 'editor_keybinding_preset';
-  static const String keyCustomKeybindings = 'editor_custom_keybindings';
-  static const String keyReadOnly = 'editor_read_only';
-  static const String keyDomReadOnly = 'editor_dom_read_only';
-  static const String keyDragAndDrop = 'editor_drag_and_drop';
-  static const String keyLinks = 'editor_links';
-  static const String keyMouseWheelZoom = 'editor_mouse_wheel_zoom';
-  static const String keyMouseWheelScrollSensitivity =
-      'editor_mouse_wheel_scroll_sensitivity';
-  static const String keyAutomaticLayout = 'editor_automatic_layout';
-  static const String keyPadding = 'editor_padding';
-  static const String keyRoundedSelection = 'editor_rounded_selection';
-  static const String keySelectionHighlight = 'editor_selection_highlight';
-  static const String keyOccurrencesHighlight = 'editor_occurrences_highlight';
-  static const String keyOverviewRulerBorder = 'editor_overview_ruler_border';
-  static const String keyHideCursorInOverviewRuler =
-      'editor_hide_cursor_in_overview_ruler';
-  static const String keyScrollbar = 'editor_scrollbar';
-  static const String keyExperimentalFeatures = 'editor_experimental_features';
-
   // === PROPERTIES ===
-
-  // General Settings
   final String theme;
   final double fontSize;
   final String fontFamily;
@@ -1050,423 +961,114 @@ class EditorSettings extends Equatable {
     );
   }
 
-  /// Convert to Monaco editor options JSON
-  Map<String, dynamic> toMonacoOptions() {
+  /// Convert to JSON for serialization
+  Map<String, dynamic> toJson() {
     return {
-      'theme': theme,
-      'fontSize': fontSize,
-      'fontFamily': fontFamily,
-      'lineHeight': lineHeight,
-      'letterSpacing': letterSpacing,
-      'lineNumbers': showLineNumbers ? 'on' : 'off',
-      'minimap': {
-        'enabled': showMinimap,
-        'side': minimapSide.name,
-        'renderCharacters': minimapRenderCharacters,
-        'size': minimapSize,
-      },
-      'renderIndentGuides': showIndentGuides,
-      'renderWhitespace': renderWhitespace.name,
-      'rulers': rulers,
-      'stickyScroll': {'enabled': stickyScroll},
-      'showFoldingControls': showFoldingControls,
-      'glyphMargin': glyphMargin,
-      'renderLineHighlight': renderLineHighlight,
-      'wordWrap': wordWrap.name,
-      'wordWrapColumn': wordWrapColumn,
-      'tabSize': tabSize,
-      'insertSpaces': insertSpaces,
-      'autoIndent': autoIndent,
-      'autoClosingBrackets': autoClosingBrackets,
-      'autoClosingQuotes': autoClosingQuotes,
-      'autoSurround': autoSurround,
-      'bracketPairColorization': {'enabled': bracketPairColorization},
-      'folding': codeFolding,
-      'scrollBeyondLastLine': scrollBeyondLastLine,
-      'smoothScrolling': smoothScrolling,
-      'fastScrollSensitivity': fastScrollSensitivity,
-      'scrollPredominantAxis': scrollPredominantAxis,
-      'cursorBlinking': cursorBlinking.name,
-      'cursorSmoothCaretAnimation': cursorSmoothCaretAnimation,
-      'cursorStyle': cursorStyle.name,
-      'cursorWidth': cursorWidth,
-      'multiCursorModifier': multiCursorModifier.name,
-      'multiCursorMergeOverlapping': multiCursorMergeOverlapping,
-      'formatOnPaste': formatOnPaste,
-      'formatOnType': formatOnType,
-      'quickSuggestions': quickSuggestions,
-      'quickSuggestionsDelay': quickSuggestionsDelay,
-      'suggestOnTriggerCharacters': suggestOnTriggerCharacters,
-      'acceptSuggestionOnEnter': acceptSuggestionOnEnter.name,
-      'acceptSuggestionOnCommitCharacter': acceptSuggestionOnCommitCharacter,
-      'snippetSuggestions': snippetSuggestions.name,
-      'wordBasedSuggestions': wordBasedSuggestions.name,
-      'parameterHints': {'enabled': parameterHints},
-      'hover': {'enabled': hover},
-      'contextmenu': contextMenu,
-      'find': {
-        'seedSearchStringFromSelection': seedSearchStringFromSelection,
-      },
-      'accessibilitySupport': accessibilitySupport.name,
-      'accessibilityPageSize': accessibilityPageSize,
-      'renderValidationDecorations': renderValidationDecorations,
-      'renderControlCharacters': renderControlCharacters,
-      'disableLayerHinting': disableLayerHinting,
-      'disableMonospaceOptimizations': disableMonospaceOptimizations,
-      'maxTokenizationLineLength': maxTokenizationLineLength,
-      'readOnly': readOnly,
-      'domReadOnly': domReadOnly,
-      'dragAndDrop': dragAndDrop,
-      'links': links,
-      'mouseWheelZoom': mouseWheelZoom,
-      'mouseWheelScrollSensitivity': mouseWheelScrollSensitivity,
-      'automaticLayout': automaticLayout,
-      'padding': padding,
-      'roundedSelection': roundedSelection,
-      'selectionHighlight': selectionHighlight,
-      'occurrencesHighlight': occurrencesHighlight,
-      'overviewRulerBorder': overviewRulerBorder,
-      'hideCursorInOverviewRuler': hideCursorInOverviewRuler,
-      'scrollbar': scrollbar,
+      // General
+      'editor_theme': theme,
+      'editor_font_size': fontSize,
+      'editor_font_family': fontFamily,
+      'editor_line_height': lineHeight,
+      'editor_letter_spacing': letterSpacing,
+
+      // Display
+      'editor_show_line_numbers': showLineNumbers,
+      'editor_line_numbers_style': lineNumbersStyle.name,
+      'editor_show_minimap': showMinimap,
+      'editor_minimap_side': minimapSide.name,
+      'editor_minimap_render_characters': minimapRenderCharacters,
+      'editor_minimap_size': minimapSize,
+      'editor_show_indent_guides': showIndentGuides,
+      'editor_render_whitespace': renderWhitespace.name,
+      'editor_rulers': rulers,
+      'editor_sticky_scroll': stickyScroll,
+      'editor_show_folding_controls': showFoldingControls,
+      'editor_glyph_margin': glyphMargin,
+      'editor_render_line_highlight': renderLineHighlight,
+
+      // Editor Behavior
+      'editor_word_wrap': wordWrap.name,
+      'editor_word_wrap_column': wordWrapColumn,
+      'editor_tab_size': tabSize,
+      'editor_insert_spaces': insertSpaces,
+      'editor_auto_indent': autoIndent,
+      'editor_auto_closing_brackets': autoClosingBrackets,
+      'editor_auto_closing_quotes': autoClosingQuotes,
+      'editor_auto_surround': autoSurround,
+      'editor_bracket_pair_colorization': bracketPairColorization,
+      'editor_code_folding': codeFolding,
+      'editor_scroll_beyond_last_line': scrollBeyondLastLine,
+      'editor_smooth_scrolling': smoothScrolling,
+      'editor_fast_scroll_sensitivity': fastScrollSensitivity,
+      'editor_scroll_predominant_axis': scrollPredominantAxis,
+
+      // Cursor
+      'editor_cursor_blinking': cursorBlinking.name,
+      'editor_cursor_smooth_caret_animation': cursorSmoothCaretAnimation,
+      'editor_cursor_style': cursorStyle.name,
+      'editor_cursor_width': cursorWidth,
+      'editor_multi_cursor_modifier': multiCursorModifier.name,
+      'editor_multi_cursor_merge_overlapping': multiCursorMergeOverlapping,
+
+      // Editing Features
+      'editor_format_on_save': formatOnSave,
+      'editor_format_on_paste': formatOnPaste,
+      'editor_format_on_type': formatOnType,
+      'editor_quick_suggestions': quickSuggestions,
+      'editor_quick_suggestions_delay': quickSuggestionsDelay,
+      'editor_suggest_on_trigger_characters': suggestOnTriggerCharacters,
+      'editor_accept_suggestion_on_enter': acceptSuggestionOnEnter.name,
+      'editor_accept_suggestion_on_commit_character':
+          acceptSuggestionOnCommitCharacter,
+      'editor_snippet_suggestions': snippetSuggestions.name,
+      'editor_word_based_suggestions': wordBasedSuggestions.name,
+      'editor_parameter_hints': parameterHints,
+      'editor_hover': hover,
+      'editor_context_menu': contextMenu,
+
+      // Find & Replace
+      'editor_find': find,
+      'editor_seed_search_string_from_selection': seedSearchStringFromSelection,
+
+      // Accessibility
+      'editor_accessibility_support': accessibilitySupport.name,
+      'editor_accessibility_page_size': accessibilityPageSize,
+
+      // Performance
+      'editor_render_validation_decorations': renderValidationDecorations,
+      'editor_render_control_characters': renderControlCharacters,
+      'editor_disable_layer_hinting': disableLayerHinting,
+      'editor_disable_monospace_optimizations': disableMonospaceOptimizations,
+      'editor_max_tokenization_line_length': maxTokenizationLineLength,
+
+      // Language Configs
+      'editor_language_configs': Map<String, dynamic>.fromEntries(
+          languageConfigs.entries
+              .map((e) => MapEntry(e.key, e.value.toJson()))),
+
+      // Keybindings
+      'editor_keybinding_preset': keybindingPreset.name,
+      'editor_custom_keybindings': customKeybindings,
+
+      // Advanced
+      'editor_read_only': readOnly,
+      'editor_dom_read_only': domReadOnly,
+      'editor_drag_and_drop': dragAndDrop,
+      'editor_links': links,
+      'editor_mouse_wheel_zoom': mouseWheelZoom,
+      'editor_mouse_wheel_scroll_sensitivity': mouseWheelScrollSensitivity,
+      'editor_automatic_layout': automaticLayout,
+      'editor_padding': padding,
+      'editor_rounded_selection': roundedSelection,
+      'editor_selection_highlight': selectionHighlight,
+      'editor_occurrences_highlight': occurrencesHighlight,
+      'editor_overview_ruler_border': overviewRulerBorder,
+      'editor_hide_cursor_in_overview_ruler': hideCursorInOverviewRuler,
+      'editor_scrollbar': scrollbar,
+      'editor_experimental_features': experimentalFeatures,
     };
   }
 
-  /// Save all settings to SharedPreferences
-  Future<void> save() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    // General
-    await prefs.setString(keyTheme, theme);
-    await prefs.setDouble(keyFontSize, fontSize);
-    await prefs.setString(keyFontFamily, fontFamily);
-    await prefs.setDouble(keyLineHeight, lineHeight);
-    await prefs.setDouble(keyLetterSpacing, letterSpacing);
-
-    // Display
-    await prefs.setBool(keyShowLineNumbers, showLineNumbers);
-    await prefs.setString(keyLineNumbersStyle, lineNumbersStyle.name);
-    await prefs.setBool(keyShowMinimap, showMinimap);
-    await prefs.setString(keyMinimapSide, minimapSide.name);
-    await prefs.setBool(keyMinimapRenderCharacters, minimapRenderCharacters);
-    await prefs.setInt(keyMinimapSize, minimapSize);
-    await prefs.setBool(keyShowIndentGuides, showIndentGuides);
-    await prefs.setString(keyRenderWhitespace, renderWhitespace.name);
-    await prefs.setStringList(
-        keyRulers, rulers.map((r) => r.toString()).toList());
-    await prefs.setBool(keyStickyScroll, stickyScroll);
-    await prefs.setString(keyShowFoldingControls, showFoldingControls);
-    await prefs.setBool(keyGlyphMargin, glyphMargin);
-    await prefs.setString(keyRenderLineHighlight, renderLineHighlight);
-
-    // Editor Behavior
-    await prefs.setString(keyWordWrap, wordWrap.name);
-    await prefs.setInt(keyWordWrapColumn, wordWrapColumn);
-    await prefs.setInt(keyTabSize, tabSize);
-    await prefs.setBool(keyInsertSpaces, insertSpaces);
-    await prefs.setString(keyAutoIndent, autoIndent);
-    await prefs.setString(keyAutoClosingBrackets, autoClosingBrackets);
-    await prefs.setString(keyAutoClosingQuotes, autoClosingQuotes);
-    await prefs.setString(keyAutoSurround, autoSurround);
-    await prefs.setBool(keyBracketPairColorization, bracketPairColorization);
-    await prefs.setBool(keyCodeFolding, codeFolding);
-    await prefs.setBool(keyScrollBeyondLastLine, scrollBeyondLastLine);
-    await prefs.setBool(keySmoothScrolling, smoothScrolling);
-    await prefs.setDouble(keyFastScrollSensitivity, fastScrollSensitivity);
-    await prefs.setBool(keyScrollPredominantAxis, scrollPredominantAxis);
-
-    // Cursor
-    await prefs.setString(keyCursorBlinking, cursorBlinking.name);
-    await prefs.setString(
-        keyCursorSmoothCaretAnimation, cursorSmoothCaretAnimation);
-    await prefs.setString(keyCursorStyle, cursorStyle.name);
-    await prefs.setInt(keyCursorWidth, cursorWidth);
-    await prefs.setString(keyMultiCursorModifier, multiCursorModifier.name);
-    await prefs.setBool(
-        keyMultiCursorMergeOverlapping, multiCursorMergeOverlapping);
-
-    // Editing Features
-    await prefs.setBool(keyFormatOnSave, formatOnSave);
-    await prefs.setBool(keyFormatOnPaste, formatOnPaste);
-    await prefs.setBool(keyFormatOnType, formatOnType);
-    await prefs.setBool(keyQuickSuggestions, quickSuggestions);
-    await prefs.setInt(keyQuickSuggestionsDelay, quickSuggestionsDelay);
-    await prefs.setBool(
-        keySuggestOnTriggerCharacters, suggestOnTriggerCharacters);
-    await prefs.setString(
-        keyAcceptSuggestionOnEnter, acceptSuggestionOnEnter.name);
-    await prefs.setBool(keyAcceptSuggestionOnCommitCharacter,
-        acceptSuggestionOnCommitCharacter);
-    await prefs.setString(keySnippetSuggestions, snippetSuggestions.name);
-    await prefs.setString(keyWordBasedSuggestions, wordBasedSuggestions.name);
-    await prefs.setBool(keyParameterHints, parameterHints);
-    await prefs.setBool(keyHover, hover);
-    await prefs.setBool(keyContextMenu, contextMenu);
-
-    // Find & Replace
-    await prefs.setBool(keyFind, find);
-    await prefs.setString(
-        keySeedSearchStringFromSelection, seedSearchStringFromSelection);
-
-    // Accessibility
-    await prefs.setString(keyAccessibilitySupport, accessibilitySupport.name);
-    await prefs.setInt(keyAccessibilityPageSize, accessibilityPageSize);
-
-    // Performance
-    await prefs.setString(
-        keyRenderValidationDecorations, renderValidationDecorations);
-    await prefs.setBool(keyRenderControlCharacters, renderControlCharacters);
-    await prefs.setBool(keyDisableLayerHinting, disableLayerHinting);
-    await prefs.setBool(
-        keyDisableMonospaceOptimizations, disableMonospaceOptimizations);
-    await prefs.setInt(keyMaxTokenizationLineLength, maxTokenizationLineLength);
-
-    // Language Configs (as JSON)
-    final langConfigsJson = <String, Map<String, dynamic>>{};
-    for (final entry in languageConfigs.entries) {
-      langConfigsJson[entry.key] = entry.value.toJson();
-    }
-    await prefs.setString(keyLanguageConfigs, langConfigsJson.encode());
-
-    // Keybindings
-    await prefs.setString(keyKeybindingPreset, keybindingPreset.name);
-    await prefs.setString(keyCustomKeybindings, customKeybindings.encode());
-
-    // Advanced
-    await prefs.setBool(keyReadOnly, readOnly);
-    await prefs.setBool(keyDomReadOnly, domReadOnly);
-    await prefs.setBool(keyDragAndDrop, dragAndDrop);
-    await prefs.setBool(keyLinks, links);
-    await prefs.setBool(keyMouseWheelZoom, mouseWheelZoom);
-    await prefs.setDouble(
-        keyMouseWheelScrollSensitivity, mouseWheelScrollSensitivity);
-    await prefs.setBool(keyAutomaticLayout, automaticLayout);
-    await prefs.setString(keyPadding, padding.encode());
-    await prefs.setBool(keyRoundedSelection, roundedSelection);
-    await prefs.setBool(keySelectionHighlight, selectionHighlight);
-    await prefs.setString(keyOccurrencesHighlight, occurrencesHighlight);
-    await prefs.setBool(keyOverviewRulerBorder, overviewRulerBorder);
-    await prefs.setBool(
-        keyHideCursorInOverviewRuler, hideCursorInOverviewRuler);
-    await prefs.setString(keyScrollbar, scrollbar.encode());
-    await prefs.setString(
-        keyExperimentalFeatures, experimentalFeatures.encode());
-  }
-
-  /// Load all settings from SharedPreferences
-  static Future<EditorSettings> load() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    // Helper functions for enum parsing
-    T? parseEnum<T extends Enum>(String? value, List<T> values) {
-      if (value == null) return null;
-      try {
-        return values.firstWhere((e) => e.name == value);
-      } catch (e) {
-        return null;
-      }
-    }
-
-    // Parse language configs
-    final parsedLanguageConfigs = <String, LanguageConfig>{};
-    final langConfigsString = prefs.getString(keyLanguageConfigs);
-    if (langConfigsString != null) {
-      try {
-        final langConfigsJson =
-            langConfigsString.decode() as Map<String, dynamic>? ?? {};
-        for (final entry in langConfigsJson.entries) {
-          if (entry.value is Map<String, dynamic>) {
-            parsedLanguageConfigs[entry.key] =
-                LanguageConfig.fromJson(entry.value as Map<String, dynamic>);
-          }
-        }
-      } catch (e) {
-        // Ignore parsing errors, use empty map
-        if (kDebugMode) {
-          print('Error parsing language configs from SharedPreferences: $e');
-        }
-      }
-    }
-
-    return EditorSettings(
-      // General
-      theme: prefs.getString(keyTheme) ?? defaultTheme,
-      fontSize: prefs.getDouble(keyFontSize) ?? defaultFontSize,
-      fontFamily: prefs.getString(keyFontFamily) ?? defaultFontFamily,
-      lineHeight: prefs.getDouble(keyLineHeight) ?? defaultLineHeight,
-      letterSpacing: prefs.getDouble(keyLetterSpacing) ?? defaultLetterSpacing,
-
-      // Display
-      showLineNumbers:
-          prefs.getBool(keyShowLineNumbers) ?? defaultShowLineNumbers,
-      lineNumbersStyle: parseEnum(
-              prefs.getString(keyLineNumbersStyle), LineNumbersStyle.values) ??
-          defaultLineNumbersStyle,
-      showMinimap: prefs.getBool(keyShowMinimap) ?? defaultShowMinimap,
-      minimapSide:
-          parseEnum(prefs.getString(keyMinimapSide), MinimapSide.values) ??
-              defaultMinimapSide,
-      minimapRenderCharacters: prefs.getBool(keyMinimapRenderCharacters) ??
-          defaultMinimapRenderCharacters,
-      minimapSize: prefs.getInt(keyMinimapSize) ?? defaultMinimapSize,
-      showIndentGuides:
-          prefs.getBool(keyShowIndentGuides) ?? defaultShowIndentGuides,
-      renderWhitespace: parseEnum(
-              prefs.getString(keyRenderWhitespace), RenderWhitespace.values) ??
-          defaultRenderWhitespace,
-      rulers: prefs
-              .getStringList(keyRulers)
-              ?.map((s) => int.tryParse(s) ?? 0)
-              .where((i) => i > 0)
-              .toList() ??
-          defaultRulers,
-      stickyScroll: prefs.getBool(keyStickyScroll) ?? defaultStickyScroll,
-      showFoldingControls:
-          prefs.getString(keyShowFoldingControls) ?? defaultShowFoldingControls,
-      glyphMargin: prefs.getBool(keyGlyphMargin) ?? defaultGlyphMargin,
-      renderLineHighlight:
-          prefs.getString(keyRenderLineHighlight) ?? defaultRenderLineHighlight,
-
-      // Editor Behavior
-      wordWrap: parseEnum(prefs.getString(keyWordWrap), WordWrap.values) ??
-          defaultWordWrap,
-      wordWrapColumn: prefs.getInt(keyWordWrapColumn) ?? defaultWordWrapColumn,
-      tabSize: prefs.getInt(keyTabSize) ?? defaultTabSize,
-      insertSpaces: prefs.getBool(keyInsertSpaces) ?? defaultInsertSpaces,
-      autoIndent: prefs.getString(keyAutoIndent) ?? defaultAutoIndent,
-      autoClosingBrackets:
-          prefs.getString(keyAutoClosingBrackets) ?? defaultAutoClosingBrackets,
-      autoClosingQuotes:
-          prefs.getString(keyAutoClosingQuotes) ?? defaultAutoClosingQuotes,
-      autoSurround: prefs.getString(keyAutoSurround) ?? defaultAutoSurround,
-      bracketPairColorization: prefs.getBool(keyBracketPairColorization) ??
-          defaultBracketPairColorization,
-      codeFolding: prefs.getBool(keyCodeFolding) ?? defaultCodeFolding,
-      scrollBeyondLastLine:
-          prefs.getBool(keyScrollBeyondLastLine) ?? defaultScrollBeyondLastLine,
-      smoothScrolling:
-          prefs.getBool(keySmoothScrolling) ?? defaultSmoothScrolling,
-      fastScrollSensitivity: prefs.getDouble(keyFastScrollSensitivity) ??
-          defaultFastScrollSensitivity,
-      scrollPredominantAxis: prefs.getBool(keyScrollPredominantAxis) ??
-          defaultScrollPredominantAxis,
-
-      // Cursor
-      cursorBlinking: parseEnum(
-              prefs.getString(keyCursorBlinking), CursorBlinking.values) ??
-          defaultCursorBlinking,
-      cursorSmoothCaretAnimation:
-          prefs.getString(keyCursorSmoothCaretAnimation) ??
-              defaultCursorSmoothCaretAnimation,
-      cursorStyle:
-          parseEnum(prefs.getString(keyCursorStyle), CursorStyle.values) ??
-              defaultCursorStyle,
-      cursorWidth: prefs.getInt(keyCursorWidth) ?? defaultCursorWidth,
-      multiCursorModifier: parseEnum(prefs.getString(keyMultiCursorModifier),
-              MultiCursorModifier.values) ??
-          defaultMultiCursorModifier,
-      multiCursorMergeOverlapping:
-          prefs.getBool(keyMultiCursorMergeOverlapping) ??
-              defaultMultiCursorMergeOverlapping,
-
-      // Editing Features
-      formatOnSave: prefs.getBool(keyFormatOnSave) ?? defaultFormatOnSave,
-      formatOnPaste: prefs.getBool(keyFormatOnPaste) ?? defaultFormatOnPaste,
-      formatOnType: prefs.getBool(keyFormatOnType) ?? defaultFormatOnType,
-      quickSuggestions:
-          prefs.getBool(keyQuickSuggestions) ?? defaultQuickSuggestions,
-      quickSuggestionsDelay: prefs.getInt(keyQuickSuggestionsDelay) ??
-          defaultQuickSuggestionsDelay,
-      suggestOnTriggerCharacters:
-          prefs.getBool(keySuggestOnTriggerCharacters) ??
-              defaultSuggestOnTriggerCharacters,
-      acceptSuggestionOnEnter: parseEnum(
-              prefs.getString(keyAcceptSuggestionOnEnter),
-              AcceptSuggestionOnEnter.values) ??
-          defaultAcceptSuggestionOnEnter,
-      acceptSuggestionOnCommitCharacter:
-          prefs.getBool(keyAcceptSuggestionOnCommitCharacter) ??
-              defaultAcceptSuggestionOnCommitCharacter,
-      snippetSuggestions: parseEnum(prefs.getString(keySnippetSuggestions),
-              SnippetSuggestions.values) ??
-          defaultSnippetSuggestions,
-      wordBasedSuggestions: parseEnum(prefs.getString(keyWordBasedSuggestions),
-              WordBasedSuggestions.values) ??
-          defaultWordBasedSuggestions,
-      parameterHints: prefs.getBool(keyParameterHints) ?? defaultParameterHints,
-      hover: prefs.getBool(keyHover) ?? defaultHover,
-      contextMenu: prefs.getBool(keyContextMenu) ?? defaultContextMenu,
-
-      // Find & Replace
-      find: prefs.getBool(keyFind) ?? defaultFind,
-      seedSearchStringFromSelection:
-          prefs.getString(keySeedSearchStringFromSelection) ??
-              defaultSeedSearchStringFromSelection,
-
-      // Accessibility
-      accessibilitySupport: parseEnum(prefs.getString(keyAccessibilitySupport),
-              AccessibilitySupport.values) ??
-          defaultAccessibilitySupport,
-      accessibilityPageSize: prefs.getInt(keyAccessibilityPageSize) ??
-          defaultAccessibilityPageSize,
-
-      // Performance
-      renderValidationDecorations:
-          prefs.getString(keyRenderValidationDecorations) ??
-              defaultRenderValidationDecorations,
-      renderControlCharacters: prefs.getBool(keyRenderControlCharacters) ??
-          defaultRenderControlCharacters,
-      disableLayerHinting:
-          prefs.getBool(keyDisableLayerHinting) ?? defaultDisableLayerHinting,
-      disableMonospaceOptimizations:
-          prefs.getBool(keyDisableMonospaceOptimizations) ??
-              defaultDisableMonospaceOptimizations,
-      maxTokenizationLineLength: prefs.getInt(keyMaxTokenizationLineLength) ??
-          defaultMaxTokenizationLineLength,
-
-      // Language Configs
-      languageConfigs: parsedLanguageConfigs,
-
-      // Keybindings
-      keybindingPreset: parseEnum(prefs.getString(keyKeybindingPreset),
-              KeybindingPresetEnum.values) ??
-          defaultKeybindingPreset,
-      customKeybindings: ConvertObject.toMap(
-          prefs.getString(keyCustomKeybindings),
-          defaultValue: {}),
-
-      // Advanced
-      readOnly: prefs.getBool(keyReadOnly) ?? defaultReadOnly,
-      domReadOnly: prefs.getBool(keyDomReadOnly) ?? defaultDomReadOnly,
-      dragAndDrop: prefs.getBool(keyDragAndDrop) ?? defaultDragAndDrop,
-      links: prefs.getBool(keyLinks) ?? defaultLinks,
-      mouseWheelZoom: prefs.getBool(keyMouseWheelZoom) ?? defaultMouseWheelZoom,
-      mouseWheelScrollSensitivity:
-          prefs.getDouble(keyMouseWheelScrollSensitivity) ??
-              defaultMouseWheelScrollSensitivity,
-      automaticLayout:
-          prefs.getBool(keyAutomaticLayout) ?? defaultAutomaticLayout,
-      padding: (prefs.getString(keyPadding)?.decode() as Map<String, dynamic>?)
-              ?.map(
-                  (key, value) => MapEntry(key, ConvertObject.toInt(value))) ??
-          defaultPadding,
-      roundedSelection:
-          prefs.getBool(keyRoundedSelection) ?? defaultRoundedSelection,
-      selectionHighlight:
-          prefs.getBool(keySelectionHighlight) ?? defaultSelectionHighlight,
-      occurrencesHighlight: prefs.getString(keyOccurrencesHighlight) ??
-          defaultOccurrencesHighlight,
-      overviewRulerBorder:
-          prefs.getBool(keyOverviewRulerBorder) ?? defaultOverviewRulerBorder,
-      hideCursorInOverviewRuler: prefs.getBool(keyHideCursorInOverviewRuler) ??
-          defaultHideCursorInOverviewRuler,
-      scrollbar: prefs.getString(keyScrollbar)?.decode()
-              as Map<String, dynamic>? ?? // Cast to Map<String, dynamic>
-          defaultScrollbar,
-      experimentalFeatures: prefs.getString(keyExperimentalFeatures)?.decode()
-              as Map<String, dynamic>? ?? // Cast to Map<String, dynamic>
-          {},
-    );
-  }
 
   @override
   List<Object?> get props => [

@@ -5,6 +5,8 @@ import 'package:context_collector/src/features/editor/domain/editor_settings.dar
 import 'package:context_collector/src/features/editor/domain/keybinding_manager.dart';
 import 'package:context_collector/src/features/editor/domain/monaco_data.dart';
 import 'package:context_collector/src/features/editor/domain/theme_manager.dart';
+import 'package:context_collector/src/features/editor/services/editor_settings_service.dart';
+import 'package:context_collector/src/features/editor/utils/monaco_settings_converter.dart';
 import 'package:context_collector/src/shared/theme/extensions.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -1570,7 +1572,7 @@ class _EnhancedEditorSettingsDialogState
           const SizedBox(width: 12),
           FilledButton(
             onPressed: () async {
-              await _settings.save();
+              await EditorSettingsService.save(_settings);
               if (mounted) {
                 Navigator.of(context).pop(_settings);
               }
@@ -1681,7 +1683,7 @@ class _EnhancedEditorSettingsDialogState
   }
 
   Future<void> _exportSettings() async {
-    final settingsJson = jsonEncode(_settings.toMonacoOptions());
+    final settingsJson = jsonEncode(MonacoSettingsConverter.toMonacoOptions(_settings));
     try {
       final outputFile = await FilePicker.platform.saveFile(
         dialogTitle: 'Export Editor Settings',
