@@ -363,7 +363,6 @@ class LanguageMapper {
   /// Get all supported languages (including common extensions)
   static Set<String> getSupportedLanguages() {
     final languages = <String>{}
-
       // Add explicitly mapped languages
       ..addAll(_extensionToLanguage.values)
       ..addAll(_filenameToLanguage.values);

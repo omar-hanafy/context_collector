@@ -113,14 +113,13 @@ extension TextStylesExtension on BuildContext {
     FontWeight? fontWeight,
     double? height,
     double? letterSpacing,
-  }) =>
-      displayLarge?.copyWith(
-        color: color,
-        fontSize: fontSize,
-        fontWeight: fontWeight,
-        height: height,
-        letterSpacing: letterSpacing,
-      );
+  }) => displayLarge?.copyWith(
+    color: color,
+    fontSize: fontSize,
+    fontWeight: fontWeight,
+    height: height,
+    letterSpacing: letterSpacing,
+  );
 
   TextStyle? titleMediumCopy({
     Color? color,
@@ -128,14 +127,13 @@ extension TextStylesExtension on BuildContext {
     FontWeight? fontWeight,
     double? height,
     double? letterSpacing,
-  }) =>
-      titleMedium?.copyWith(
-        color: color,
-        fontSize: fontSize,
-        fontWeight: fontWeight,
-        height: height,
-        letterSpacing: letterSpacing,
-      );
+  }) => titleMedium?.copyWith(
+    color: color,
+    fontSize: fontSize,
+    fontWeight: fontWeight,
+    height: height,
+    letterSpacing: letterSpacing,
+  );
 
   TextStyle? bodyMediumCopy({
     Color? color,
@@ -143,14 +141,13 @@ extension TextStylesExtension on BuildContext {
     FontWeight? fontWeight,
     double? height,
     double? letterSpacing,
-  }) =>
-      bodyMedium?.copyWith(
-        color: color,
-        fontSize: fontSize,
-        fontWeight: fontWeight,
-        height: height,
-        letterSpacing: letterSpacing,
-      );
+  }) => bodyMedium?.copyWith(
+    color: color,
+    fontSize: fontSize,
+    fontWeight: fontWeight,
+    height: height,
+    letterSpacing: letterSpacing,
+  );
 
   TextStyle? labelSmallCopy({
     Color? color,
@@ -158,12 +155,11 @@ extension TextStylesExtension on BuildContext {
     FontWeight? fontWeight,
     double? height,
     double? letterSpacing,
-  }) =>
-      labelSmall?.copyWith(
-        color: color,
-        fontSize: fontSize,
-        fontWeight: fontWeight,
-        height: height,
-        letterSpacing: letterSpacing,
-      );
+  }) => labelSmall?.copyWith(
+    color: color,
+    fontSize: fontSize,
+    fontWeight: fontWeight,
+    height: height,
+    letterSpacing: letterSpacing,
+  );
 }

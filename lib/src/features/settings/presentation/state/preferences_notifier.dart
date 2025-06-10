@@ -6,8 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 // Provider for the PreferencesNotifier
 final preferencesProvider =
     StateNotifierProvider<PreferencesNotifier, ExtensionPrefsWithLoading>(
-  (ref) => PreferencesNotifier(),
-);
+      (ref) => PreferencesNotifier(),
+    );
 
 // State class to include loading status
 class ExtensionPrefsWithLoading {
@@ -68,7 +68,9 @@ class PreferencesNotifier extends StateNotifier<ExtensionPrefsWithLoading> {
       final prefsJson = sharedPrefs.getString(_prefsKey);
       if (prefsJson != null) {
         state = state.copyWith(
-            prefs: ExtensionPrefs.fromJsonString(prefsJson), isLoading: false);
+          prefs: ExtensionPrefs.fromJsonString(prefsJson),
+          isLoading: false,
+        );
       } else {
         state = state.copyWith(isLoading: false);
       }
@@ -89,8 +91,9 @@ class PreferencesNotifier extends StateNotifier<ExtensionPrefsWithLoading> {
 
   Future<void> toggleExtension(String extension) async {
     ExtensionPrefs newPrefs;
-    final isDefault =
-        ExtensionCatalog.extensionCategories.containsKey(extension);
+    final isDefault = ExtensionCatalog.extensionCategories.containsKey(
+      extension,
+    );
 
     if (isDefault) {
       if (_prefs.disabledExtensions.contains(extension)) {
@@ -106,7 +109,9 @@ class PreferencesNotifier extends StateNotifier<ExtensionPrefsWithLoading> {
   }
 
   Future<void> addCustomExtension(
-      String extension, FileCategory category) async {
+    String extension,
+    FileCategory category,
+  ) async {
     if (extension.isEmpty || !extension.startsWith('.')) {
       throw ArgumentError('Invalid extension format');
     }
@@ -136,9 +141,10 @@ class PreferencesNotifier extends StateNotifier<ExtensionPrefsWithLoading> {
 
   Future<void> disableAll() async {
     state = state.copyWith(
-        prefs: _prefs.copyWith(
-      disabledExtensions: ExtensionCatalog.extensionCategories.keys.toSet(),
-    ));
+      prefs: _prefs.copyWith(
+        disabledExtensions: ExtensionCatalog.extensionCategories.keys.toSet(),
+      ),
+    );
     await _savePreferences();
   }
 }

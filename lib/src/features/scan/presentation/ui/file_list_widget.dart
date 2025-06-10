@@ -606,109 +606,109 @@ class _FileListItem extends StatelessWidget {
     );
   }
 
-// Helper method for special filename detection
+  // Helper method for special filename detection
   ({IconData icon, Color color, Color? backgroundColor})?
-      _getSpecialFilenameIcon(String fileName) {
+  _getSpecialFilenameIcon(String fileName) {
     return switch (fileName) {
       // Dart/Flutter specific
       'pubspec.yaml' || 'pubspec.yml' => (
-          icon: Icons.flutter_dash,
-          color: const Color(0xFF0175C2),
-          backgroundColor: null,
-        ),
+        icon: Icons.flutter_dash,
+        color: const Color(0xFF0175C2),
+        backgroundColor: null,
+      ),
       'analysis_options.yaml' => (
-          icon: Icons.analytics_rounded,
-          color: const Color(0xFF0175C2),
-          backgroundColor: null,
-        ),
+        icon: Icons.analytics_rounded,
+        color: const Color(0xFF0175C2),
+        backgroundColor: null,
+      ),
 
       // Build files
       'dockerfile' => (
-          icon: Icons.directions_boat_rounded,
-          color: const Color(0xFF2496ED),
-          backgroundColor: null,
-        ),
+        icon: Icons.directions_boat_rounded,
+        color: const Color(0xFF2496ED),
+        backgroundColor: null,
+      ),
       'makefile' || 'gnumakefile' => (
-          icon: Icons.build_rounded,
-          color: const Color(0xFF427819),
-          backgroundColor: null,
-        ),
+        icon: Icons.build_rounded,
+        color: const Color(0xFF427819),
+        backgroundColor: null,
+      ),
       'cmakelists.txt' => (
-          icon: Icons.build_rounded,
-          color: const Color(0xFF064F8C),
-          backgroundColor: null,
-        ),
+        icon: Icons.build_rounded,
+        color: const Color(0xFF064F8C),
+        backgroundColor: null,
+      ),
 
       // Package management
       'package.json' => (
-          icon: Icons.inventory_2_rounded,
-          color: const Color(0xFFCB3837),
-          backgroundColor: null,
-        ),
+        icon: Icons.inventory_2_rounded,
+        color: const Color(0xFFCB3837),
+        backgroundColor: null,
+      ),
       'package-lock.json' => (
-          icon: Icons.lock_rounded,
-          color: const Color(0xFFCB3837),
-          backgroundColor: null,
-        ),
+        icon: Icons.lock_rounded,
+        color: const Color(0xFFCB3837),
+        backgroundColor: null,
+      ),
       'cargo.toml' => (
-          icon: Icons.inventory_2_rounded,
-          color: const Color(0xFFCE422B),
-          backgroundColor: null,
-        ),
+        icon: Icons.inventory_2_rounded,
+        color: const Color(0xFFCE422B),
+        backgroundColor: null,
+      ),
       'go.mod' => (
-          icon: Icons.inventory_2_rounded,
-          color: const Color(0xFF00ADD8),
-          backgroundColor: null,
-        ),
+        icon: Icons.inventory_2_rounded,
+        color: const Color(0xFF00ADD8),
+        backgroundColor: null,
+      ),
       'requirements.txt' => (
-          icon: Icons.inventory_2_rounded,
-          color: const Color(0xFF3776AB),
-          backgroundColor: null,
-        ),
+        icon: Icons.inventory_2_rounded,
+        color: const Color(0xFF3776AB),
+        backgroundColor: null,
+      ),
       'pipfile' => (
-          icon: Icons.inventory_2_rounded,
-          color: const Color(0xFF3776AB),
-          backgroundColor: null,
-        ),
+        icon: Icons.inventory_2_rounded,
+        color: const Color(0xFF3776AB),
+        backgroundColor: null,
+      ),
 
       // Configuration files
       '.gitignore' => (
-          icon: Icons.visibility_off_rounded,
-          color: const Color(0xFFF05032),
-          backgroundColor: null,
-        ),
+        icon: Icons.visibility_off_rounded,
+        color: const Color(0xFFF05032),
+        backgroundColor: null,
+      ),
       '.gitattributes' => (
-          icon: Icons.settings_rounded,
-          color: const Color(0xFFF05032),
-          backgroundColor: null,
-        ),
+        icon: Icons.settings_rounded,
+        color: const Color(0xFFF05032),
+        backgroundColor: null,
+      ),
       '.editorconfig' => (
-          icon: Icons.edit_rounded,
-          color: const Color(0xFF000000),
-          backgroundColor: null,
-        ),
+        icon: Icons.edit_rounded,
+        color: const Color(0xFF000000),
+        backgroundColor: null,
+      ),
       '.eslintrc' || '.eslintrc.json' => (
-          icon: Icons.check_circle_rounded,
-          color: const Color(0xFF4B32C3),
-          backgroundColor: null,
-        ),
+        icon: Icons.check_circle_rounded,
+        color: const Color(0xFF4B32C3),
+        backgroundColor: null,
+      ),
       '.prettierrc' || '.prettierrc.json' => (
-          icon: Icons.auto_fix_high_rounded,
-          color: const Color(0xFFF7B93E),
-          backgroundColor: null,
-        ),
+        icon: Icons.auto_fix_high_rounded,
+        color: const Color(0xFFF7B93E),
+        backgroundColor: null,
+      ),
 
       // CI/CD
       '.travis.yml' => (
-          icon: Icons.build_circle_rounded,
-          color: const Color(0xFF3EAAAF),
-          backgroundColor: null,
-        ),
+        icon: Icons.build_circle_rounded,
+        color: const Color(0xFF3EAAAF),
+        backgroundColor: null,
+      ),
       'docker-compose.yml' || 'docker-compose.yaml' => (
-          icon: Icons.view_module_rounded,
-          color: const Color(0xFF2496ED),
-          backgroundColor: null,
-        ),
+        icon: Icons.view_module_rounded,
+        color: const Color(0xFF2496ED),
+        backgroundColor: null,
+      ),
       _ => null,
     };
   }

@@ -45,7 +45,7 @@ class ExtensionPrefs {
       final categoryName = entry.value.toString();
       final category =
           FileCategory.values.firstWhereOrNull((c) => c.name == categoryName) ??
-              FileCategory.other;
+          FileCategory.other;
 
       result[entry.key] = category;
     }
@@ -154,8 +154,9 @@ class ExtensionPrefs {
 
     // Count by category
     for (final category in FileCategory.values) {
-      final count =
-          activeExtensions.values.where((cat) => cat == category).length;
+      final count = activeExtensions.values
+          .where((cat) => cat == category)
+          .length;
       if (count > 0) {
         stats[category.name] = count;
       }
@@ -188,7 +189,9 @@ class ExtensionPrefs {
           .map((e) => Object.hash(e.key, e.value))
           .fold(0, (a, b) => a is num ? a.toInt() ^ b : 0),
       disabledExtensions.fold(
-          0, (a, b) => a is num ? a.toInt() ^ b.hashCode : 0),
+        0,
+        (a, b) => a is num ? a.toInt() ^ b.hashCode : 0,
+      ),
     );
   }
 

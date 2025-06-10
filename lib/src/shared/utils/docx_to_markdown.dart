@@ -174,15 +174,17 @@ class DocxToMarkdownConverter {
       throw FileSystemException('File not found', filePath);
     }
 
-// Check file extension
+    // Check file extension
     final ext = path.extension(filePath).toLowerCase();
     if (ext == '.doc') {
       throw UnsupportedFormatException(
-          'Old .doc format is not supported. Please convert to .docx first.');
+        'Old .doc format is not supported. Please convert to .docx first.',
+      );
     }
     if (ext != '.docx') {
       throw UnsupportedFormatException(
-          'Unsupported file format: $ext. Only .docx files are supported.');
+        'Unsupported file format: $ext. Only .docx files are supported.',
+      );
     }
 
     if (config.useStreaming) {
@@ -229,42 +231,43 @@ class DocxToMarkdownConverter {
   }
 
   Future<void> _processArchive(Archive archive) async {
-// Extract relationships
+    // Extract relationships
     await _parseRelationships(archive);
 
-// Extract numbering definitions
+    // Extract numbering definitions
     await _parseNumbering(archive);
 
-// Extract comments if enabled
+    // Extract comments if enabled
     if (config.includeComments) {
       await _parseComments(archive);
     }
 
-// Extract footnotes
+    // Extract footnotes
     await _parseFootnotes(archive);
 
-// Extract media files
+    // Extract media files
     if (config.extractImages && outputMediaPath != null) {
       await _extractMediaFiles(archive);
     }
 
-// Extract and parse main document
+    // Extract and parse main document
     final docFile = archive.files.firstWhere(
       (f) => f.name == 'word/document.xml',
       orElse: () => throw DocxParsingException('Missing word/document.xml'),
     );
 
-// FIX: The argument type 'Uint8List?' can't be assigned to the parameter type 'List<int>'. (Documentation)
+    // FIX: The argument type 'Uint8List?' can't be assigned to the parameter type 'List<int>'. (Documentation)
     final xmlDoc = XmlDocument.parse(
-        const Utf8Decoder().convert(docFile.readBytes() ?? []));
+      const Utf8Decoder().convert(docFile.readBytes() ?? []),
+    );
 
-// Process document body
+    // Process document body
     final body = xmlDoc.findAllElements('w:body').firstOrNull;
     if (body == null) {
       throw DocxParsingException('Document body not found');
     }
 
-// Track code block state
+    // Track code block state
     bool inCodeBlock = false;
 
     for (final element in body.children) {
@@ -273,14 +276,14 @@ class DocxToMarkdownConverter {
       }
     }
 
-// Close any open code block
+    // Close any open code block
     if (inCodeBlock) {
       _output
         ..writeln('```')
         ..writeln();
     }
 
-// Append footnotes if any
+    // Append footnotes if any
     if (_footnotes.isNotEmpty) {
       _output.writeln('\n---\n');
       for (final footnote in _footnotes) {
@@ -296,9 +299,10 @@ class DocxToMarkdownConverter {
 
     if (relsFile == null) return;
 
-// FIX: The argument type 'Uint8List?' can't be assigned to the parameter type 'List<int>'. (Documentation)
+    // FIX: The argument type 'Uint8List?' can't be assigned to the parameter type 'List<int>'. (Documentation)
     final relsDoc = XmlDocument.parse(
-        const Utf8Decoder().convert(relsFile.readBytes() ?? []));
+      const Utf8Decoder().convert(relsFile.readBytes() ?? []),
+    );
 
     for (final rel in relsDoc.findAllElements('Relationship')) {
       final id = rel.getAttribute('Id');
@@ -323,16 +327,19 @@ class DocxToMarkdownConverter {
     if (numFile == null) return;
 
     final numDoc = XmlDocument.parse(
-        const Utf8Decoder().convert(numFile.readBytes() ?? []));
+      const Utf8Decoder().convert(numFile.readBytes() ?? []),
+    );
 
-// Parse abstract numbering definitions
+    // Parse abstract numbering definitions
     for (final abstractNum in numDoc.findAllElements('w:abstractNum')) {
       final abstractNumId = abstractNum.getAttribute('w:abstractNumId');
       if (abstractNumId != null) {
         for (final lvl in abstractNum.findAllElements('w:lvl')) {
           final ilvl = lvl.getAttribute('w:ilvl');
-          final numFmt =
-              lvl.findElements('w:numFmt').firstOrNull?.getAttribute('w:val');
+          final numFmt = lvl
+              .findElements('w:numFmt')
+              .firstOrNull
+              ?.getAttribute('w:val');
           if (ilvl != null) {
             _numbering['$abstractNumId:$ilvl'] = numFmt ?? 'bullet';
           }
@@ -340,12 +347,12 @@ class DocxToMarkdownConverter {
       }
     }
 
-// Parse num to abstractNum mapping
+    // Parse num to abstractNum mapping
     for (final num in numDoc.findAllElements('w:num')) {
       final numId = num.getAttribute('w:numId');
-      final abstractNumId = num.findElements('w:abstractNumId')
-          .firstOrNull
-          ?.getAttribute('w:val');
+      final abstractNumId = num.findElements(
+        'w:abstractNumId',
+      ).firstOrNull?.getAttribute('w:val');
       if (numId != null && abstractNumId != null) {
         _numToAbstract[numId] = abstractNumId;
       }
@@ -360,13 +367,14 @@ class DocxToMarkdownConverter {
     if (commentsFile == null) return;
 
     final commentsDoc = XmlDocument.parse(
-        const Utf8Decoder().convert(commentsFile.readBytes() ?? []));
+      const Utf8Decoder().convert(commentsFile.readBytes() ?? []),
+    );
 
     for (final comment in commentsDoc.findAllElements('w:comment')) {
       final id = comment.getAttribute('w:id');
       final author = comment.getAttribute('w:author');
 
-// Extract comment text properly with paragraph boundaries
+      // Extract comment text properly with paragraph boundaries
       final paragraphs = comment.findAllElements('w:p');
       final textParts = <String>[];
 
@@ -395,13 +403,14 @@ class DocxToMarkdownConverter {
     if (footnotesFile == null) return;
 
     final footnotesDoc = XmlDocument.parse(
-        const Utf8Decoder().convert(footnotesFile.readBytes() ?? []));
+      const Utf8Decoder().convert(footnotesFile.readBytes() ?? []),
+    );
 
     for (final footnote in footnotesDoc.findAllElements('w:footnote')) {
       final id = footnote.getAttribute('w:id');
       if (id != null && id != '0' && id != '-1') {
         // Skip separator and continuation
-// Extract footnote text properly
+        // Extract footnote text properly
         final paragraphs = footnote.findAllElements('w:p');
         final textParts = <String>[];
 
@@ -430,12 +439,12 @@ class DocxToMarkdownConverter {
         final fileName = path.basename(file.name);
         final outputFile = File(path.join(outputMediaPath!, fileName));
 
-// Use streaming write for large images
+        // Use streaming write for large images
         final outputStream = OutputFileStream(outputFile.path);
         file.writeContent(outputStream);
         await outputStream.close();
 
-// Map both the full path and just the filename
+        // Map both the full path and just the filename
         _mediaFiles[file.name] = fileName;
         _mediaFiles[fileName] = fileName;
       }
@@ -460,33 +469,33 @@ class DocxToMarkdownConverter {
     final styleEl = pPr?.getElement('w:pStyle')?.getAttribute('w:val');
     final numPr = pPr?.getElement('w:numPr');
 
-// Check if this is a code block style
+    // Check if this is a code block style
     final bool isCodeBlockStyle = styleEl == config.codeBlockStyle;
 
-// Handle code blocks
+    // Handle code blocks
     if (isCodeBlockStyle) {
       final content = _extractParagraphContent(p);
 
       if (!isInCodeBlock) {
-// Start new code block
+        // Start new code block
         _output
           ..writeln('```')
           ..writeln(content);
         return true;
       } else {
-// Continue code block
+        // Continue code block
         _output.writeln(content);
         return true;
       }
     } else if (isInCodeBlock) {
-// End code block
+      // End code block
       _output
         ..writeln('```')
         ..writeln();
       isInCodeBlock = false;
     }
 
-// Determine paragraph prefix
+    // Determine paragraph prefix
     String prefix = '';
     if (styleEl != null && config.styleMapping.containsKey(styleEl)) {
       prefix = config.styleMapping[styleEl]!;
@@ -497,10 +506,10 @@ class DocxToMarkdownConverter {
       prefix = _getListPrefix(numPr);
     }
 
-// Process content
+    // Process content
     final content = _extractParagraphContent(p);
 
-// Handle horizontal rules
+    // Handle horizontal rules
     if (content == '---' || content == '***' || content == '___') {
       _output
         ..writeln(content)
@@ -512,7 +521,7 @@ class DocxToMarkdownConverter {
         (config.preserveEmptyParagraphs && prefix.isEmpty)) {
       _output.writeln('$prefix$content');
 
-// Add spacing
+      // Add spacing
       if (prefix.startsWith('#')) {
         _output.writeln();
       } else if (!_isListItem(prefix) && prefix != '> ') {
@@ -532,14 +541,14 @@ class DocxToMarkdownConverter {
     final level = int.tryParse(ilvl) ?? 0;
     final indent = ' ' * (level * 2);
 
-// Look up numbering format through the num -> abstract mapping
+    // Look up numbering format through the num -> abstract mapping
     final abstractId = _numToAbstract[numId];
     String? numFmt;
     if (abstractId != null) {
       numFmt = _numbering['$abstractId:$ilvl'];
     }
 
-// Update list state
+    // Update list state
     _listState.updateList(numId, ilvl, numFmt);
     final listInfo = _listState.getList(numId);
 
@@ -552,7 +561,7 @@ class DocxToMarkdownConverter {
       final letter = String.fromCharCode(64 + (listInfo?.lastIndex ?? 1));
       return '$indent$letter. ';
     } else {
-// Bulleted list
+      // Bulleted list
       final bullet = config.bulletStyles[level % config.bulletStyles.length];
       return '$indent$bullet ';
     }
@@ -603,7 +612,7 @@ class DocxToMarkdownConverter {
   String _processRun(XmlElement r) {
     final textBuffer = StringBuffer();
 
-// Check for footnote reference
+    // Check for footnote reference
     final footnoteRef = r.getElement('w:footnoteReference');
     if (footnoteRef != null) {
       final id = footnoteRef.getAttribute('w:id');
@@ -612,22 +621,22 @@ class DocxToMarkdownConverter {
       }
     }
 
-// Extract text
+    // Extract text
     for (final t in r.findAllElements('w:t')) {
       textBuffer.write(t.innerText);
     }
 
-// Handle breaks
+    // Handle breaks
     if (r.findElements('w:br').isNotEmpty) {
       textBuffer.write('  \n'); // Markdown line break
     }
 
-// Handle tabs
+    // Handle tabs
     if (r.findElements('w:tab').isNotEmpty) {
       textBuffer.write('\t');
     }
 
-// Handle images
+    // Handle images
     final drawing = r.getElement('w:drawing');
     if (drawing != null) {
       final image = _extractImage(drawing);
@@ -636,13 +645,13 @@ class DocxToMarkdownConverter {
       }
     }
 
-// Handle embedded objects
+    // Handle embedded objects
     final object = r.getElement('w:object');
     if (object != null) {
       return '[Embedded Object]';
     }
 
-// Apply formatting
+    // Apply formatting
     final rPr = r.getElement('w:rPr');
     final text = textBuffer.toString();
     if (rPr != null && text.isNotEmpty) {
@@ -655,9 +664,11 @@ class DocxToMarkdownConverter {
   String _applyFormatting(String text, XmlElement rPr) {
     var txt = text;
 
-    final isBold = rPr.findElements('w:b').isNotEmpty &&
+    final isBold =
+        rPr.findElements('w:b').isNotEmpty &&
         rPr.findElements('w:b').first.getAttribute('w:val') != 'false';
-    final isItalic = rPr.findElements('w:i').isNotEmpty &&
+    final isItalic =
+        rPr.findElements('w:i').isNotEmpty &&
         rPr.findElements('w:i').first.getAttribute('w:val') != 'false';
     final isStrike = rPr.findElements('w:strike').isNotEmpty;
     final isUnderline = rPr.findElements('w:u').isNotEmpty;
@@ -669,12 +680,12 @@ class DocxToMarkdownConverter {
         .any((e) => e.getAttribute('w:val') == 'superscript');
     final isCode = _isCodeFormatting(rPr);
 
-// Apply code formatting first
+    // Apply code formatting first
     if (isCode) {
       return '`$txt`';
     }
 
-// Apply other formatting
+    // Apply other formatting
     if (isSubscript) {
       txt = '<sub>$txt</sub>';
     } else if (isSuperscript) {
@@ -700,7 +711,7 @@ class DocxToMarkdownConverter {
         case UnderlineMode.plusPlus:
           txt = '++$txt++';
         case UnderlineMode.ignore:
-// Do nothing
+          // Do nothing
           break;
       }
     }
@@ -709,9 +720,11 @@ class DocxToMarkdownConverter {
   }
 
   bool _isCodeFormatting(XmlElement rPr) {
-// Check for courier fonts
-    final font =
-        rPr.getElement('w:rFonts')?.getAttribute('w:ascii')?.toLowerCase();
+    // Check for courier fonts
+    final font = rPr
+        .getElement('w:rFonts')
+        ?.getAttribute('w:ascii')
+        ?.toLowerCase();
     if (font != null &&
         (font.contains('courier') ||
             font.contains('consolas') ||
@@ -719,7 +732,7 @@ class DocxToMarkdownConverter {
       return true;
     }
 
-// Check for shading (often used for inline code)
+    // Check for shading (often used for inline code)
     if (rPr.findElements('w:shd').isNotEmpty) {
       return true;
     }
@@ -729,14 +742,15 @@ class DocxToMarkdownConverter {
 
   String? _extractImage(XmlElement drawing) {
     try {
-// Skip shapes and diagrams
+      // Skip shapes and diagrams
       if (_isShape(drawing)) {
         return null;
       }
 
-// Extract image data
+      // Extract image data
       final picProps = drawing.findAllElements('pic:cNvPr').firstOrNull;
-      final altText = picProps?.getAttribute('descr') ??
+      final altText =
+          picProps?.getAttribute('descr') ??
           picProps?.getAttribute('name') ??
           'Image';
 
@@ -744,12 +758,12 @@ class DocxToMarkdownConverter {
       final embed = blip?.getAttribute('r:embed');
 
       if (embed != null) {
-// Look up in relationships
+        // Look up in relationships
         final rel = _relationships[embed];
         if (rel != null) {
           final imagePath = _resolveImagePath(rel.target);
 
-// Add width constraint if configured
+          // Add width constraint if configured
           if (config.maxImageWidth > 0) {
             return '![$altText]($imagePath =${config.maxImageWidth}x)';
           }
@@ -771,13 +785,13 @@ class DocxToMarkdownConverter {
 
   String _resolveImagePath(String target) {
     if (_mediaFiles.isNotEmpty) {
-// Check if we have this media file
+      // Check if we have this media file
       final mediaKey = 'word/$target';
       if (_mediaFiles.containsKey(mediaKey)) {
         return _mediaFiles[mediaKey]!;
       }
 
-// Try just the filename
+      // Try just the filename
       final filename = path.basename(target);
       if (_mediaFiles.containsKey(filename)) {
         return _mediaFiles[filename]!;
@@ -813,13 +827,13 @@ class DocxToMarkdownConverter {
     final rows = table.findAllElements('w:tr').toList();
     if (rows.isEmpty) return;
 
-// Reset vertical merge tracking
+    // Reset vertical merge tracking
     _verticalMerges.clear();
 
-// Analyze table for column alignment
+    // Analyze table for column alignment
     final columnAlignments = _analyzeTableAlignment(table);
 
-// Process all rows
+    // Process all rows
     for (var i = 0; i < rows.length; i++) {
       final row = rows[i];
       final cells = row.findAllElements('w:tc').toList();
@@ -827,14 +841,14 @@ class DocxToMarkdownConverter {
       var colIndex = 0;
 
       for (final cell in cells) {
-// Check for vertical merge
+        // Check for vertical merge
         final vMerge = cell.getElement('w:tcPr')?.getElement('w:vMerge');
 
         if (vMerge != null && vMerge.getAttribute('w:val') != 'restart') {
-// This is a continuation of a vertical merge
+          // This is a continuation of a vertical merge
           cellTexts.add(' ');
         } else {
-// Normal cell or start of vertical merge
+          // Normal cell or start of vertical merge
           final cellText = StringBuffer();
           final paragraphs = cell.findAllElements('w:p').toList();
 
@@ -850,20 +864,20 @@ class DocxToMarkdownConverter {
           final content = cellText.toString().trim();
           cellTexts.add(content.isEmpty ? ' ' : content.replaceAll('|', r'\|'));
 
-// Track vertical merge start
+          // Track vertical merge start
           if (vMerge != null && vMerge.getAttribute('w:val') == 'restart') {
             _verticalMerges.add(VerticalMergeCell(row: i, col: colIndex));
           }
         }
 
-// Handle column spans
+        // Handle column spans
         final gridSpan = cell
             .getElement('w:tcPr')
             ?.getElement('w:gridSpan')
             ?.getAttribute('w:val');
         final spanCount = int.tryParse(gridSpan ?? '1') ?? 1;
 
-// Add empty cells for column spans
+        // Add empty cells for column spans
         for (var k = 1; k < spanCount; k++) {
           cellTexts.add(' ');
           colIndex++;
@@ -874,12 +888,13 @@ class DocxToMarkdownConverter {
 
       _output.writeln('| ${cellTexts.join(' | ')} |');
 
-// Add separator after first row
+      // Add separator after first row
       if (i == 0) {
         final separators = <String>[];
         for (var j = 0; j < cellTexts.length; j++) {
-          final alignment =
-              j < columnAlignments.length ? columnAlignments[j] : 'left';
+          final alignment = j < columnAlignments.length
+              ? columnAlignments[j]
+              : 'left';
           switch (alignment) {
             case 'center':
               separators.add(':---:');
@@ -899,7 +914,7 @@ class DocxToMarkdownConverter {
   List<String> _analyzeTableAlignment(XmlElement table) {
     final alignments = <String>[];
 
-// Get first row to analyze columns
+    // Get first row to analyze columns
     final firstRow = table.findAllElements('w:tr').firstOrNull;
     if (firstRow != null) {
       for (final cell in firstRow.findAllElements('w:tc')) {

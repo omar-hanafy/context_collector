@@ -118,7 +118,8 @@ class AutoUpdaterService implements UpdaterListener {
     debugPrint('[AutoUpdater] Update downloaded!');
     if (appcastItem != null) {
       debugPrint(
-          '[AutoUpdater] Ready to install: ${appcastItem.versionString}');
+        '[AutoUpdater] Ready to install: ${appcastItem.versionString}',
+      );
     }
   }
 

@@ -2,7 +2,6 @@
 import 'dart:io';
 
 import 'package:context_collector/context_collector.dart';
-import 'package:context_collector/src/features/editor/utils/webview_platform_utils.dart';
 import 'package:context_collector/src/features/settings/presentation/state/theme_notifier.dart';
 import 'package:context_collector/src/features/settings/services/auto_updater_service.dart';
 import 'package:flutter/material.dart';
@@ -54,16 +53,22 @@ void main() async {
 /// Start Monaco asset copying silently in background - no UI indication
 void _startMonacoAssetsSilently(ProviderContainer container) {
   debugPrint(
-      '[ContextCollector] 🤫 Starting Monaco assets SILENTLY in background...');
+    '[ContextCollector] 🤫 Starting Monaco assets SILENTLY in background...',
+  );
 
   // Fire and forget - completely silent, no UI changes
-  container.read(unifiedMonacoProvider.notifier).initialize().then((_) {
-    debugPrint('[ContextCollector] ✅ Monaco assets ready silently');
-  }).catchError((dynamic error) {
-    // Silent failure - will be retried when user actually needs the editor
-    debugPrint(
-        '[ContextCollector] ⚠️ Silent Monaco asset initialization failed: $error');
-  });
+  container
+      .read(monacoProvider.notifier)
+      .initialize()
+      .then((_) {
+        debugPrint('[ContextCollector] ✅ Monaco assets ready silently');
+      })
+      .catchError((dynamic error) {
+        // Silent failure - will be retried when user actually needs the editor
+        debugPrint(
+          '[ContextCollector] ⚠️ Silent Monaco asset initialization failed: $error',
+        );
+      });
 }
 
 /// Start editor preloading - will automatically wait for assets
@@ -74,13 +79,13 @@ void _startEditorPreloading(ProviderContainer container) {
   // and initialize the editor when assets are ready
   container
     ..read(monacoEditorServiceProvider)
-
     // Also listen to status for debugging
     ..listen<EditorStatus>(
       monacoEditorStatusProvider,
       (previous, next) {
         debugPrint(
-            '[ContextCollector] Editor status changed: ${previous?.lifecycle} → ${next.lifecycle}');
+          '[ContextCollector] Editor status changed: ${previous?.lifecycle} → ${next.lifecycle}',
+        );
         debugPrint('  Has Content: ${next.hasContent}');
         if (next.error != null) {
           debugPrint('  Error: ${next.error}');
@@ -91,7 +96,8 @@ void _startEditorPreloading(ProviderContainer container) {
   // Check initial state
   final initialStatus = container.read(monacoEditorStatusProvider);
   debugPrint(
-      '[ContextCollector] Initial editor status: ${initialStatus.lifecycle}');
+    '[ContextCollector] Initial editor status: ${initialStatus.lifecycle}',
+  );
 }
 
 /// Initialize auto updater for automatic updates
@@ -99,19 +105,27 @@ void _initializeAutoUpdater(ProviderContainer container) {
   // Only initialize on supported platforms
   if (!Platform.isMacOS && !Platform.isWindows) {
     debugPrint(
-        '[ContextCollector] Auto updater not supported on this platform');
+      '[ContextCollector] Auto updater not supported on this platform',
+    );
     return;
   }
 
   debugPrint('[ContextCollector] 🔄 Initializing auto updater...');
 
   // Initialize auto updater service
-  container.read(autoUpdaterServiceProvider).initialize().then((_) {
-    debugPrint('[ContextCollector] ✅ Auto updater initialized successfully');
-  }).catchError((dynamic error) {
-    debugPrint(
-        '[ContextCollector] ⚠️ Auto updater initialization failed: $error');
-  });
+  container
+      .read(autoUpdaterServiceProvider)
+      .initialize()
+      .then((_) {
+        debugPrint(
+          '[ContextCollector] ✅ Auto updater initialized successfully',
+        );
+      })
+      .catchError((dynamic error) {
+        debugPrint(
+          '[ContextCollector] ⚠️ Auto updater initialization failed: $error',
+        );
+      });
 }
 
 class ContextCollectorApp extends ConsumerWidget {

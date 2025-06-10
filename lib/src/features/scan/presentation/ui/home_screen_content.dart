@@ -118,46 +118,48 @@ class HomeScreenContent extends StatelessWidget {
       spacing: 16,
       runSpacing: 16,
       children: features
-          .map((feature) => SizedBox(
-                width: 280,
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsetsDirectional.all(12),
-                      decoration: BoxDecoration(
-                        color: context.primary.addOpacity(0.08),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        feature.icon,
-                        size: 24,
-                        color: context.primary,
-                      ),
+          .map(
+            (feature) => SizedBox(
+              width: 280,
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsetsDirectional.all(12),
+                    decoration: BoxDecoration(
+                      color: context.primary.addOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            feature.title,
-                            style: context.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            feature.description,
-                            style: context.bodySmall?.copyWith(
-                              color: context.onSurface.addOpacity(0.6),
-                            ),
-                          ),
-                        ],
-                      ),
+                    child: Icon(
+                      feature.icon,
+                      size: 24,
+                      color: context.primary,
                     ),
-                  ],
-                ),
-              ))
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          feature.title,
+                          style: context.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          feature.description,
+                          style: context.bodySmall?.copyWith(
+                            color: context.onSurface.addOpacity(0.6),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
           .toList(),
     );
   }
@@ -271,7 +273,10 @@ class HomeScreenContent extends StatelessWidget {
   }
 
   Widget _buildFormatCategory(
-      BuildContext context, FileCategory category, List<String> extensions) {
+    BuildContext context,
+    FileCategory category,
+    List<String> extensions,
+  ) {
     return Container(
       padding: const EdgeInsetsDirectional.all(16),
       decoration: BoxDecoration(
@@ -331,23 +336,25 @@ class HomeScreenContent extends StatelessWidget {
             spacing: 6,
             runSpacing: 6,
             children: extensions
-                .map((ext) => Container(
-                      padding: const EdgeInsetsDirectional.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
+                .map(
+                  (ext) => Container(
+                    padding: const EdgeInsetsDirectional.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: context.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      ext,
+                      style: context.labelSmall?.copyWith(
+                        fontFamily: 'monospace',
+                        fontSize: 12,
                       ),
-                      decoration: BoxDecoration(
-                        color: context.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        ext,
-                        style: context.labelSmall?.copyWith(
-                          fontFamily: 'monospace',
-                          fontSize: 12,
-                        ),
-                      ),
-                    ))
+                    ),
+                  ),
+                )
                 .toList(),
           ),
         ],

@@ -19,8 +19,10 @@ class FileScanner {
 
     final foundFiles = <ScannedFile>[];
 
-    await for (final entity
-        in directory.list(recursive: true, followLinks: false)) {
+    await for (final entity in directory.list(
+      recursive: true,
+      followLinks: false,
+    )) {
       if (entity is File) {
         var extension = path.extension(entity.path).toLowerCase();
 

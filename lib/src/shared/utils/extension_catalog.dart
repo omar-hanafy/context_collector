@@ -455,7 +455,9 @@ enum FileCategory {
 /// Top-level function to check if an extension supports text extraction
 /// This is the clean API mentioned in the roadmap
 bool supportsTextHelper(
-    String extension, Map<String, FileCategory>? customExtensions) {
+  String extension,
+  Map<String, FileCategory>? customExtensions,
+) {
   final ext = extension.toLowerCase();
 
   // Check custom extensions first (user preferences)
@@ -469,7 +471,9 @@ bool supportsTextHelper(
 
 /// Get category for an extension, considering user preferences
 FileCategory? getExtensionCategory(
-    String extension, Map<String, FileCategory>? customExtensions) {
+  String extension,
+  Map<String, FileCategory>? customExtensions,
+) {
   final ext = extension.toLowerCase();
 
   // Check custom extensions first

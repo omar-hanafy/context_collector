@@ -1,0 +1,111 @@
+Analyzing context_collector...                                  
+
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:86:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:87:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:88:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:93:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:94:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:97:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:100:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:103:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:104:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:107:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:110:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:111:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:114:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:117:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:118:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:119:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:122:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:123:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:128:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:129:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:130:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:131:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:132:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:133:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:136:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:139:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:142:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:145:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:146:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:149:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:152:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:155:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:160:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:163:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:166:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:169:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:170:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:173:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:178:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:179:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:180:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:181:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:184:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:187:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:190:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:193:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:196:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:199:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:202:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:203:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:204:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:207:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:208:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:213:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:216:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:221:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:224:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:227:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:230:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:233:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:238:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:243:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:246:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:251:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:252:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:253:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:254:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:255:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:258:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:261:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:264:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:267:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:270:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:273:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:276:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:279:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:282:6 • invalid_annotation_target
+warning • The annotation 'JsonKey.new' can only be used on fields or getters • lib/src/features/editor/core/model/editor_settings.dart:293:6 • invalid_annotation_target
+warning • The left operand can't be null, so the right operand is never executed • lib/src/features/editor/core/model/editor_settings.dart:363:36 • dead_null_aware_expression
+   info • A type annotation is needed because it isn't obvious • lib/src/features/editor/core/model/editor_settings.g.dart:43:1 • specify_nonobvious_property_types
+   info • Unnecessary use of a null check ('!') • lib/src/features/editor/core/model/editor_settings.g.dart:247:59 • unnecessary_null_checks
+   info • Unnecessary use of a null check ('!') • lib/src/features/editor/core/model/editor_settings.g.dart:249:68 • unnecessary_null_checks
+   info • Unnecessary use of a null check ('!') • lib/src/features/editor/core/model/editor_settings.g.dart:254:59 • unnecessary_null_checks
+   info • Unnecessary use of a null check ('!') • lib/src/features/editor/core/model/editor_settings.g.dart:260:59 • unnecessary_null_checks
+   info • Unnecessary use of a null check ('!') • lib/src/features/editor/core/model/editor_settings.g.dart:274:77 • unnecessary_null_checks
+   info • Unnecessary use of a null check ('!') • lib/src/features/editor/core/model/editor_settings.g.dart:276:68 • unnecessary_null_checks
+   info • Unnecessary use of a null check ('!') • lib/src/features/editor/core/model/editor_settings.g.dart:279:65 • unnecessary_null_checks
+   info • Unnecessary use of a null check ('!') • lib/src/features/editor/core/model/editor_settings.g.dart:288:73 • unnecessary_null_checks
+   info • Unnecessary use of a null check ('!') • lib/src/features/editor/core/model/editor_settings.g.dart:292:63 • unnecessary_null_checks
+   info • Unnecessary use of a null check ('!') • lib/src/features/editor/core/model/editor_settings.g.dart:294:67 • unnecessary_null_checks
+   info • Unnecessary use of a null check ('!') • lib/src/features/editor/core/model/editor_settings.g.dart:302:67 • unnecessary_null_checks
+   info • Unnecessary use of a null check ('!') • lib/src/features/editor/core/model/editor_settings.g.dart:314:63 • unnecessary_null_checks
+   info • A type annotation is needed because it isn't obvious • lib/src/features/editor/core/model/editor_settings.g.dart:333:1 • specify_nonobvious_property_types
+   info • A type annotation is needed because it isn't obvious • lib/src/features/editor/core/model/editor_settings.g.dart:340:1 • specify_nonobvious_property_types
+   info • A type annotation is needed because it isn't obvious • lib/src/features/editor/core/model/editor_settings.g.dart:345:1 • specify_nonobvious_property_types
+   info • A type annotation is needed because it isn't obvious • lib/src/features/editor/core/model/editor_settings.g.dart:353:1 • specify_nonobvious_property_types
+   info • A type annotation is needed because it isn't obvious • lib/src/features/editor/core/model/editor_settings.g.dart:361:1 • specify_nonobvious_property_types
+   info • A type annotation is needed because it isn't obvious • lib/src/features/editor/core/model/editor_settings.g.dart:370:1 • specify_nonobvious_property_types
+   info • A type annotation is needed because it isn't obvious • lib/src/features/editor/core/model/editor_settings.g.dart:375:1 • specify_nonobvious_property_types
+   info • A type annotation is needed because it isn't obvious • lib/src/features/editor/core/model/editor_settings.g.dart:381:1 • specify_nonobvious_property_types
+   info • A type annotation is needed because it isn't obvious • lib/src/features/editor/core/model/editor_settings.g.dart:388:1 • specify_nonobvious_property_types
+   info • A type annotation is needed because it isn't obvious • lib/src/features/editor/core/model/editor_settings.g.dart:395:1 • specify_nonobvious_property_types
+   info • A type annotation is needed because it isn't obvious • lib/src/features/editor/core/model/editor_settings.g.dart:401:1 • specify_nonobvious_property_types
+   info • Use an if-null operator to convert a 'null' to a 'bool' • lib/src/features/editor/ui/dialogs/language_settings_dialog.dart:174:26 • use_if_null_to_convert_nulls_to_bools
+   info • 'value' is deprecated and shouldn't be used. Use component accessors like .r or .g, or toARGB32 for an explicit conversion • lib/src/features/editor/ui/widgets/settings/form_fields.dart:211:25 • deprecated_member_use
+warning • The type argument(s) of the constructor 'Future.delayed' can't be inferred • lib/src/features/scan/presentation/state/selection_notifier.dart:264:15 • inference_failure_on_instance_creation
+warning • The value of the local variable 'batchResults' isn't used • packages/ai_token_calculator/example/example.dart:97:9 • unused_local_variable
+
+107 issues found. (ran in 2.6s)

@@ -24,7 +24,7 @@ class DropProcessResult {
   final Map<String, String> errors; // path -> error message
   final List<String> skippedPaths; // Already processed paths (duplicates)
   final List<String>
-      filteredPaths; // Files filtered due to unsupported extensions
+  filteredPaths; // Files filtered due to unsupported extensions
 
   bool get hasErrors => errors.isNotEmpty;
 
@@ -84,19 +84,22 @@ class DropProcessor {
 
     if (kDebugMode) {
       print(
-          '[DropProcessor] Starting processing of ${droppedItems.length} items');
+        '[DropProcessor] Starting processing of ${droppedItems.length} items',
+      );
       for (var i = 0; i < droppedItems.length && i < 5; i++) {
         print('  - Item $i: ${droppedItems[i].path}');
       }
     }
 
     // Phase 1: Collect and categorize items
-    onProgress?.call(DropProcessProgress(
-      totalItems: droppedItems.length,
-      processedItems: 0,
-      currentItem: null,
-      phase: DropProcessPhase.collectingItems,
-    ));
+    onProgress?.call(
+      DropProcessProgress(
+        totalItems: droppedItems.length,
+        processedItems: 0,
+        currentItem: null,
+        phase: DropProcessPhase.collectingItems,
+      ),
+    );
 
     final collectionResult = await _collectDroppedItems(droppedItems);
 
@@ -106,16 +109,19 @@ class DropProcessor {
       print('  - Directory paths: ${collectionResult.directoryPaths.length}');
       if (collectionResult.filePaths.isNotEmpty) {
         print(
-            '  - First few files: ${collectionResult.filePaths.take(3).toList()}');
+          '  - First few files: ${collectionResult.filePaths.take(3).toList()}',
+        );
       }
     }
 
-    onProgress?.call(DropProcessProgress(
-      totalItems: collectionResult.totalEstimatedItems,
-      processedItems: droppedItems.length,
-      currentItem: null,
-      phase: DropProcessPhase.resolvingDirectories,
-    ));
+    onProgress?.call(
+      DropProcessProgress(
+        totalItems: collectionResult.totalEstimatedItems,
+        processedItems: droppedItems.length,
+        currentItem: null,
+        phase: DropProcessPhase.resolvingDirectories,
+      ),
+    );
 
     // Phase 2: Resolve directories to files
     final allScannedFiles = <ScannedFile>[];
@@ -145,22 +151,26 @@ class DropProcessor {
       }
       processedCount++;
 
-      onProgress?.call(DropProcessProgress(
-        totalItems: collectionResult.totalEstimatedItems,
-        processedItems: processedCount,
-        currentItem: filePath,
-        phase: DropProcessPhase.scanningFiles,
-      ));
+      onProgress?.call(
+        DropProcessProgress(
+          totalItems: collectionResult.totalEstimatedItems,
+          processedItems: processedCount,
+          currentItem: filePath,
+          phase: DropProcessPhase.scanningFiles,
+        ),
+      );
     }
 
     // Process directories
     for (final dirPath in collectionResult.directoryPaths) {
-      onProgress?.call(DropProcessProgress(
-        totalItems: collectionResult.totalEstimatedItems,
-        processedItems: processedCount,
-        currentItem: dirPath,
-        phase: DropProcessPhase.scanningFiles,
-      ));
+      onProgress?.call(
+        DropProcessProgress(
+          totalItems: collectionResult.totalEstimatedItems,
+          processedItems: processedCount,
+          currentItem: dirPath,
+          phase: DropProcessPhase.scanningFiles,
+        ),
+      );
 
       try {
         final scannedFiles = await _fileScanner.scanDirectory(
@@ -185,12 +195,14 @@ class DropProcessor {
       }
     }
 
-    onProgress?.call(DropProcessProgress(
-      totalItems: allScannedFiles.length,
-      processedItems: 0,
-      currentItem: null,
-      phase: DropProcessPhase.filteringDuplicates,
-    ));
+    onProgress?.call(
+      DropProcessProgress(
+        totalItems: allScannedFiles.length,
+        processedItems: 0,
+        currentItem: null,
+        phase: DropProcessPhase.filteringDuplicates,
+      ),
+    );
 
     final uniqueFiles = <ScannedFile>[];
     final skippedPaths = <String>[];
@@ -204,7 +216,8 @@ class DropProcessor {
         skippedPaths.add(file.fullPath);
         if (i < 3) {
           debugPrint(
-              '[DropProcessor] Skipping existing file: ${file.fullPath}');
+            '[DropProcessor] Skipping existing file: ${file.fullPath}',
+          );
         }
       }
       // Skip if we've already processed this path in this batch
@@ -212,7 +225,8 @@ class DropProcessor {
         skippedPaths.add(file.fullPath);
         if (i < 3) {
           debugPrint(
-              '[DropProcessor] Skipping duplicate in batch: ${file.fullPath}');
+            '[DropProcessor] Skipping duplicate in batch: ${file.fullPath}',
+          );
         }
       }
       // Add to unique files
@@ -223,26 +237,31 @@ class DropProcessor {
 
       if (i % 10 == 0) {
         // Update progress every 10 files
-        onProgress?.call(DropProcessProgress(
-          totalItems: allScannedFiles.length,
-          processedItems: i + 1,
-          currentItem: file.name,
-          phase: DropProcessPhase.filteringDuplicates,
-        ));
+        onProgress?.call(
+          DropProcessProgress(
+            totalItems: allScannedFiles.length,
+            processedItems: i + 1,
+            currentItem: file.name,
+            phase: DropProcessPhase.filteringDuplicates,
+          ),
+        );
       }
     }
 
     // Final progress
-    onProgress?.call(DropProcessProgress(
-      totalItems: uniqueFiles.length,
-      processedItems: uniqueFiles.length,
-      currentItem: null,
-      phase: DropProcessPhase.complete,
-    ));
+    onProgress?.call(
+      DropProcessProgress(
+        totalItems: uniqueFiles.length,
+        processedItems: uniqueFiles.length,
+        currentItem: null,
+        phase: DropProcessPhase.complete,
+      ),
+    );
 
     if (kDebugMode) {
       print(
-          '[DropProcessor] Processing complete in ${stopwatch.elapsedMilliseconds}ms');
+        '[DropProcessor] Processing complete in ${stopwatch.elapsedMilliseconds}ms',
+      );
       print('  - Files found: ${uniqueFiles.length}');
       print('  - Errors: ${errors.length}');
       print('  - Skipped (duplicates): ${skippedPaths.length}');
@@ -276,8 +295,9 @@ class DropProcessor {
       if (itemPath.contains('/tmp/Drops/')) {
         try {
           final content = await File(itemPath).readAsString();
-          final directoryPath =
-              VSCodeDropDetector.extractDirectoryPath(content);
+          final directoryPath = VSCodeDropDetector.extractDirectoryPath(
+            content,
+          );
 
           if (directoryPath != null) {
             directoryPaths.add(directoryPath);

@@ -1,5 +1,4 @@
 import 'package:context_collector/context_collector.dart';
-import 'package:context_collector/src/features/scan/services/drop_processor.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -207,8 +206,9 @@ class ActionButtonsWidget extends ConsumerWidget {
                         height: 16,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(context.primary),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            context.primary,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -234,8 +234,9 @@ class ActionButtonsWidget extends ConsumerWidget {
                     child: LinearProgressIndicator(
                       value: selectionState.processingProgress!.progress,
                       backgroundColor: context.primary.addOpacity(0.1),
-                      valueColor:
-                          AlwaysStoppedAnimation<Color>(context.primary),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        context.primary,
+                      ),
                       minHeight: 4,
                     ),
                   ),

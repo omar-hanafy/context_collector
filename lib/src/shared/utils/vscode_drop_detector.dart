@@ -10,8 +10,9 @@ class VSCodeDropDetector {
   ///
   /// Looks for: <script>start("/path/to/directory/");</script>
   static String? extractDirectoryPath(String content) {
-    final match =
-        RegExp(r'<script>start\("([^"]+)"\);</script>').firstMatch(content);
+    final match = RegExp(
+      r'<script>start\("([^"]+)"\);</script>',
+    ).firstMatch(content);
     return match?.group(1);
   }
 

@@ -78,8 +78,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     if (!text.startsWith('.')) {
                       return TextEditingValue(
                         text: '.$text',
-                        selection:
-                            TextSelection.collapsed(offset: text.length + 1),
+                        selection: TextSelection.collapsed(
+                          offset: text.length + 1,
+                        ),
                       );
                     }
                     return newValue;
@@ -92,8 +93,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   if (!value.startsWith('.')) {
                     return 'Extension must start with a dot';
                   }
-                  if (currentPrefs.activeExtensions
-                      .containsKey(value.toLowerCase())) {
+                  if (currentPrefs.activeExtensions.containsKey(
+                    value.toLowerCase(),
+                  )) {
                     return 'Extension already exists';
                   }
                   return null;
@@ -310,8 +312,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content:
-                                    Text('All default extensions disabled'),
+                                content: Text(
+                                  'All default extensions disabled',
+                                ),
                               ),
                             );
                           }
@@ -333,11 +336,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                     await notifier.resetToDefaults();
                                     if (mounted) {
                                       Navigator.pop(dialogContext);
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         const SnackBar(
                                           content: Text(
-                                              'Settings reset to defaults'),
+                                            'Settings reset to defaults',
+                                          ),
                                         ),
                                       );
                                     }
@@ -405,84 +410,88 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           ),
         ),
         Expanded(
-          child: Builder(builder: (context) {
-            if (prefsState.isLoading) {
-              return const Center(child: CircularProgressIndicator());
-            }
+          child: Builder(
+            builder: (context) {
+              if (prefsState.isLoading) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-            final groupedExtensions = notifier.groupedExtensions;
-            final currentPrefs = prefsState.prefs;
+              final groupedExtensions = notifier.groupedExtensions;
+              final currentPrefs = prefsState.prefs;
 
-            return ListView.builder(
-              padding: const EdgeInsetsDirectional.all(16),
-              itemCount: groupedExtensions.length,
-              itemBuilder: (context, index) {
-                final category = groupedExtensions.keys.elementAt(index);
-                final extensions = groupedExtensions[category]!;
-                final enabledCount = extensions.where((e) => e.value).length;
+              return ListView.builder(
+                padding: const EdgeInsetsDirectional.all(16),
+                itemCount: groupedExtensions.length,
+                itemBuilder: (context, index) {
+                  final category = groupedExtensions.keys.elementAt(index);
+                  final extensions = groupedExtensions[category]!;
+                  final enabledCount = extensions.where((e) => e.value).length;
 
-                return Card(
-                  margin: const EdgeInsetsDirectional.only(bottom: 16),
-                  child: ExpansionTile(
-                    leading: Icon(category.icon),
-                    title: Text(category.displayName),
-                    subtitle: Text(
-                      '$enabledCount of ${extensions.length} enabled',
-                      style: context.bodySmall?.copyWith(
-                        color: context.onSurface.addOpacity(0.6),
-                      ),
-                    ),
-                    children: [
-                      const Divider(height: 1),
-                      Padding(
-                        padding: const EdgeInsetsDirectional.all(8),
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: extensions.map((entry) {
-                            final extension = entry.key;
-                            final isEnabled = entry.value;
-                            final isCustom = currentPrefs.customExtensions
-                                .containsKey(extension);
-
-                            return FilterChip(
-                              label: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(extension),
-                                  if (isCustom) ...[
-                                    const SizedBox(width: 4),
-                                    Icon(
-                                      Icons.star_rounded,
-                                      size: 14,
-                                      color: context.primary,
-                                    ),
-                                  ],
-                                ],
-                              ),
-                              selected: isEnabled,
-                              onSelected: (_) async {
-                                await notifier.toggleExtension(extension);
-                              },
-                              showCheckmark: true,
-                              deleteIcon: isCustom
-                                  ? const Icon(Icons.close_rounded, size: 18)
-                                  : null,
-                              onDeleted: isCustom
-                                  ? () async {
-                                      await notifier.toggleExtension(extension);
-                                    }
-                                  : null,
-                            );
-                          }).toList(),
+                  return Card(
+                    margin: const EdgeInsetsDirectional.only(bottom: 16),
+                    child: ExpansionTile(
+                      leading: Icon(category.icon),
+                      title: Text(category.displayName),
+                      subtitle: Text(
+                        '$enabledCount of ${extensions.length} enabled',
+                        style: context.bodySmall?.copyWith(
+                          color: context.onSurface.addOpacity(0.6),
                         ),
                       ),
-                    ],
-                  ),
-                );
-              },
-            );
-          }),
+                      children: [
+                        const Divider(height: 1),
+                        Padding(
+                          padding: const EdgeInsetsDirectional.all(8),
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: extensions.map((entry) {
+                              final extension = entry.key;
+                              final isEnabled = entry.value;
+                              final isCustom = currentPrefs.customExtensions
+                                  .containsKey(extension);
+
+                              return FilterChip(
+                                label: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(extension),
+                                    if (isCustom) ...[
+                                      const SizedBox(width: 4),
+                                      Icon(
+                                        Icons.star_rounded,
+                                        size: 14,
+                                        color: context.primary,
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                selected: isEnabled,
+                                onSelected: (_) async {
+                                  await notifier.toggleExtension(extension);
+                                },
+                                showCheckmark: true,
+                                deleteIcon: isCustom
+                                    ? const Icon(Icons.close_rounded, size: 18)
+                                    : null,
+                                onDeleted: isCustom
+                                    ? () async {
+                                        await notifier.toggleExtension(
+                                          extension,
+                                        );
+                                      }
+                                    : null,
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
         ),
       ],
     );
@@ -527,18 +536,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   onPressed: () async {
                     try {
                       // Show loading indicator without awaiting it
-                      unawaited(showDialog<void>(
-                        context: context,
-                        barrierDismissible: false,
-                        builder: (dialogContext) => const Center(
-                          child: Card(
-                            child: Padding(
-                              padding: EdgeInsets.all(20),
-                              child: CircularProgressIndicator(),
+                      unawaited(
+                        showDialog<void>(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (dialogContext) => const Center(
+                            child: Card(
+                              child: Padding(
+                                padding: EdgeInsets.all(20),
+                                child: CircularProgressIndicator(),
+                              ),
                             ),
                           ),
                         ),
-                      ));
+                      );
 
                       await autoUpdaterService.checkForUpdates();
 
@@ -547,7 +558,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text(
-                                'Update check complete! If an update is available, it will download automatically.'),
+                              'Update check complete! If an update is available, it will download automatically.',
+                            ),
                           ),
                         );
                       }
@@ -651,11 +663,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
                 const SizedBox(height: 16),
                 _buildInfoRow(
-                    context,
-                    'Version',
-                    _packageInfo == null
-                        ? 'Loading...'
-                        : '${_packageInfo!.version}${_packageInfo!.buildNumber.isNotEmpty ? '+${_packageInfo!.buildNumber}' : ''}'),
+                  context,
+                  'Version',
+                  _packageInfo == null
+                      ? 'Loading...'
+                      : '${_packageInfo!.version}${_packageInfo!.buildNumber.isNotEmpty ? '+${_packageInfo!.buildNumber}' : ''}',
+                ),
                 const SizedBox(height: 8),
                 _buildInfoRow(context, 'Platform', Platform.operatingSystem),
                 const SizedBox(height: 8),

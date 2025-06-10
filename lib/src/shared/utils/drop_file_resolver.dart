@@ -13,7 +13,8 @@ class DropFileResolver {
     return filePath.contains('/tmp/Drops/') ||
         filePath.contains(r'\tmp\Drops\') ||
         filePath.contains(
-            '/Containers/com.omarhanafy.context.collector/Data/tmp/Drops/');
+          '/Containers/com.omarhanafy.context.collector/Data/tmp/Drops/',
+        );
   }
 
   /// Try to resolve the original file information from a temporary drop file
