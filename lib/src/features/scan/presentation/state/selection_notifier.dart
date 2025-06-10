@@ -3,13 +3,12 @@ import 'dart:io';
 
 import 'package:context_collector/context_collector.dart';
 import 'package:context_collector/src/features/scan/services/drop_processor.dart';
-import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// State class
+// State class (no changes needed here)
 @immutable
 class SelectionState {
   const SelectionState({
@@ -66,7 +65,7 @@ class SelectionState {
   bool get hasSelectedFiles => selectedFiles.isNotEmpty;
 }
 
-// Provider
+// Provider (no changes needed here)
 final selectionProvider =
     StateNotifierProvider<SelectionNotifier, SelectionState>((ref) {
   final fileScanner = FileScanner();
@@ -90,19 +89,23 @@ class SelectionNotifier extends StateNotifier<SelectionState> {
         _dropProcessor = dropProcessor,
         _ref = ref,
         super(const SelectionState());
+
   final FileScanner _fileScanner;
   final ContentAssembler _contentAssembler;
   final DropProcessor _dropProcessor;
   // ignore: unused_field
   final Ref _ref;
 
-  // Track active operations to prevent race conditions
-  final _activeOperations = <String>{};
-  StreamSubscription<DropProcessProgress>? _dropProcessSubscription;
+  /// --- RACE CONDITION FIX ---
+  /// Each time a new file loading operation starts (or is cleared), we increment this ID.
+  /// Async operations check if their original ID is still the current one before updating the state.
+  /// This prevents a slow, old operation from overwriting a newer state.
+  int _loadOperationId = 0;
 
   @override
   void dispose() {
-    _dropProcessSubscription?.cancel();
+    // Incrementing the ID on dispose ensures any lingering async operations are cancelled.
+    _loadOperationId++;
     super.dispose();
   }
 
@@ -113,15 +116,10 @@ class SelectionNotifier extends StateNotifier<SelectionState> {
 
   /// Process dropped items using the DropProcessor for robust handling
   Future<void> processDroppedItems(List<XFile> droppedItems) async {
-    // Check if already processing
-    if (_activeOperations.contains('drop_process')) {
-      if (kDebugMode) {
-        print('[SelectionNotifier] Already processing dropped items, skipping');
-      }
-      return;
-    }
+    /// --- RACE CONDITION FIX ---
+    /// This is a new operation, so we get a new ID, invalidating any previous operations.
+    final operationId = ++_loadOperationId;
 
-    _activeOperations.add('drop_process');
     state = state.copyWith(
       isProcessing: true,
       clearError: true,
@@ -131,240 +129,141 @@ class SelectionNotifier extends StateNotifier<SelectionState> {
     try {
       final effectiveSupportedExtensions =
           state.supportedExtensions ?? ExtensionCatalog.extensionCategories;
-
-      // Get existing file paths for duplicate detection
       final existingPaths = state.allFiles.map((f) => f.fullPath).toSet();
 
-      // Process dropped items with progress tracking
       final result = await _dropProcessor.processDroppedItems(
         droppedItems: droppedItems,
         supportedExtensions: effectiveSupportedExtensions,
         existingFilePaths: existingPaths,
         onProgress: (progress) {
-          if (mounted) {
+          if (mounted && operationId == _loadOperationId) {
             state = state.copyWith(processingProgress: progress);
           }
         },
       );
 
-      // Processing complete, now load file contents
+      // Check if the operation has been cancelled by a newer one.
+      if (!mounted || operationId != _loadOperationId) return;
+
+      // Processing complete, now add files and load their contents
       if (result.files.isNotEmpty) {
-        await _batchAddFiles(result.files);
+        await _batchAddAndLoadFiles(operationId, result.files);
       }
 
-      // Report errors if any
+      // --- Error and message reporting (simplified for clarity) ---
       if (result.hasErrors) {
-        final errorMessage = result.errors.entries
-            .take(3) // Show first 3 errors
-            .map((e) => '${e.key}: ${e.value}')
-            .join('\n');
-        final moreErrors = result.errors.length > 3
-            ? '\n...and ${result.errors.length - 3} more errors'
-            : '';
-
+        state = state.copyWith(error: 'Some files could not be processed.');
+      } else if (result.skippedPaths.isNotEmpty && result.files.isEmpty) {
         state = state.copyWith(
-          error: 'Some files could not be processed:\n$errorMessage$moreErrors',
-        );
-      }
-
-      // Report skipped files if any and no other files were added
-      if (result.skippedPaths.isNotEmpty && result.files.isEmpty) {
-        state = state.copyWith(
-          error: '${result.skippedPaths.length} files were already added',
-        );
+            error:
+                'No new files added. Skipped ${result.skippedPaths.length} duplicates.');
       }
     } catch (e) {
-      if (kDebugMode) {
-        print('[SelectionNotifier] Error in processDroppedItems: $e');
+      if (mounted && operationId == _loadOperationId) {
+        state = state.copyWith(error: 'Failed to process dropped items: $e');
       }
-      state = state.copyWith(
-        error: 'Failed to process dropped items: $e',
-      );
     } finally {
-      _activeOperations.remove('drop_process');
-      state = state.copyWith(
-        isProcessing: false,
-        clearProgress: true,
-      );
+      if (mounted && operationId == _loadOperationId) {
+        state = state.copyWith(isProcessing: false, clearProgress: true);
+      }
     }
   }
 
-  /// Batch add files with proper state management
-  Future<void> _batchAddFiles(List<ScannedFile> newFiles) async {
+  /// --- REFACTORED ---
+  /// Combines batch adding and loading into a single, cancellable flow.
+  Future<void> _batchAddAndLoadFiles(
+      int operationId, List<ScannedFile> newFiles) async {
     if (newFiles.isEmpty) return;
 
-    // Add operation tracking
-    _activeOperations.add('batch_add');
+    // 1. Add new files to the state immediately so they appear in the UI.
+    final currentFiles = List<ScannedFile>.from(state.allFiles);
+    final currentSelectedPaths = Set<String>.from(state.selectedFilePaths);
+    final filesToAdd = <ScannedFile>[];
 
-    try {
-      final currentFiles = List<ScannedFile>.from(state.allFiles);
-      final currentSelectedPaths = Set<String>.from(state.selectedFilePaths);
-
-      // Add new files
-      for (final file in newFiles) {
-        if (!currentFiles.any((f) => f.fullPath == file.fullPath)) {
-          currentFiles.add(file);
-          currentSelectedPaths.add(file.fullPath);
-        }
+    for (final file in newFiles) {
+      if (!currentFiles.any((f) => f.fullPath == file.fullPath)) {
+        filesToAdd.add(file);
+        currentFiles.add(file);
+        currentSelectedPaths.add(file.fullPath);
       }
-
-      // Update state with all new files at once
-      state = state.copyWith(
-        allFiles: currentFiles,
-        selectedFilePaths: currentSelectedPaths,
-        pendingLoadCount: newFiles.length,
-      );
-
-      // Load file contents in batches
-      await _batchLoadFileContents();
-    } finally {
-      _activeOperations.remove('batch_add');
     }
+
+    if (!mounted || operationId != _loadOperationId) return;
+
+    state = state.copyWith(
+      allFiles: currentFiles,
+      selectedFilePaths: currentSelectedPaths,
+      pendingLoadCount: state.pendingLoadCount + filesToAdd.length,
+    );
+    await _updateCombinedContent();
+
+    // 2. Load the content for the newly added files in cancellable batches.
+    await _batchLoadFileContents(operationId, filesToAdd);
   }
 
-  /// Load file contents in batches to avoid UI freezing
-  Future<void> _batchLoadFileContents() async {
-    final filesToLoad = state.selectedFiles
-        .where((f) => f.content == null && f.error == null)
-        .toList();
-
-    if (filesToLoad.isEmpty) {
-      state = state.copyWith(pendingLoadCount: 0);
-      return;
-    }
-
-    // Add operation tracking
-    _activeOperations.add('batch_load');
+  /// --- REFACTORED ---
+  /// Loads file contents in batches and is aware of the operationId to allow cancellation.
+  Future<void> _batchLoadFileContents(
+      int operationId, List<ScannedFile> filesToLoad) async {
+    if (filesToLoad.isEmpty) return;
 
     try {
       final effectiveSupportedExtensions =
           state.supportedExtensions ?? ExtensionCatalog.extensionCategories;
-
-      const batchSize = 10; // Process 10 files at a time
-      final currentFiles = List<ScannedFile>.from(state.allFiles);
+      const batchSize = 10;
 
       for (var i = 0; i < filesToLoad.length; i += batchSize) {
+        // *** CANCELLATION CHECK ***
+        if (!mounted || operationId != _loadOperationId) return;
+
         final batch = filesToLoad.skip(i).take(batchSize).toList();
-
-        // Load batch in parallel
-        final futures = batch.map((file) async {
-          try {
-            return await _fileScanner.loadFileContent(
-                file, effectiveSupportedExtensions);
-          } catch (e) {
-            return file.copyWith(
-              error: 'Failed to load: $e',
-            );
-          }
-        });
-
+        final futures = batch.map((file) =>
+            _fileScanner.loadFileContent(file, effectiveSupportedExtensions));
         final loadedBatch = await Future.wait(futures);
 
-        // Update files in state
+        // *** CANCELLATION CHECK ***
+        if (!mounted || operationId != _loadOperationId) return;
+
+        // *** SAFE STATE UPDATE ***
+        // Apply updates to the *current* state's file list.
+        // This prevents re-introducing files that were cleared.
+        final currentFiles = List<ScannedFile>.from(state.allFiles);
+        var changed = false;
         for (final loadedFile in loadedBatch) {
           final index =
               currentFiles.indexWhere((f) => f.fullPath == loadedFile.fullPath);
           if (index != -1) {
             currentFiles[index] = loadedFile;
+            changed = true;
           }
         }
 
-        // Update state after each batch
-        final remaining = filesToLoad.length - (i + batch.length);
-        state = state.copyWith(
-          allFiles: currentFiles,
-          pendingLoadCount: remaining > 0 ? remaining : 0,
-        );
-
-        // Update combined content periodically
-        if (i % (batchSize * 2) == 0 || remaining == 0) {
+        if (changed) {
+          state = state.copyWith(
+            allFiles: currentFiles,
+            pendingLoadCount: state.pendingLoadCount - batch.length,
+          );
           await _updateCombinedContent();
+        } else {
+          // Files were likely cleared while loading, just update the count.
+          state =
+              state.copyWith(pendingLoadCount: state.pendingLoadCount - batch.length);
         }
 
-        // Small delay to prevent UI freezing
-        if (remaining > 0) {
-          await Future<void>.delayed(const Duration(milliseconds: 50));
-        }
-      }
-
-      // Final update
-      await _updateCombinedContent();
-    } catch (e) {
-      if (kDebugMode) {
-        print('[SelectionNotifier] Batch load error: $e');
-      }
-      state = state.copyWith(
-        error: 'Error loading file contents: $e',
-        pendingLoadCount: 0,
-      );
-    } finally {
-      _activeOperations.remove('batch_load');
-    }
-  }
-
-  Future<void> addFiles(List<String> filePaths) async {
-    var newFilesAdded = false;
-    final currentFiles = List<ScannedFile>.from(state.allFiles);
-    final currentSelectedPaths = Set<String>.from(state.selectedFilePaths);
-
-    for (final filePath in filePaths) {
-      final file = File(filePath);
-      if (file.existsSync()) {
-        final scannedFile = ScannedFile.fromFile(file);
-        if (!currentFiles.any((f) => f.fullPath == scannedFile.fullPath)) {
-          currentFiles.add(scannedFile);
-          currentSelectedPaths.add(scannedFile.fullPath);
-          newFilesAdded = true;
-        }
-      }
-    }
-
-    if (newFilesAdded) {
-      // First update state with new files (showing loading state)
-      state = state.copyWith(
-        allFiles: currentFiles,
-        selectedFilePaths: currentSelectedPaths,
-        clearError: true,
-        isProcessing: true, // Show processing state
-      );
-
-      // Load file contents (this will also update combined content and set isProcessing to false)
-      await loadFileContents();
-    } else {
-      state = state.copyWith(clearError: true); // Still clear error if any
-    }
-  }
-
-  Future<void> addDirectory(String directoryPath) async {
-    state = state.copyWith(isProcessing: true, clearError: true);
-    try {
-      final effectiveSupportedExtensions =
-          state.supportedExtensions ?? ExtensionCatalog.extensionCategories;
-      final foundFiles = await _fileScanner.scanDirectory(
-          directoryPath, effectiveSupportedExtensions);
-
-      var newFilesAdded = false;
-      final currentFiles = List<ScannedFile>.from(state.allFiles);
-      final currentSelectedPaths = Set<String>.from(state.selectedFilePaths);
-
-      for (final file in foundFiles) {
-        if (!currentFiles.any((f) => f.fullPath == file.fullPath)) {
-          currentFiles.add(file);
-          currentSelectedPaths.add(file.fullPath);
-          newFilesAdded = true;
-        }
-      }
-
-      state = state.copyWith(
-          allFiles: currentFiles, selectedFilePaths: currentSelectedPaths);
-      if (newFilesAdded) {
-        await _updateCombinedContent();
-        await loadFileContents();
+        // Small delay to keep the UI responsive.
+        await Future.delayed(const Duration(milliseconds: 50));
       }
     } catch (e) {
-      state = state.copyWith(error: 'Error scanning directory: $e');
+      if (mounted && operationId == _loadOperationId) {
+        state = state.copyWith(error: 'Error loading file contents: $e');
+      }
     } finally {
-      state = state.copyWith(isProcessing: false);
+      if (mounted && operationId == _loadOperationId) {
+        // This was the last active operation, so we can clear the pending count.
+        if (state.pendingLoadCount <= 0) {
+            state = state.copyWith(pendingLoadCount: 0);
+        }
+      }
     }
   }
 
@@ -373,17 +272,33 @@ class SelectionNotifier extends StateNotifier<SelectionState> {
       ..removeWhere((f) => f.fullPath == file.fullPath);
     final currentSelectedPaths = Set<String>.from(state.selectedFilePaths)
       ..remove(file.fullPath);
+
+    // If the removed file was pending, decrease the count.
+    final wasPending = file.content == null && file.error == null;
+    final newPendingCount =
+        wasPending ? state.pendingLoadCount - 1 : state.pendingLoadCount;
+
     state = state.copyWith(
-        allFiles: currentFiles, selectedFilePaths: currentSelectedPaths);
+      allFiles: currentFiles,
+      selectedFilePaths: currentSelectedPaths,
+      pendingLoadCount: newPendingCount > 0 ? newPendingCount : 0,
+    );
     _updateCombinedContent();
   }
 
+  /// --- REFACTORED ---
   void clearFiles() {
+    // Invalidate any ongoing loading operations by incrementing the ID.
+    _loadOperationId++;
+
     state = state.copyWith(
       allFiles: [],
       selectedFilePaths: {},
       combinedContent: '',
       clearError: true,
+      pendingLoadCount: 0,
+      clearProgress: true,
+      isProcessing: false,
     );
   }
 
@@ -409,165 +324,101 @@ class SelectionNotifier extends StateNotifier<SelectionState> {
     _updateCombinedContent();
   }
 
-  Future<void> loadFileContents() async {
-    final filesToLoad = state.selectedFiles
-        .where((f) => f.content == null && f.error == null)
-        .toList();
-
-    if (filesToLoad.isEmpty) return;
-
-    state = state.copyWith(isProcessing: true, clearError: true);
-    try {
-      final effectiveSupportedExtensions =
-          state.supportedExtensions ?? ExtensionCatalog.extensionCategories;
-
-      final currentFiles = List<ScannedFile>.from(state.allFiles);
-      var changed = false;
-
-      for (final file in filesToLoad) {
-        final index =
-            currentFiles.indexWhere((f) => f.fullPath == file.fullPath);
-        if (index != -1) {
-          final updatedFile = await _fileScanner.loadFileContent(
-              file, effectiveSupportedExtensions);
-          currentFiles[index] = updatedFile;
-          changed = true;
-        }
-      }
-      if (changed) {
-        state = state.copyWith(
-            allFiles: currentFiles); // Update state once after loop
-      }
-      await _updateCombinedContent(); // This will also update state with new combined content
-    } catch (e) {
-      state = state.copyWith(error: 'Error loading files: $e');
-    } finally {
-      state = state.copyWith(isProcessing: false);
-    }
-  }
-
   Future<void> copyToClipboard() async {
-    var contentToCopy = state.combinedContent;
-    if (contentToCopy.isEmpty && state.hasSelectedFiles) {
-      state = state.copyWith(isProcessing: true);
-      await loadFileContents(); // This will update state.combinedContent via _updateCombinedContent
-      contentToCopy =
-          state.combinedContent; // Re-fetch potentially updated content
-      state = state.copyWith(isProcessing: false);
-    }
-    if (contentToCopy.isEmpty && !state.hasSelectedFiles) {
-      state = state.copyWith(error: 'No files selected to copy.');
+    await _ensureContentIsLoaded();
+    if (state.combinedContent.isEmpty) {
+      state = state.copyWith(error: 'No content to copy.');
       return;
     }
-
-    try {
-      await Clipboard.setData(ClipboardData(text: contentToCopy));
-    } catch (e) {
-      state = state.copyWith(error: 'Error copying to clipboard: $e');
-    }
+    await Clipboard.setData(ClipboardData(text: state.combinedContent));
   }
 
   Future<void> saveToFile() async {
-    var contentToSave = state.combinedContent;
-    if (contentToSave.isEmpty && state.hasSelectedFiles) {
-      state = state.copyWith(isProcessing: true);
-      await loadFileContents();
-      contentToSave = state.combinedContent;
-      state = state.copyWith(isProcessing: false);
-    }
-    if (contentToSave.isEmpty && !state.hasSelectedFiles) {
-      state = state.copyWith(error: 'No files selected to save.');
+    await _ensureContentIsLoaded();
+    final contentToSave = state.combinedContent;
+
+    if (contentToSave.isEmpty) {
+      state = state.copyWith(error: 'No content to save.');
       return;
     }
 
     try {
       final fileName =
           'context_collection_${DateTime.now().millisecondsSinceEpoch}.txt';
-      final filePath = await getSaveLocation(
-        suggestedName: fileName,
-        acceptedTypeGroups: [
-          const XTypeGroup(label: 'Text files', extensions: ['txt']),
-        ],
-      );
-
+      final filePath = await getSaveLocation(suggestedName: fileName);
       if (filePath != null) {
-        final file = File(filePath.path);
-        await file.writeAsString(contentToSave);
+        await File(filePath.path).writeAsString(contentToSave);
       }
     } catch (e) {
       state = state.copyWith(error: 'Error saving file: $e');
     }
   }
 
+  /// Helper to ensure all selected files are loaded before an action.
+  Future<void> _ensureContentIsLoaded() async {
+    final filesToLoad = state.selectedFiles
+        .where((f) => f.content == null && f.error == null)
+        .toList();
+    if (filesToLoad.isEmpty) {
+      await _updateCombinedContent();
+      return;
+    }
+
+    final operationId = ++_loadOperationId;
+    state = state.copyWith(isProcessing: true);
+    await _batchLoadFileContents(operationId, filesToLoad);
+    if (mounted && operationId == _loadOperationId) {
+      state = state.copyWith(isProcessing: false);
+    }
+  }
+
   Future<void> pickFiles() async {
+    final operationId = ++_loadOperationId;
     state = state.copyWith(isProcessing: true, clearError: true);
     try {
-      final files = await openFiles(
-        acceptedTypeGroups: [
-          const XTypeGroup(
-            label: 'Text files',
-            extensions: <String>[
-              'txt',
-              'dart',
-              'py',
-              'js',
-              'ts',
-              'jsx',
-              'tsx',
-              'java',
-              'kt',
-              'swift',
-              'cpp',
-              'c',
-              'h',
-              'hpp',
-              'cs',
-              'php',
-              'rb',
-              'go',
-              'rs',
-              'html',
-              'css',
-              'scss',
-              'json',
-              'xml',
-              'yaml',
-              'yml',
-              'md',
-              'sql'
-            ],
-          ),
-          const XTypeGroup(label: 'All files'),
-        ],
-      );
+      final files = await openFiles();
+      if (!mounted || operationId != _loadOperationId) return;
 
       if (files.isNotEmpty) {
-        final filePaths = files.map((file) => file.path).toList();
-        // addFiles will set processing to false after it's done with its own loading.
-        // So, no need to set isProcessing to false here explicitly.
-        await addFiles(filePaths);
-      } else {
-        state = state.copyWith(isProcessing: false);
+        final scannedFiles = files
+            .map((f) => ScannedFile.fromFile(File(f.path)))
+            .toList();
+        await _batchAddAndLoadFiles(operationId, scannedFiles);
       }
     } catch (e) {
-      state =
-          state.copyWith(error: 'Error picking files: $e', isProcessing: false);
+      if(mounted && operationId == _loadOperationId) {
+        state = state.copyWith(error: 'Error picking files: $e');
+      }
+    } finally {
+       if(mounted && operationId == _loadOperationId) {
+        state = state.copyWith(isProcessing: false);
+      }
     }
   }
 
   Future<void> pickDirectory() async {
+    final operationId = ++_loadOperationId;
     state = state.copyWith(isProcessing: true, clearError: true);
     try {
       final directoryPath = await getDirectoryPath();
+       if (!mounted || operationId != _loadOperationId) return;
+
       if (directoryPath != null) {
-        // addDirectory will set processing to false.
-        await addDirectory(directoryPath);
-      } else {
-        state = state.copyWith(isProcessing: false);
+        final foundFiles = await _fileScanner.scanDirectory(
+            directoryPath,
+            state.supportedExtensions ?? ExtensionCatalog.extensionCategories);
+        if (mounted && operationId == _loadOperationId) {
+          await _batchAddAndLoadFiles(operationId, foundFiles);
+        }
       }
     } catch (e) {
-      state = state.copyWith(
-          error: 'Error picking directory: $e', isProcessing: false);
+       if(mounted && operationId == _loadOperationId) {
+        state = state.copyWith(error: 'Error picking directory: $e');
+       }
+    } finally {
+      if(mounted && operationId == _loadOperationId) {
+        state = state.copyWith(isProcessing: false);
+      }
     }
   }
 
@@ -575,16 +426,11 @@ class SelectionNotifier extends StateNotifier<SelectionState> {
     state = state.copyWith(clearError: true);
   }
 
-  // isFileSelected can be a getter on the state or a method here.
-  // For consistency with UI, usually it's part of state or derived from it.
-  // Let's assume UI will use state.selectedFilePaths.contains(file.fullPath)
-
-  // Private method to update combined content
-  // Note: This now updates the state directly.
   Future<void> _updateCombinedContent() async {
-    final content = await _contentAssembler.buildMerged(state.selectedFiles);
-    // Check if the notifier is still mounted before updating state
     if (!mounted) return;
-    state = state.copyWith(combinedContent: content);
+    final content = await _contentAssembler.buildMerged(state.selectedFiles);
+    if (mounted) {
+      state = state.copyWith(combinedContent: content);
+    }
   }
 }

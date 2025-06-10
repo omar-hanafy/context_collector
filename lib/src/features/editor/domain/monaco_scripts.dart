@@ -1,3 +1,31 @@
+enum MonacoActions {
+  format('editor.action.formatDocument'),
+  find('actions.find'),
+  replace('editor.action.startFindReplaceAction'),
+  gotoLine('editor.action.gotoLine'),
+  toggleWordWrap('editor.action.toggleWordWrap'),
+  toggleMinimap('editor.action.toggleMinimap'),
+  toggleLineComment('editor.action.commentLine'),
+  toggleBlockComment('editor.action.blockComment'),
+  triggerSuggest('editor.action.triggerSuggest'),
+  showCommandPalette('editor.action.quickCommand'),
+  foldAll('editor.foldAll'),
+  unfoldAll('editor.unfoldAll'),
+  selectAll('editor.action.selectAll'),
+  undo('undo'),
+  redo('redo'),
+  cut('editor.action.clipboardCutAction'),
+  copy('editor.action.clipboardCopyAction'),
+  paste('editor.action.clipboardPasteAction'),
+  increaseFontSize('editor.action.fontZoomIn'),
+  decreaseFontSize('editor.action.fontZoomOut'),
+  resetFontSize('editor.action.fontZoomReset');
+
+  const MonacoActions(this.command);
+
+  final String command;
+}
+
 /// Monaco editor JavaScript scripts used in the editor feature
 class MonacoScripts {
   // Private constructor to prevent instantiation
@@ -78,6 +106,10 @@ class MonacoScripts {
     }
   ''';
 
+  /// Script to scroll to bottom of editor
+  static const String scrollToTopScript =
+      'window.editor?.setScrollPosition({ scrollTop: 0 })';
+
   /// Script to get editor statistics
   static const String getEditorStatsScript = r"""
     JSON.stringify({
@@ -150,10 +182,132 @@ class MonacoScripts {
   ''';
 
   /// Script to go to a specific line
-  static String goToLineScript(int line) => 
-    'if (window.editor) { window.editor.revealLineInCenter($line); window.editor.setPosition({ lineNumber: $line, column: 1 }); }';
+  static String goToLineScript(int line) =>
+      'if (window.editor) { window.editor.revealLineInCenter($line); window.editor.setPosition({ lineNumber: $line, column: 1 }); }';
 
   /// Generate script for executing Monaco editor actions
-  static String executeActionScript(String actionId) => 
-    'window.editor?.getAction("$actionId")?.run()';
+  static String executeActionScript(String actionId) =>
+      'window.editor?.getAction("$actionId")?.run()';
+
+  /// Script to create flutterChannel for Windows WebView2
+  static const String windowsFlutterChannelScript = '''
+    // Create flutterChannel immediately when document is created
+    console.log('[Windows Init] Creating flutterChannel on document creation');
+    window.flutterChannel = {
+      postMessage: function(msg) {
+        console.log('[flutterChannel] Posting message:', msg);
+        if (window.chrome && window.chrome.webview) {
+          window.chrome.webview.postMessage(msg);
+        } else {
+          console.error('[flutterChannel] WebView2 API not available!');
+        }
+      }
+    };
+    console.log('[Windows Init] flutterChannel created successfully');
+  ''';
+
+  /// Script to check Windows editor readiness and force ready event if needed
+  static String windowsReadinessCheckScript(int checkCount) => '''
+    (function() {
+      console.log('[Ready Check] Checking environment...');
+      const status = {
+        hasRequire: typeof require !== 'undefined',
+        hasMonaco: typeof monaco !== 'undefined',
+        hasEditor: typeof window.editor !== 'undefined',
+        hasFlutterChannel: typeof window.flutterChannel !== 'undefined',
+        documentReady: document.readyState === 'complete',
+        monacoStatus: window.monacoStatus || {}
+      };
+      console.log('[Ready Check] Status:', JSON.stringify(status, null, 2));
+      
+      // If editor exists but we haven't sent ready event, force it
+      if (status.hasEditor && status.hasFlutterChannel && window.editor) {
+        console.log('[Ready Check] Editor found! Forcing ready event...');
+        
+        // Make sure all API functions are available
+        if (!window.setEditorContent) {
+          window.setEditorContent = function(content) {
+            if (window.editor) window.editor.setValue(content || '');
+          };
+        }
+        if (!window.getEditorContent) {
+          window.getEditorContent = function() {
+            return window.editor ? window.editor.getValue() : '';
+          };
+        }
+        if (!window.setEditorLanguage) {
+          window.setEditorLanguage = function(language) {
+            if (window.editor && window.editor.getModel()) {
+              monaco.editor.setModelLanguage(window.editor.getModel(), language);
+            }
+          };
+        }
+        if (!window.setEditorTheme) {
+          window.setEditorTheme = function(theme) {
+            if (monaco) monaco.editor.setTheme(theme);
+          };
+        }
+        if (!window.setEditorOptions) {
+          window.setEditorOptions = function(options) {
+            if (window.editor) window.editor.updateOptions(options);
+          };
+        }
+        
+        // Send ready event
+        window.flutterChannel.postMessage(JSON.stringify({
+          event: 'onEditorReady',
+          payload: {
+            detail: 'Windows editor ready (forced)',
+            checkCount: $checkCount
+          }
+        }));
+        
+        // Stop checking after sending ready
+        return true;
+      } else if (!status.hasRequire && status.documentReady) {
+        console.error('[Ready Check] CRITICAL: require is not defined after document ready!');
+        window.flutterChannel.postMessage(JSON.stringify({
+          event: 'error',
+          message: 'require is not defined - Monaco loader failed'
+        }));
+        return true; // Stop checking
+      }
+      
+      return false; // Continue checking
+    })();
+  ''';
+
+  /// Script to inject readiness detection for non-Windows platforms
+  static const String nonWindowsReadinessDetectionScript = '''
+    // Listen for console logs that indicate editor is ready
+    const originalLog = console.log;
+    console.log = function(...args) {
+      originalLog.apply(console, args);
+      const message = args.join(' ');
+      
+      // Check for various ready indicators
+      if (message.includes('Monaco editor instance created') ||
+          message.includes('ENHANCED_EDITOR_READY_EVENT_FIRED') ||
+          message.includes('onEditorReady')) {
+        if (window.flutterChannel) {
+          window.flutterChannel.postMessage(JSON.stringify({
+            event: 'onEditorReady',
+            detail: 'Editor ready detected from console'
+          }));
+        }
+      }
+    };
+
+    // Also check periodically
+    setTimeout(function checkReady() {
+      if (window.editor && window.flutterChannel) {
+        window.flutterChannel.postMessage(JSON.stringify({
+          event: 'onEditorReady',
+          detail: 'Editor ready via periodic check'
+        }));
+      } else {
+        setTimeout(checkReady, 1000);
+      }
+    }, 1000);
+  ''';
 }

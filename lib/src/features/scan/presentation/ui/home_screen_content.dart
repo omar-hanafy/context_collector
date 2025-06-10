@@ -2,8 +2,8 @@ import 'package:context_collector/src/shared/theme/extensions.dart';
 import 'package:context_collector/src/shared/utils/extension_catalog.dart';
 import 'package:flutter/material.dart';
 
-class DropZoneWidget extends StatelessWidget {
-  const DropZoneWidget({super.key});
+class HomeScreenContent extends StatelessWidget {
+  const HomeScreenContent({super.key});
 
   @override
   Widget build(BuildContext context) {

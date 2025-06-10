@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../domain/editor_settings.dart';
 
 /// Service responsible for persisting and loading editor settings
-class EditorSettingsService {
+class EditorSettingsServiceHelper {
   static const String _storageKey = 'editor_settings';
 
   /// Save settings to SharedPreferences as a single JSON string

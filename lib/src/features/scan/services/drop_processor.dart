@@ -17,14 +17,19 @@ class DropProcessResult {
     required this.files,
     required this.errors,
     required this.skippedPaths,
+    this.filteredPaths = const [],
   });
 
   final List<ScannedFile> files;
   final Map<String, String> errors; // path -> error message
-  final List<String> skippedPaths; // Already processed paths
+  final List<String> skippedPaths; // Already processed paths (duplicates)
+  final List<String>
+      filteredPaths; // Files filtered due to unsupported extensions
 
   bool get hasErrors => errors.isNotEmpty;
-  int get totalProcessed => files.length + errors.length + skippedPaths.length;
+
+  int get totalProcessed =>
+      files.length + errors.length + skippedPaths.length + filteredPaths.length;
 }
 
 /// Progress information for drop processing
@@ -55,6 +60,7 @@ enum DropProcessPhase {
   complete('Complete');
 
   const DropProcessPhase(this.message);
+
   final String message;
 }
 
@@ -79,6 +85,9 @@ class DropProcessor {
     if (kDebugMode) {
       print(
           '[DropProcessor] Starting processing of ${droppedItems.length} items');
+      for (var i = 0; i < droppedItems.length && i < 5; i++) {
+        print('  - Item $i: ${droppedItems[i].path}');
+      }
     }
 
     // Phase 1: Collect and categorize items
@@ -90,6 +99,16 @@ class DropProcessor {
     ));
 
     final collectionResult = await _collectDroppedItems(droppedItems);
+
+    if (kDebugMode) {
+      print('[DropProcessor] Collection result:');
+      print('  - File paths: ${collectionResult.filePaths.length}');
+      print('  - Directory paths: ${collectionResult.directoryPaths.length}');
+      if (collectionResult.filePaths.isNotEmpty) {
+        print(
+            '  - First few files: ${collectionResult.filePaths.take(3).toList()}');
+      }
+    }
 
     onProgress?.call(DropProcessProgress(
       totalItems: collectionResult.totalEstimatedItems,
@@ -104,11 +123,20 @@ class DropProcessor {
     var processedCount = droppedItems.length;
 
     // Process individual files first
+    final filteredPaths = <String>[];
+
     for (final filePath in collectionResult.filePaths) {
       try {
         final file = File(filePath);
-        if (await file.exists()) {
-          allScannedFiles.add(ScannedFile.fromFile(file));
+        if (file.existsSync()) {
+          final scannedFile = ScannedFile.fromFile(file);
+          // Check if file has supported extension
+          if (supportedExtensions.containsKey(scannedFile.extension) ||
+              scannedFile.extension.isEmpty) {
+            allScannedFiles.add(scannedFile);
+          } else {
+            filteredPaths.add(filePath);
+          }
         } else {
           errors[filePath] = 'File not found';
         }
@@ -148,6 +176,15 @@ class DropProcessor {
     }
 
     // Phase 3: Filter duplicates and already-added files
+    if (kDebugMode) {
+      print('[DropProcessor] Before filtering:');
+      print('  - All scanned files: ${allScannedFiles.length}');
+      print('  - Existing file paths: ${existingFilePaths.length}');
+      if (allScannedFiles.isNotEmpty) {
+        print('  - First scanned file: ${allScannedFiles.first.fullPath}');
+      }
+    }
+
     onProgress?.call(DropProcessProgress(
       totalItems: allScannedFiles.length,
       processedItems: 0,
@@ -165,10 +202,18 @@ class DropProcessor {
       // Skip if already in the app
       if (existingFilePaths.contains(file.fullPath)) {
         skippedPaths.add(file.fullPath);
+        if (i < 3) {
+          debugPrint(
+              '[DropProcessor] Skipping existing file: ${file.fullPath}');
+        }
       }
       // Skip if we've already processed this path in this batch
       else if (seenPaths.contains(file.fullPath)) {
         skippedPaths.add(file.fullPath);
+        if (i < 3) {
+          debugPrint(
+              '[DropProcessor] Skipping duplicate in batch: ${file.fullPath}');
+        }
       }
       // Add to unique files
       else {
@@ -201,12 +246,14 @@ class DropProcessor {
       print('  - Files found: ${uniqueFiles.length}');
       print('  - Errors: ${errors.length}');
       print('  - Skipped (duplicates): ${skippedPaths.length}');
+      print('  - Filtered (unsupported): ${filteredPaths.length}');
     }
 
     return DropProcessResult(
       files: uniqueFiles,
       errors: errors,
       skippedPaths: skippedPaths,
+      filteredPaths: filteredPaths,
     );
   }
 
@@ -220,6 +267,10 @@ class DropProcessor {
 
     for (final item in droppedItems) {
       final itemPath = item.path;
+
+      if (kDebugMode) {
+        print('[DropProcessor] Processing dropped item: $itemPath');
+      }
 
       // Check for VS Code directory drop
       if (itemPath.contains('/tmp/Drops/')) {
@@ -273,8 +324,8 @@ class DropProcessor {
           // Handle other temporary drop files
           try {
             final testFile = File(itemPath);
-            if (await testFile.exists() &&
-                (await testFile.stat()).type == FileSystemEntityType.file) {
+            if (testFile.existsSync() &&
+                testFile.statSync().type == FileSystemEntityType.file) {
               filePaths.add(itemPath);
             }
           } catch (_) {

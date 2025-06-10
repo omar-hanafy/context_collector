@@ -1,0 +1,19 @@
+# build.yaml
+targets:
+  $default:
+    builders:
+      # Configure json_serializable
+      json_serializable:
+        options:
+          # This is a global default. It's the same as putting
+          # @JsonSerializable(explicitToJson: true) on every class.
+          explicit_to_json: true
+
+      # Configure freezed
+      freezed:
+        options:
+          # This is a new option that makes this whole process smoother.
+          # It tells freezed to use the modern json_serializable builder
+          # for JSON integration, which is exactly what we want.
+          # It defaults to true, but we set it explicitly for clarity.
+          json: true

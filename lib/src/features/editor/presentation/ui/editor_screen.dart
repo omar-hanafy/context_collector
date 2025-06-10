@@ -1,21 +1,5 @@
 // lib/src/features/editor/presentation/ui/editor_screen.dart
-import 'dart:io';
-
-import 'package:context_collector/src/features/editor/domain/editor_settings.dart';
-import 'package:context_collector/src/features/editor/presentation/ui/enhanced_editor_settings_dialog.dart';
-import 'package:context_collector/src/features/editor/presentation/ui/monaco_editor_container.dart';
-import 'package:context_collector/src/features/editor/presentation/ui/monaco_editor_info_bar.dart';
-import 'package:context_collector/src/features/editor/services/editor_settings_service.dart';
-import 'package:context_collector/src/features/editor/services/monaco_editor_providers.dart';
-import 'package:context_collector/src/features/editor/services/monaco_editor_state.dart';
-import 'package:context_collector/src/features/scan/presentation/state/selection_notifier.dart';
-import 'package:context_collector/src/features/scan/presentation/ui/action_buttons_widget.dart';
-import 'package:context_collector/src/features/scan/presentation/ui/file_list_widget.dart';
-import 'package:context_collector/src/features/settings/presentation/ui/settings_screen.dart';
-import 'package:context_collector/src/shared/shared.dart';
-import 'package:context_collector/src/shared/utils/drop_file_resolver.dart';
-import 'package:context_collector/src/shared/utils/vscode_drop_detector.dart';
-import 'package:desktop_drop/desktop_drop.dart';
+import 'package:context_collector/context_collector.dart';
 import 'package:enefty_icons/enefty_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -36,7 +20,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   late AnimationController _sidebarAnimationController;
   late Animation<double> _sidebarAnimation;
   bool _isSidebarExpanded = false;
-  bool _isDragging = false;
 
   // Settings state
   EditorSettings _editorSettings = const EditorSettings();
@@ -70,7 +53,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   }
 
   Future<void> _loadEditorSettings() async {
-    final settings = await EditorSettingsService.load();
+    final settings = await EditorSettingsServiceHelper.load();
     if (mounted) {
       setState(() {
         _editorSettings = settings;
@@ -80,14 +63,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
   Future<void> _applySettingsToEditor() async {
     final editorService = ref.read(monacoEditorServiceProvider);
-    await editorService.applySettings(_editorSettings);
+    await editorService.updateSettings(_editorSettings);
   }
 
   Future<void> _saveAndApplySettings(EditorSettings newSettings) async {
     setState(() {
       _editorSettings = newSettings;
     });
-    await EditorSettingsService.save(newSettings);
+    await EditorSettingsServiceHelper.save(newSettings);
     await _applySettingsToEditor();
   }
 
@@ -132,8 +115,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     final editorStatus = ref.watch(monacoEditorStatusProvider);
 
     // Listen for editor ready state to apply initial settings
-    ref.listen<MonacoEditorStatus>(monacoEditorStatusProvider,
-        (previous, next) {
+    ref.listen<EditorStatus>(monacoEditorStatusProvider, (previous, next) {
       if (!_hasAppliedInitialSettings && next.isReady) {
         _hasAppliedInitialSettings = true;
         _applySettingsToEditor();
@@ -213,217 +195,126 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           const SizedBox(width: 8),
         ],
       ),
-      body: DropTarget(
-        onDragEntered: (details) {
-          setState(() => _isDragging = true);
-        },
-        onDragExited: (details) {
-          setState(() => _isDragging = false);
-        },
-        onDragDone: (details) async {
-          setState(() => _isDragging = false);
+      body: DropZone(
+        child: Column(
+          children: [
+            // Main editor area
+            Expanded(
+              child: ResizableSplitter(
+                initialRatio: 0.35,
+                maxRatio: 0.6,
+                startPanel: Column(
+                  children: [
+                    const ActionButtonsWidget(),
+                    const Expanded(child: FileListWidget()),
+                    if (selectionState.isProcessing)
+                      const LinearProgressIndicator(),
+                  ],
+                ),
+                endPanel: Stack(
+                  children: [
+                    // Monaco Editor
+                    const MonacoEditorContainer(
+                      key: Key('editor-screen-monaco'),
+                    ),
 
-          final files = <String>[];
-          final directories = <String>[];
+                    // Animated Sidebar (INSIDE Monaco editor area)
+                    AnimatedBuilder(
+                      animation: _sidebarAnimation,
+                      builder: (context, child) {
+                        final width =
+                            _expandedSidebarWidth * _sidebarAnimation.value;
 
-          for (final file in details.files) {
-            final filePath = file.path;
+                        return Positioned(
+                          left: 0,
+                          top: 0,
+                          bottom: 0,
+                          child: SizedBox(
+                            width: width,
+                            child: width > 0
+                                ? ClipRect(
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: context.surfaceContainerHighest,
+                                        border: BorderDirectional(
+                                          end: BorderSide(
+                                            color:
+                                                context.outline.addOpacity(0.2),
+                                          ),
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color:
+                                                context.shadow.addOpacity(0.05),
+                                            offset: const Offset(2, 0),
+                                            blurRadius: 4,
+                                          ),
+                                        ],
+                                      ),
+                                      child: _buildExpandedSidebar(
+                                          context, selectionState),
+                                    ),
+                                  )
+                                : null,
+                          ),
+                        );
+                      },
+                    ),
 
-            // Check if this is a VS Code directory drop
-            if (filePath.contains('/tmp/Drops/')) {
-              try {
-                // Try to read as VS Code directory listing
-                final content = await File(filePath).readAsString();
-                final directoryPath =
-                    VSCodeDropDetector.extractDirectoryPath(content);
-
-                if (directoryPath != null) {
-                  // Just add the directory path and let normal error handling deal with permissions
-                  directories.add(directoryPath);
-                  continue;
-                }
-              } catch (_) {
-                // Not a VS Code directory listing, process normally
-              }
-            }
-
-            // Handle typed drops (desktop_drop 0.6.0+)
-            if (file is DropItemDirectory) {
-              directories.add(filePath);
-            } else if (file is DropItemFile) {
-              // JetBrains workaround: Check if this "file" is actually a directory
-              // JetBrains incorrectly reports directories as DropItemFile
-              final checkType = FileSystemEntity.typeSync(filePath);
-              if (checkType == FileSystemEntityType.directory) {
-                directories.add(filePath);
-              } else {
-                files.add(filePath);
-              }
-            } else {
-              // Fallback for regular XFile - use filesystem check
-              final entity = FileSystemEntity.typeSync(filePath);
-              if (entity == FileSystemEntityType.directory) {
-                directories.add(filePath);
-              } else if (entity == FileSystemEntityType.file) {
-                files.add(filePath);
-              } else if (DropFileResolver.isTemporaryDropFile(filePath)) {
-                // Handle other temporary drop files
-                try {
-                  final testFile = File(filePath);
-                  if (testFile.existsSync() &&
-                      testFile.statSync().type == FileSystemEntityType.file) {
-                    files.add(filePath);
-                  }
-                } catch (_) {
-                  // Skip files that can't be accessed
-                }
-              }
-            }
-          }
-
-          if (files.isNotEmpty) {
-            await selectionNotifier.addFiles(files);
-          }
-
-          for (final directory in directories) {
-            await selectionNotifier.addDirectory(directory);
-          }
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          decoration: BoxDecoration(
-            color: _isDragging
-                ? context.primary.addOpacity(0.05)
-                : Colors.transparent,
-            border: _isDragging
-                ? Border.all(
-                    color: context.primary.addOpacity(0.3),
-                    width: 2,
-                  )
-                : null,
-          ),
-          child: Column(
-            children: [
-              // Main editor area
-              Expanded(
-                child: ResizableSplitter(
-                  initialRatio: 0.35,
-                  maxRatio: 0.6,
-                  startPanel: Column(
-                    children: [
-                      const ActionButtonsWidget(),
-                      const Expanded(child: FileListWidget()),
-                      if (selectionState.isProcessing)
-                        const LinearProgressIndicator(),
-                    ],
-                  ),
-                  endPanel: Stack(
-                    children: [
-                      // Monaco Editor
-                      const MonacoEditorContainer(
-                        key: Key('editor-screen-monaco'),
-                      ),
-
-                      // Animated Sidebar (INSIDE Monaco editor area)
-                      AnimatedBuilder(
+                    // Floating Toggle Button (positioned in editor area)
+                    Positioned(
+                      left: _isSidebarExpanded ? _expandedSidebarWidth - 20 : 8,
+                      top: 16,
+                      child: AnimatedBuilder(
                         animation: _sidebarAnimation,
                         builder: (context, child) {
-                          final width =
-                              _expandedSidebarWidth * _sidebarAnimation.value;
-
-                          return Positioned(
-                            left: 0,
-                            top: 0,
-                            bottom: 0,
-                            child: SizedBox(
-                              width: width,
-                              child: width > 0
-                                  ? ClipRect(
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          color:
-                                              context.surfaceContainerHighest,
-                                          border: BorderDirectional(
-                                            end: BorderSide(
-                                              color: context.outline
-                                                  .addOpacity(0.2),
-                                            ),
-                                          ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: context.shadow
-                                                  .addOpacity(0.05),
-                                              offset: const Offset(2, 0),
-                                              blurRadius: 4,
-                                            ),
-                                          ],
-                                        ),
-                                        child: _buildExpandedSidebar(
-                                            context, selectionState),
-                                      ),
-                                    )
-                                  : null,
+                          return Material(
+                            color: _isSidebarExpanded
+                                ? context.surfaceContainerHighest
+                                : context.surface,
+                            elevation: 4,
+                            shape: const CircleBorder(),
+                            child: InkWell(
+                              onTap: _toggleSidebar,
+                              customBorder: const CircleBorder(),
+                              splashColor: Colors.transparent,
+                              highlightColor: Colors.transparent,
+                              hoverColor: context.onSurface.addOpacity(0.04),
+                              child: Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: context.outline.addOpacity(0.2),
+                                  ),
+                                ),
+                                child: Icon(
+                                  _isSidebarExpanded
+                                      ? Icons.chevron_left
+                                      : EneftyIcons.setting_3_outline,
+                                  size: 20,
+                                  color: context.onSurfaceVariant,
+                                ),
+                              ),
                             ),
                           );
                         },
                       ),
-
-                      // Floating Toggle Button (positioned in editor area)
-                      Positioned(
-                        left:
-                            _isSidebarExpanded ? _expandedSidebarWidth - 20 : 8,
-                        top: 16,
-                        child: AnimatedBuilder(
-                          animation: _sidebarAnimation,
-                          builder: (context, child) {
-                            return Material(
-                              color: _isSidebarExpanded
-                                  ? context.surfaceContainerHighest
-                                  : context.surface,
-                              elevation: 4,
-                              shape: const CircleBorder(),
-                              child: InkWell(
-                                onTap: _toggleSidebar,
-                                customBorder: const CircleBorder(),
-                                splashColor: Colors.transparent,
-                                highlightColor: Colors.transparent,
-                                hoverColor: context.onSurface.addOpacity(0.04),
-                                child: Container(
-                                  width: 36,
-                                  height: 36,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: context.outline.addOpacity(0.2),
-                                    ),
-                                  ),
-                                  child: Icon(
-                                    _isSidebarExpanded
-                                        ? Icons.chevron_left
-                                        : EneftyIcons.setting_3_outline,
-                                    size: 20,
-                                    color: context.onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
+            ),
 
-              // Bottom info bar
-              if (editorStatus.isReady)
-                MonacoEditorInfoBar(
-                  bridge: ref.read(monacoEditorServiceProvider).bridge,
-                  onCopy: () =>
-                      _copyToClipboard(context, selectionState.combinedContent),
-                ),
-            ],
-          ),
+            // Bottom info bar
+            if (editorStatus.isReady)
+              MonacoEditorInfoBar(
+                bridge: ref.read(monacoEditorServiceProvider).bridge,
+                onCopy: () =>
+                    _copyToClipboard(context, selectionState.combinedContent),
+              ),
+          ],
         ),
       ),
     );
@@ -637,12 +528,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   borderRadius: BorderRadius.circular(8),
                   dropdownColor: context.surface,
                   menuMaxHeight: 300,
-                  items: [
-                    _buildThemeDropdownItem('vs', 'Light'),
-                    _buildThemeDropdownItem('vs-dark', 'Dark'),
-                    _buildThemeDropdownItem('hc-black', 'High Contrast'),
-                    _buildThemeDropdownItem('one-dark-pro', 'One Dark Pro'),
-                  ],
+                  items: EditorConstants.themeNames.entries
+                      .map((entry) =>
+                          _buildThemeDropdownItem(entry.key, entry.value))
+                      .toList(),
                   onChanged: (value) async {
                     if (value != null) {
                       final newSettings =

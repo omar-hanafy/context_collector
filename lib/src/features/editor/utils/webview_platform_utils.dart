@@ -1,7 +1,6 @@
 // lib/src/features/editor/utils/webview_platform_utils.dart
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_windows/webview_windows.dart' as ww;
@@ -164,9 +163,70 @@ class WebViewPlatformUtils {
         if (info?.isSupported ?? false) {
           return child;
         } else {
+          // For Windows with missing WebView2, show special handling
+          if (Platform.isWindows && !(info?.isSupported ?? false)) {
+            return _buildWebView2MissingScreen(context, info);
+          }
           return _buildUnsupportedPlatform(info);
         }
       },
+    );
+  }
+
+  static Widget _buildWebView2MissingScreen(
+      BuildContext context, WebViewPlatformInfo? info) {
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.warning_amber_rounded,
+                size: 64,
+                color: Colors.orange,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'WebView2 Runtime Required',
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Context Collector requires Microsoft Edge WebView2 Runtime to function on Windows.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: () => showWebView2InstallDialog(context),
+                icon: const Icon(Icons.download),
+                label: const Text('Install WebView2 Runtime'),
+              ),
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: () async {
+                  // Restart the app check
+                  final newInfo = await getPlatformInfo();
+                  if (newInfo.isSupported && context.mounted) {
+                    // Trigger app restart
+                    await Navigator.of(context).pushNamedAndRemoveUntil(
+                      '/',
+                      (route) => false,
+                    );
+                  }
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('Recheck After Installation'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -289,28 +349,6 @@ class WebViewPlatformUtils {
         );
       },
     );
-  }
-
-  /// Check if running in development/debug mode
-  static bool get isDebugMode => kDebugMode;
-
-  /// Get platform-specific debugging information
-  static Future<Map<String, dynamic>> getDebugInfo() async {
-    final info = await getPlatformInfo();
-
-    return {
-      'platform': info.platform,
-      'isSupported': info.isSupported,
-      'engine': info.engine,
-      'version': info.version,
-      'error': info.error,
-      'requirements': info.requirements,
-      'isDarkMode':
-          WidgetsBinding.instance.platformDispatcher.platformBrightness ==
-              Brightness.dark,
-      'isDebugMode': isDebugMode,
-      'dartVersion': Platform.version,
-    };
   }
 }
 

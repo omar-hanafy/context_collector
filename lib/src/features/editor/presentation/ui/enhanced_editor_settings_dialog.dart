@@ -1,12 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:context_collector/src/features/editor/domain/editor_constants.dart';
 import 'package:context_collector/src/features/editor/domain/editor_settings.dart';
 import 'package:context_collector/src/features/editor/domain/keybinding_manager.dart';
-import 'package:context_collector/src/features/editor/domain/monaco_data.dart';
 import 'package:context_collector/src/features/editor/domain/theme_manager.dart';
+import 'package:context_collector/src/features/editor/presentation/ui/settings_widgets/settings_widgets.dart';
 import 'package:context_collector/src/features/editor/services/editor_settings_service.dart';
-import 'package:context_collector/src/features/editor/utils/monaco_settings_converter.dart';
 import 'package:context_collector/src/shared/theme/extensions.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -48,7 +48,8 @@ class EnhancedEditorSettingsDialog extends StatefulWidget {
 }
 
 class _EnhancedEditorSettingsDialogState
-    extends State<EnhancedEditorSettingsDialog> with TickerProviderStateMixin {
+    extends State<EnhancedEditorSettingsDialog>
+    with TickerProviderStateMixin {
   late EditorSettings _settings;
   late TabController _tabController;
 
@@ -229,7 +230,7 @@ class _EnhancedEditorSettingsDialogState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader('Font & Typography'),
+          const SettingsSectionHeader(title: 'Font & Typography'),
           const SizedBox(height: 16),
 
           // Font Family
@@ -314,7 +315,7 @@ class _EnhancedEditorSettingsDialogState
           ),
 
           const SizedBox(height: 32),
-          _buildSectionHeader('Basic Options'),
+          const SettingsSectionHeader(title: 'Basic Options'),
           const SizedBox(height: 16),
 
           // Read Only
@@ -361,15 +362,16 @@ class _EnhancedEditorSettingsDialogState
   }
 
   Widget _buildAppearanceTab() {
-    final availableThemes =
-        ThemeManager.getAllThemes(customThemes: widget.customThemes);
+    final availableThemes = ThemeManager.getAllThemes(
+      customThemes: widget.customThemes,
+    );
 
     return SingleChildScrollView(
       padding: const EdgeInsetsDirectional.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader('Theme'),
+          const SettingsSectionHeader(title: 'Theme'),
           const SizedBox(height: 16),
 
           // Theme Selection
@@ -395,7 +397,7 @@ class _EnhancedEditorSettingsDialogState
           ),
 
           const SizedBox(height: 32),
-          _buildSectionHeader('Display'),
+          const SettingsSectionHeader(title: 'Display'),
           const SizedBox(height: 16),
 
           // Line Numbers
@@ -435,8 +437,9 @@ class _EnhancedEditorSettingsDialogState
                     onChanged: (value) {
                       if (value != null) {
                         setState(() {
-                          _settings =
-                              _settings.copyWith(lineNumbersStyle: value);
+                          _settings = _settings.copyWith(
+                            lineNumbersStyle: value,
+                          );
                         });
                       }
                     },
@@ -465,7 +468,7 @@ class _EnhancedEditorSettingsDialogState
                     label: 'Minimap Side',
                     value: _settings.minimapSide,
                     items: MinimapSide.values,
-                    itemBuilder: (side) => side.name.capitalize(),
+                    itemBuilder: (side) => side.name.toTitle,
                     onChanged: (value) {
                       if (value != null) {
                         setState(() {
@@ -483,8 +486,9 @@ class _EnhancedEditorSettingsDialogState
                     value: _settings.minimapRenderCharacters,
                     onChanged: (value) {
                       setState(() {
-                        _settings =
-                            _settings.copyWith(minimapRenderCharacters: value);
+                        _settings = _settings.copyWith(
+                          minimapRenderCharacters: value,
+                        );
                       });
                     },
                   ),
@@ -553,7 +557,7 @@ class _EnhancedEditorSettingsDialogState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader('Text Editing'),
+          const SettingsSectionHeader(title: 'Text Editing'),
           const SizedBox(height: 16),
 
           // Word Wrap
@@ -633,7 +637,7 @@ class _EnhancedEditorSettingsDialogState
           ),
 
           const SizedBox(height: 32),
-          _buildSectionHeader('Auto Features'),
+          const SettingsSectionHeader(title: 'Auto Features'),
           const SizedBox(height: 16),
 
           _buildSwitchTile(
@@ -670,7 +674,7 @@ class _EnhancedEditorSettingsDialogState
           ),
 
           const SizedBox(height: 32),
-          _buildSectionHeader('Code Intelligence'),
+          const SettingsSectionHeader(title: 'Code Intelligence'),
           const SizedBox(height: 16),
 
           _buildSwitchTile(
@@ -707,7 +711,7 @@ class _EnhancedEditorSettingsDialogState
           ),
 
           const SizedBox(height: 32),
-          _buildSectionHeader('Cursor & Selection'),
+          const SettingsSectionHeader(title: 'Cursor & Selection'),
           const SizedBox(height: 16),
 
           Row(
@@ -717,7 +721,7 @@ class _EnhancedEditorSettingsDialogState
                   label: 'Cursor Blinking',
                   value: _settings.cursorBlinking,
                   items: CursorBlinking.values,
-                  itemBuilder: (blinking) => blinking.name.capitalize(),
+                  itemBuilder: (blinking) => blinking.name.toTitle,
                   onChanged: (value) {
                     if (value != null) {
                       setState(() {
@@ -733,7 +737,7 @@ class _EnhancedEditorSettingsDialogState
                   label: 'Cursor Style',
                   value: _settings.cursorStyle,
                   items: CursorStyle.values,
-                  itemBuilder: (style) => style.name.capitalize(),
+                  itemBuilder: (style) => style.name.toTitle,
                   onChanged: (value) {
                     if (value != null) {
                       setState(() {
@@ -760,7 +764,7 @@ class _EnhancedEditorSettingsDialogState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader('Keybinding Preset'),
+          const SettingsSectionHeader(title: 'Keybinding Preset'),
           const SizedBox(height: 16),
 
           // Preset Selection
@@ -799,8 +803,9 @@ class _EnhancedEditorSettingsDialogState
                     onChanged: (value) {
                       if (value != null) {
                         setState(() {
-                          _settings =
-                              _settings.copyWith(keybindingPreset: value);
+                          _settings = _settings.copyWith(
+                            keybindingPreset: value,
+                          );
                         });
                       }
                     },
@@ -817,7 +822,7 @@ class _EnhancedEditorSettingsDialogState
           ),
 
           const SizedBox(height: 32),
-          _buildSectionHeader('Popular Shortcuts'),
+          const SettingsSectionHeader(title: 'Popular Shortcuts'),
           const SizedBox(height: 16),
 
           // Show common shortcuts
@@ -833,7 +838,7 @@ class _EnhancedEditorSettingsDialogState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader('Language-Specific Settings'),
+          const SettingsSectionHeader(title: 'Language-Specific Settings'),
           const SizedBox(height: 8),
           Text(
             'Configure settings that apply only to specific programming languages.',
@@ -905,19 +910,26 @@ class _EnhancedEditorSettingsDialogState
       ),
       itemBuilder: (context, index) {
         final entry = entries[index];
-        final languageName = MonacoData.availableLanguages.firstWhere(
-            (lang) => lang['value'] == entry.key,
-            orElse: () => {'value': entry.key, 'text': entry.key})['text'];
+        final languageName = EditorConstants.languages.entries
+            .map((e) => {'value': e.key, 'text': e.value})
+            .toList()
+            .firstWhere(
+              (lang) => lang['value'] == entry.key,
+              orElse: () => {'value': entry.key, 'text': entry.key},
+            )['text'];
 
         return ListTile(
           contentPadding: const EdgeInsetsDirectional.symmetric(
-              horizontal: 16, vertical: 8),
+            horizontal: 16,
+            vertical: 8,
+          ),
           leading: Icon(Icons.language, color: context.primary),
           title: Text(languageName ?? entry.key, style: context.bodyLarge),
           subtitle: Text(
             _getLanguageConfigSummary(entry.value),
-            style: context.bodySmall
-                ?.copyWith(color: context.onSurface.addOpacity(0.6)),
+            style: context.bodySmall?.copyWith(
+              color: context.onSurface.addOpacity(0.6),
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -925,8 +937,10 @@ class _EnhancedEditorSettingsDialogState
             mainAxisSize: MainAxisSize.min,
             children: [
               IconButton(
-                icon: Icon(Icons.edit_outlined,
-                    color: context.onSurface.addOpacity(0.7)),
+                icon: Icon(
+                  Icons.edit_outlined,
+                  color: context.onSurface.addOpacity(0.7),
+                ),
                 tooltip: 'Edit',
                 onPressed: () =>
                     _showLanguageSettingsDialog(context, language: entry.key),
@@ -952,7 +966,7 @@ class _EnhancedEditorSettingsDialogState
       parts.add(config.insertSpaces! ? 'Use Spaces' : 'Use Tabs');
     }
     if (config.wordWrap != null && config.wordWrap != WordWrap.off) {
-      parts.add('Word Wrap: ${config.wordWrap!.name.capitalize()}');
+      parts.add('Word Wrap: ${config.wordWrap!.name.toTitle}');
     }
     if (config.formatOnSave != null && config.formatOnSave!) {
       parts.add('Format on Save');
@@ -976,23 +990,27 @@ class _EnhancedEditorSettingsDialogState
     );
   }
 
-  Future<void> _showLanguageSettingsDialog(BuildContext context,
-      {String? language}) async {
+  Future<void> _showLanguageSettingsDialog(
+    BuildContext context, {
+    String? language,
+  }) async {
     final result = await showDialog<MapEntry<String, LanguageConfig>?>(
       context: context,
       barrierDismissible: false,
       builder: (_) => _LanguageSettingsDialog(
         currentConfigs: _settings.languageConfigs,
         language: language,
-        initialConfig:
-            language != null ? _settings.languageConfigs[language] : null,
+        initialConfig: language != null
+            ? _settings.languageConfigs[language]
+            : null,
       ),
     );
 
     if (result != null) {
       setState(() {
-        final newConfigs =
-            Map<String, LanguageConfig>.from(_settings.languageConfigs);
+        final newConfigs = Map<String, LanguageConfig>.from(
+          _settings.languageConfigs,
+        );
         newConfigs[result.key] = result.value;
         _settings = _settings.copyWith(languageConfigs: newConfigs);
       });
@@ -1005,7 +1023,7 @@ class _EnhancedEditorSettingsDialogState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader('Performance'),
+          const SettingsSectionHeader(title: 'Performance'),
           const SizedBox(height: 16),
           _buildSwitchTile(
             title: 'Smooth Scrolling',
@@ -1033,19 +1051,20 @@ class _EnhancedEditorSettingsDialogState
             value: _settings.disableMonospaceOptimizations,
             onChanged: (value) {
               setState(() {
-                _settings =
-                    _settings.copyWith(disableMonospaceOptimizations: value);
+                _settings = _settings.copyWith(
+                  disableMonospaceOptimizations: value,
+                );
               });
             },
           ),
           const SizedBox(height: 32),
-          _buildSectionHeader('Accessibility'),
+          const SettingsSectionHeader(title: 'Accessibility'),
           const SizedBox(height: 16),
           _buildDropdownField<AccessibilitySupport>(
             label: 'Accessibility Support',
             value: _settings.accessibilitySupport,
             items: AccessibilitySupport.values,
-            itemBuilder: (support) => support.name.capitalize(),
+            itemBuilder: (support) => support.name.toTitle,
             onChanged: (value) {
               if (value != null) {
                 setState(() {
@@ -1055,7 +1074,7 @@ class _EnhancedEditorSettingsDialogState
             },
           ),
           const SizedBox(height: 32),
-          _buildSectionHeader('Reset & Backup'),
+          const SettingsSectionHeader(title: 'Reset & Backup'),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -1094,16 +1113,6 @@ class _EnhancedEditorSettingsDialogState
             ],
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title) {
-    return Text(
-      title,
-      style: context.titleMedium?.copyWith(
-        fontWeight: FontWeight.w600,
-        color: context.onSurface,
       ),
     );
   }
@@ -1268,7 +1277,9 @@ class _EnhancedEditorSettingsDialogState
   }
 
   Widget _buildThemeCategorySection(
-      ThemeCategory category, List<EditorTheme> themes) {
+    ThemeCategory category,
+    List<EditorTheme> themes,
+  ) {
     final categoryThemes = themes.where((t) => t.category == category).toList();
     if (categoryThemes.isEmpty) return const SizedBox.shrink();
 
@@ -1327,17 +1338,28 @@ class _EnhancedEditorSettingsDialogState
                     Container(
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(7),
-                        color: Color(int.parse(previewColors['background']!
-                            .replaceFirst('#', '0xFF'))),
+                        color: Color(
+                          int.parse(
+                            previewColors['background']!.replaceFirst(
+                              '#',
+                              '0xFF',
+                            ),
+                          ),
+                        ),
                       ),
                       child: Column(
                         children: [
                           Container(
                             height: 20,
                             decoration: BoxDecoration(
-                              color: Color(int.parse(previewColors['accent']!
-                                      .replaceFirst('#', '0xFF')))
-                                  .addOpacity(0.1),
+                              color: Color(
+                                int.parse(
+                                  previewColors['accent']!.replaceFirst(
+                                    '#',
+                                    '0xFF',
+                                  ),
+                                ),
+                              ).addOpacity(0.1),
                               borderRadius: const BorderRadiusDirectional.only(
                                 topStart: Radius.circular(7),
                                 topEnd: Radius.circular(7),
@@ -1352,9 +1374,12 @@ class _EnhancedEditorSettingsDialogState
                                   Container(
                                     width: 8,
                                     decoration: BoxDecoration(
-                                      color: Color(int.parse(
+                                      color: Color(
+                                        int.parse(
                                           previewColors['lineNumber']!
-                                              .replaceFirst('#', '0xFF'))),
+                                              .replaceFirst('#', '0xFF'),
+                                        ),
+                                      ),
                                       borderRadius: BorderRadius.circular(1),
                                     ),
                                   ),
@@ -1367,27 +1392,34 @@ class _EnhancedEditorSettingsDialogState
                                         Container(
                                           height: 2,
                                           width: double.infinity,
-                                          color: Color(int.parse(
+                                          color: Color(
+                                            int.parse(
                                               previewColors['foreground']!
-                                                  .replaceFirst('#', '0xFF'))),
+                                                  .replaceFirst('#', '0xFF'),
+                                            ),
+                                          ),
                                         ),
                                         const SizedBox(height: 2),
                                         Container(
                                           height: 2,
                                           width: 40,
-                                          color: Color(int.parse(
+                                          color: Color(
+                                            int.parse(
                                               previewColors['accent']!
-                                                  .replaceFirst('#', '0xFF'))),
+                                                  .replaceFirst('#', '0xFF'),
+                                            ),
+                                          ),
                                         ),
                                         const SizedBox(height: 2),
                                         Container(
                                           height: 2,
                                           width: 60,
-                                          color: Color(int.parse(
-                                                  previewColors['foreground']!
-                                                      .replaceFirst(
-                                                          '#', '0xFF')))
-                                              .addOpacity(0.7),
+                                          color: Color(
+                                            int.parse(
+                                              previewColors['foreground']!
+                                                  .replaceFirst('#', '0xFF'),
+                                            ),
+                                          ).addOpacity(0.7),
                                         ),
                                       ],
                                     ),
@@ -1432,7 +1464,7 @@ class _EnhancedEditorSettingsDialogState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionHeader('Preview'),
+        const SettingsSectionHeader(title: 'Preview'),
         const SizedBox(height: 16),
         Container(
           padding: const EdgeInsetsDirectional.all(16),
@@ -1490,8 +1522,9 @@ class _EnhancedEditorSettingsDialogState
 
   Widget _buildShortcutsPreview() {
     // Get current preset shortcuts
-    final preset =
-        KeybindingManager.findPresetById(_settings.keybindingPreset.name);
+    final preset = KeybindingManager.findPresetById(
+      _settings.keybindingPreset.name,
+    );
     if (preset == null) return const SizedBox.shrink();
 
     final popularShortcuts = preset.keybindings.take(10).toList();
@@ -1572,7 +1605,7 @@ class _EnhancedEditorSettingsDialogState
           const SizedBox(width: 12),
           FilledButton(
             onPressed: () async {
-              await EditorSettingsService.save(_settings);
+              await EditorSettingsServiceHelper.save(_settings);
               if (mounted) {
                 Navigator.of(context).pop(_settings);
               }
@@ -1596,23 +1629,23 @@ class _EnhancedEditorSettingsDialogState
               'beginner',
               'developer',
               'poweruser',
-              'accessibility'
+              'accessibility',
             ])
               ListTile(
-                title: Text(presetName.capitalize()),
+                title: Text(presetName.toTitle),
                 subtitle: Text(_getPresetDescription(presetName)),
                 onTap: () {
                   setState(() {
                     _settings = EditorSettings.createPreset(presetName);
                     // Update form controllers
                     _fontSizeController.text = _settings.fontSize.toString();
-                    _lineHeightController.text =
-                        _settings.lineHeight.toString();
-                    _letterSpacingController.text =
-                        _settings.letterSpacing.toString();
+                    _lineHeightController.text = _settings.lineHeight
+                        .toString();
+                    _letterSpacingController.text = _settings.letterSpacing
+                        .toString();
                     _tabSizeController.text = _settings.tabSize.toString();
-                    _wordWrapColumnController.text =
-                        _settings.wordWrapColumn.toString();
+                    _wordWrapColumnController.text = _settings.wordWrapColumn
+                        .toString();
                   });
                   Navigator.of(context).pop();
                 },
@@ -1664,11 +1697,11 @@ class _EnhancedEditorSettingsDialogState
                 // Update form controllers
                 _fontSizeController.text = _settings.fontSize.toString();
                 _lineHeightController.text = _settings.lineHeight.toString();
-                _letterSpacingController.text =
-                    _settings.letterSpacing.toString();
+                _letterSpacingController.text = _settings.letterSpacing
+                    .toString();
                 _tabSizeController.text = _settings.tabSize.toString();
-                _wordWrapColumnController.text =
-                    _settings.wordWrapColumn.toString();
+                _wordWrapColumnController.text = _settings.wordWrapColumn
+                    .toString();
               });
               Navigator.of(context).pop();
             },
@@ -1683,7 +1716,7 @@ class _EnhancedEditorSettingsDialogState
   }
 
   Future<void> _exportSettings() async {
-    final settingsJson = jsonEncode(MonacoSettingsConverter.toMonacoOptions(_settings));
+    final settingsJson = jsonEncode(_settings.toJson());
     try {
       final outputFile = await FilePicker.platform.saveFile(
         dialogTitle: 'Export Editor Settings',
@@ -1798,7 +1831,7 @@ class _LanguageSettingsDialogState extends State<_LanguageSettingsDialog> {
     _config = widget.initialConfig ?? const LanguageConfig();
 
     _tabSizeController.text = _config.tabSize?.toString() ?? '';
-    _rulersController.text = _config.rulers?.join(',') ?? '';
+    _rulersController.text = _config.rulers.join(',');
   }
 
   @override
@@ -1815,12 +1848,16 @@ class _LanguageSettingsDialogState extends State<_LanguageSettingsDialog> {
       existingKeys.remove(widget.language);
     }
 
-    return MonacoData.availableLanguages
+    return EditorConstants.languages.entries
+        .map((e) => {'value': e.key, 'text': e.value})
+        .toList()
         .where((lang) => !existingKeys.contains(lang['value']))
-        .map((lang) => DropdownMenuItem<String>(
-              value: lang['value'],
-              child: Text(lang['text'] ?? lang['value']!),
-            ))
+        .map(
+          (lang) => DropdownMenuItem<String>(
+            value: lang['value'],
+            child: Text(lang['text'] ?? lang['value']!),
+          ),
+        )
         .toList();
   }
 
@@ -1830,11 +1867,11 @@ class _LanguageSettingsDialogState extends State<_LanguageSettingsDialog> {
     final isEditing = widget.language != null;
 
     return AlertDialog(
-      title: Text(isEditing
-          ? 'Edit ${MonacoData.availableLanguages.firstWhere((l) => l['value'] == _selectedLanguage, orElse: () => {
-                'text': _selectedLanguage!
-              })['text']} Settings'
-          : 'Add Language-Specific Settings'),
+      title: Text(
+        isEditing
+            ? 'Edit ${EditorConstants.languages.entries.map((e) => {'value': e.key, 'text': e.value}).toList().firstWhere((l) => l['value'] == _selectedLanguage, orElse: () => {'text': _selectedLanguage!})['text']} Settings'
+            : 'Add Language-Specific Settings',
+      ),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1857,21 +1894,21 @@ class _LanguageSettingsDialogState extends State<_LanguageSettingsDialog> {
               Padding(
                 padding: const EdgeInsetsDirectional.only(bottom: 16),
                 child: Text(
-                    'Editing settings for: ${MonacoData.availableLanguages.firstWhere((l) => l['value'] == _selectedLanguage, orElse: () => {
-                          'text': _selectedLanguage!
-                        })['text']}',
-                    style: theme.titleMedium),
+                  'Editing settings for: ${EditorConstants.languages.entries.map((e) => {'value': e.key, 'text': e.value}).toList().firstWhere((l) => l['value'] == _selectedLanguage, orElse: () => {'text': _selectedLanguage!})['text']}',
+                  style: theme.titleMedium,
+                ),
               ),
             const SizedBox(height: 16),
             _buildTextField(
-                controller: _tabSizeController,
-                label: 'Tab Size (Optional)',
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                onChanged: (value) {
-                  final val = int.tryParse(value);
-                  _config = _config.copyWith(tabSize: val);
-                }),
+              controller: _tabSizeController,
+              label: 'Tab Size (Optional)',
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              onChanged: (value) {
+                final val = int.tryParse(value);
+                _config = _config.copyWith(tabSize: val);
+              },
+            ),
             const SizedBox(height: 16),
             _buildSwitch(
               label: 'Insert Spaces (Optional)',
@@ -1889,7 +1926,7 @@ class _LanguageSettingsDialogState extends State<_LanguageSettingsDialog> {
               items: [null, ...WordWrap.values],
               // Allow clearing
               itemBuilder: (ww) =>
-                  ww == null ? 'Default' : ww.name.capitalize(),
+                  ww == null ? 'Default' : ww.name.toTitle,
               onChanged: (value) {
                 setState(() {
                   _config = _config.copyWith(wordWrap: value);
@@ -1898,18 +1935,18 @@ class _LanguageSettingsDialogState extends State<_LanguageSettingsDialog> {
             ),
             const SizedBox(height: 16),
             _buildTextField(
-                controller: _rulersController,
-                label: 'Rulers (Optional, e.g., 80,100)',
-                keyboardType: TextInputType.text,
-                onChanged: (value) {
-                  final rulers = value
-                      .split(',')
-                      .map((s) => int.tryParse(s.trim()))
-                      .whereType<int>()
-                      .toList();
-                  _config = _config.copyWith(
-                      rulers: rulers.isNotEmpty ? rulers : null);
-                }),
+              controller: _rulersController,
+              label: 'Rulers (Optional, e.g., 80,100)',
+              keyboardType: TextInputType.text,
+              onChanged: (value) {
+                final rulers = value
+                    .split(',')
+                    .map((s) => int.tryParse(s.trim()))
+                    .whereType<int>()
+                    .toList();
+                _config = _config.copyWith(rulers: rulers);
+              },
+            ),
             const SizedBox(height: 16),
             _buildSwitch(
               label: 'Format on Save (Optional)',
@@ -1963,12 +2000,14 @@ class _LanguageSettingsDialogState extends State<_LanguageSettingsDialog> {
             if (_selectedLanguage != null) {
               // Clear fields if they are empty strings after editing, to truly make them null
               final finalConfig = _config.copyWith(
-                tabSize:
-                    _tabSizeController.text.isEmpty ? null : _config.tabSize,
-                rulers: _rulersController.text.isEmpty ? null : _config.rulers,
+                tabSize: _tabSizeController.text.isEmpty
+                    ? null
+                    : _config.tabSize,
+                rulers: _rulersController.text.isEmpty ? [] : _config.rulers,
               );
-              Navigator.of(context)
-                  .pop(MapEntry(_selectedLanguage!, finalConfig));
+              Navigator.of(
+                context,
+              ).pop(MapEntry(_selectedLanguage!, finalConfig));
             } else if (!isEditing) {
               // Show error if no language selected when adding
               ScaffoldMessenger.of(context).showSnackBar(
@@ -2052,12 +2091,5 @@ class _LanguageSettingsDialogState extends State<_LanguageSettingsDialog> {
       }).toList(),
       onChanged: onChanged,
     );
-  }
-}
-
-extension StringExtension on String {
-  String capitalize() {
-    if (isEmpty) return this;
-    return this[0].toUpperCase() + substring(1);
   }
 }

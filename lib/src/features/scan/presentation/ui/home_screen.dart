@@ -1,7 +1,6 @@
 // lib/src/features/scan/presentation/ui/home_screen.dart
 import 'package:context_collector/context_collector.dart';
 import 'package:context_collector/src/shared/consts.dart';
-import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -17,8 +16,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  bool _isDragging = false;
-
   @override
   void initState() {
     super.initState();
@@ -63,8 +60,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           );
         }
       });
-
-    final selectionNotifier = ref.read(selectionProvider.notifier);
 
     return Scaffold(
       backgroundColor: context.surface,
@@ -149,38 +144,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: DropTarget(
-        onDragEntered: (details) {
-          setState(() => _isDragging = true);
-        },
-        onDragExited: (details) {
-          setState(() => _isDragging = false);
-        },
-        onDragDone: (details) async {
-          setState(() => _isDragging = false);
-
-          if (details.files.isEmpty) return;
-
-          // Use the new batch processor for all dropped items
-          await selectionNotifier.processDroppedItems(details.files);
-        },
-        child: Center(
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            decoration: BoxDecoration(
-              color: _isDragging
-                  ? context.primary.addOpacity(0.1)
-                  : Colors.transparent,
-              border: _isDragging
-                  ? Border.all(
-                      color: context.primary.addOpacity(0.5),
-                      width: 2,
-                    )
-                  : null,
-            ),
-            child: const DropZoneWidget(),
-          ),
-        ),
+      body: const DropZone(
+        child: HomeScreenContent(),
       ),
     );
   }
