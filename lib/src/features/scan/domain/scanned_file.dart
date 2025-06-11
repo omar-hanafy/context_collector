@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:context_collector/src/shared/utils/extension_catalog.dart';
-import 'package:context_collector/src/shared/utils/language_mapper.dart';
+import 'package:context_collector/src/features/scan/utils/extension_catalog.dart';
+import 'package:context_collector/src/features/scan/utils/language_mapper.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
 

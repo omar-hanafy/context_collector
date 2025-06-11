@@ -1,5 +1,4 @@
-import 'package:context_collector/src/shared/theme/extensions.dart';
-import 'package:context_collector/src/shared/utils/extension_catalog.dart';
+import 'package:context_collector/context_collector.dart';
 import 'package:flutter/material.dart';
 
 class HomeScreenContent extends StatelessWidget {
@@ -7,20 +6,23 @@ class HomeScreenContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        margin: const EdgeInsetsDirectional.all(32),
-        padding: const EdgeInsetsDirectional.all(64),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: 600,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Icon container with gradient background
-                Container(
+    return Container(
+      margin: const EdgeInsetsDirectional.all(32),
+      padding: const EdgeInsetsDirectional.all(64),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxWidth: 600,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DsEmptyState(
+                icon: Icons.folder_open_rounded,
+                title: 'Drop Your Files or Directories Here',
+                subtitle:
+                    'Drag and drop files or directories to combine their content\ninto a single, organized collection',
+                customIcon: Container(
                   width: 120,
                   height: 120,
                   decoration: BoxDecoration(
@@ -40,31 +42,13 @@ class HomeScreenContent extends StatelessWidget {
                     color: context.primary,
                   ),
                 ),
-                const SizedBox(height: 32),
-                Text(
-                  'Drop Your Files or Directories Here',
-                  textAlign: TextAlign.center,
-                  style: context.displaySmall?.copyWith(
-                    color: context.onSurface,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -1,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Drag and drop files or directories to combine their content\ninto a single, organized collection',
-                  textAlign: TextAlign.center,
-                  style: context.bodyLarge?.copyWith(
-                    color: context.onSurface.addOpacity(0.6),
-                    height: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 40),
-                _buildSecondaryButton(context),
-                const SizedBox(height: 48),
-                _buildFeatureGrid(context),
-              ],
-            ),
+                actions: [
+                  _buildSecondaryButton(context),
+                  const SizedBox(height: 48),
+                  _buildFeatureGrid(context),
+                ],
+              ),
+            ],
           ),
         ),
       ),
@@ -123,17 +107,13 @@ class HomeScreenContent extends StatelessWidget {
               width: 280,
               child: Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsetsDirectional.all(12),
-                    decoration: BoxDecoration(
-                      color: context.primary.addOpacity(0.08),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      feature.icon,
-                      size: 24,
-                      color: context.primary,
-                    ),
+                  DsIconContainer(
+                    icon: feature.icon,
+                    backgroundColor: context.primary.addOpacity(0.08),
+                    iconColor: context.primary,
+                    size: 24,
+                    padding: 12,
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   const SizedBox(width: 16),
                   Expanded(

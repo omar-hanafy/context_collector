@@ -1,179 +1,188 @@
-The MAIN GOAL is to make to make the code more concise and remove any unused code or left overs for clean up.
-
-
-# HER IS WHAT I NOTICED:
-## Deep-clean Refactor — **“Break-Up the Beasts”**
-
-*(turn the 7 k-LOC UI back into \~3 k without touching behaviour)*
+Below is a **“round-two” improvement plan** that focuses purely on *code conciseness & maintainability* now that the big files are already split.
+Everything proposed is mechanical (no UX or runtime behaviour changes) and can be landed as incremental PRs.
 
 ---
 
-### 0. Ground Rules
+### 1 — Build a **“design-system” micro-package**
 
-| Rule                                      | Target                                                                     |
-|-------------------------------------------|----------------------------------------------------------------------------|
-| **≤ 400 LOC per file**                    | Anything larger gets carved up.                                            |
-| **Pure widgets only** inside `ui/widgets` | No persistence, no Riverpod reads except `ConsumerWidget`.                 |
-| **No anonymous private widget forests**   | Pull every sizeable `_Foo` out into its own file when > 50 LOC or reused.  |
-| **One responsibility ⇒ one file**         | E.g. `font_size_control.dart` just +/− font logic.                         |
-| **Barrels per sub-folder**                | `ui/widgets/quick_sidebar/quick_sidebar.dart` re-exports its leaf widgets. |
+| Step                                                            | Pay-off                                                                                        |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `lib/src/features/editor/ui/design_system/…`                    | Centralise *all* repeated colours, paddings, radii, text styles, icon sizes.                   |
+| Create `DsTile`, `DsCard`, `DsSwitch`, `DsDropdown`, `DsButton` | Every custom wrapper (`ToggleTile`, `SettingsSwitchTile`, etc.) extends these.                 |
+| Add extension `BuildContext.ds`                                 | e.g. `context.ds.borderDefault`. Eliminates 30-40 lines of colour/border duplication per file. |
 
----
-
-### 1. Inventory – files still too big
-
-| File                              |     \~LOC | Keep as                               | Split out into…                                                                                                                                                                                                                                                        |
-|-----------------------------------|----------:|---------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `ui/dialogs/settings_dialog.dart` | **2 050** | `dialogs/editor_settings_dialog.dart` | `tabs/general_tab.dart`, `tabs/appearance_tab.dart`, `tabs/editor_tab.dart`, `tabs/keybindings_tab.dart`, `tabs/languages_tab/…`, `tabs/advanced_tab.dart`, **plus** `widgets/preview_panel.dart`, `widgets/theme_picker.dart`, `dialogs/language_config_dialog.dart`. |
-| `ui/screens/editor_screen.dart`   |     1 300 | `screens/editor_screen.dart`          | `widgets/quick_sidebar/quick_sidebar.dart` (contains its own helpers), `widgets/quick_sidebar/toggle_tile.dart`, `widgets/quick_sidebar/font_size_control.dart`.                                                                                                       |
-| `ui/widgets/info_bar.dart`        |       600 | `widgets/info_bar/info_bar.dart`      | `widgets/info_bar/token_chip.dart`, `widgets/info_bar/stats_row.dart`.                                                                                                                                                                                                 |
-
-*(Run `wc -l` to confirm numbers in your workspace.)*
+*Result: \~400 LOC less across widgets, styling tweaks become one-liner variables.*
 
 ---
 
-### 2. Concrete implementation steps
+### 2 — Replace hand-written settings forms with **auto-generated `json2form`**
 
-1. **Scaffold folders**
-
-   ```bash
-   mkdir -p lib/src/features/editor/ui/widgets/quick_sidebar
-   mkdir -p lib/src/features/editor/ui/dialogs/tabs
-   mkdir -p lib/src/features/editor/ui/widgets/info_bar
-   ```
-
-2. **Extract the Settings tabs**
-
-   *Inside `settings_dialog.dart`:*
+1. Annotate every **Freezed** model (`EditorSettings`, `LanguageConfig`) with friendly-name & control-type metadata
 
    ```dart
-   // BEFORE:
-   Widget _buildGeneralTab() { … }
+   @FormField.number(min: 8, max: 72, suffix: 'px')
+   double fontSize;
+   ```
+2. Run a small build-runner builder (`build_runner watch`) that spits out
+   `*.form.dart` with widgets + validators.
+3. Tabs then become:
 
-   // AFTER: remove body, forward
-   Widget _buildGeneralTab() => const GeneralTab(
-     settings: _settings,
-     onChanged: _updateTabSettings,
+   ```dart
+   @override
+   Widget build(_) => SettingsForm(
+     model: settings,
+     onChanged: onSettingsChanged,
+     include: const ['fontSize', 'lineHeight', 'letterSpacing'],
    );
    ```
 
-   *New file `tabs/general_tab.dart`:*
-
-   ```dart
-   part of '../editor_settings_dialog.dart';  // or import directly
-
-   class GeneralTab extends StatelessWidget { … }
-   ```
-
-   Repeat for the five other tabs.
-
-   > **Tip:** Use `part` + `part of` while carving to avoid a cascade of imports until everything is moved; collapse later if you don’t like “parts”.
-
-3. **Factor out shared tiny widgets**
-
-   *Move Settings form helpers*
-   `form_fields.dart` already exists ― export it and **use it** everywhere; purge local ad-hoc number/text fields.
-
-4. **Quick Sidebar move**
-
-   *Cut lines 350-900* from `editor_screen.dart` into
-   `quick_sidebar/quick_sidebar.dart`.
-
-   Interface:
-
-   ```dart
-   class QuickSidebar extends StatelessWidget {
-     const QuickSidebar({
-       required this.settings,
-       required this.selectionState,
-       required this.onSettingsChanged,
-       Key? key,
-     }) : super(key: key);
-   }
-   ```
-
-   Then inside `editor_screen.dart` replace the giant inline widget:
-
-   ```dart
-   child: QuickSidebar(
-     settings: _editorSettings,
-     selectionState: selectionState,
-     onSettingsChanged: _saveAndApplySettings,
-   ),
-   ```
-
-5. **Token chip extraction**
-
-   *Move `_TokenCountChip` and its helpers* → `info_bar/token_chip.dart`.
-   Export it via a barrel (`info_bar.dart` simply `export 'token_chip.dart';` internally) so `info_bar.dart` itself is now \~250 LOC.
-
-6. **Shrink `info_bar.dart`**
-
-   *Create* `stats_row.dart` containing `_StatItem` and `_buildStatsDisplay` logic.
-   `info_bar.dart` then composes `StatsRow` and `TokenChip`.
-
-7. **Kill duplication**
-
-   *Generic `_buildDropdownField` / `_buildNumberField`* exist in both dialog and sidebar. Keep one implementation in `form_fields.dart`, import it everywhere.
-
-8. **Lint and run**
-
-   ```bash
-   dart fix --apply
-   dart format .
-   ```
+*Result: Deletes \~900 LOC of repetitive `SettingsNumberField / Dropdown` glue.*
 
 ---
 
-### 3. Expected counts after carve-up
+### 3 — Introduce **hooked ConsumerWidgets** (`flutter_hooks` + `hooks_riverpod`)
 
-| Layer                                              | Files     | Approx total LOC                |
-|----------------------------------------------------|-----------|---------------------------------|
-| Dialog (`settings_dialog.dart` + 8 tabs + helpers) | 9         | 900-1100                        |
-| Editor screen (+ sidebar widgets)                  | 4         | 700-800                         |
-| Info bar suite                                     | 3         | 350                             |
-| *Rest (bridge, core, data)*                        | unchanged | \~2 000                         |
-| **New total UI**                                   | 16        | **\~3 100 LOC** (down from 7 k) |
+*Typical pattern shift*
 
----
+```dart
+class _EditorScreenState extends ConsumerState<EditorScreen> {
+  // animation controller boilerplate …
+}
+```
 
-### 4. Tooling shortcuts
+→
 
-* **VS Code “Move Symbol to File”** (`F2` → “…\`) speeds extraction.
-* **IntelliJ “Refactor > Extract Class”** on `_LanguageSettingsDialog` to its own file.
-* `sed` script to change private `_XYZ` classes into public ones after moving:
+```dart
+class EditorScreen extends HookConsumerWidget {
+  @override
+  Widget build(context, ref) {
+    final sidebarAnim = useAnimationController(duration: 300.ms);
+    final isExpanded = useState(false);
+    …
+  }
+}
+```
 
-  ```bash
-  sed -i '' 's/class _\([A-Za-z0-9]\+\)/class \1/' \
-     lib/src/features/editor/ui/widgets/quick_sidebar/*.dart
-  ```
+*Removes:*
 
----
-
-### 5. Validation checklist
-
-1. `flutter analyze` → 0 errors, 0 warnings.
-2. Hot-reload still opens the editor, token chip updates, quick sidebar works.
-3. Verify each tab alters `_settings` correctly (no lost callbacks).
-4. Confirm compiled AU build size unchanged (we haven’t added deps).
+* the whole `State` class for each screen (avg 50 LOC each),
+* manual `dispose` for controllers.
 
 ---
 
-### 6. Stretch (optional, after things compile)
+### 4 — Collapse **icon-text tiles** with higher-order builder
 
-* **Generate** the Settings form via JSON → `flutter_form_builder` to collapse 600 LOC more.
-* **Bring in `riverpod_generator`** to derive `Provider`s and cut boilerplate.
-* **Use sealed `NavigationRail`** instead of custom sidebar if you fancy.
+Create once:
+
+```dart
+Widget quickTile({
+  required IconData icon,
+  required String title,
+  required bool value,
+  required ValueChanged<bool> onChanged,
+}) => …
+```
+
+In `QuickSidebar` (and other places) call:
+
+```dart
+quickTile(
+  icon: Icons.wrap_text,
+  title: 'Word Wrap',
+  value: settings.wordWrap != WordWrap.off,
+  onChanged: (_) => onWordWrapToggle(),
+);
+```
+
+*Deletes `ToggleTile.dart` and similar single-use files (-120 LOC).*
 
 ---
 
-> **Deliverables**: PR titled `refactor/editor-split-ui`, touching only `ui/` and import statements elsewhere.
-> No behavioural diff, tests stay green.
+### 5 — Turn **theme / language maps** into generated const look-ups
 
-Now go slice those giants — you’ll breathe easier reading the code tomorrow.
+*Problem:* each dropdown builds `EditorConstants.languages.entries …` repeatedly.
+
+*Fix:*
+
+```dart
+part 'constants.g.dart';  // generated
+
+@LanguagesMap()
+const Map<String, String> languages = { … };
+```
+
+The builder emits:
+
+```dart
+const List<DropdownMenuItem<String>> kLanguageItems = [ … ];
+```
+
+Now dropdowns become *one line*:
+
+```dart
+DropdownButton(items: kLanguageItems, …)
+```
+
+*Erases \~100 LOC of duplicate mapping code.*
+
 ---
-END OF MY NOTICES.
 
+### 6 — Unify **snack-bar helpers**
 
-If you have better ideas or suggestions feel free to include while you are doing a second refactor phase.
+Create `void showOk(BuildContext, String msg)` and `void showErr(…)`.
+Replace every explicit `ScaffoldMessenger.of(context).showSnackBar( SnackBar( … ) )`.
 
+*\~150 LOC trimmed; errors / success toasts gain consistent styling.*
+
+---
+
+### 7 — Leverage **extension methods** for numeric / string formatting
+
+*Places to hit:*
+
+* `_formatCompactNumber`, `_formatFullNumber`, duplicate size checks, opacity maths.
+
+Create a one-stop extension:
+
+```dart
+extension NumFormat on num {
+  String compact() { … }
+  String comma() { … }
+}
+```
+
+Replace every call site (`_formatCompactNumber(x)` → `x.compact()`).
+
+---
+
+### 8 — Remove ad-hoc **PopupMenu positioning math**
+
+Use `showMenuPositioned` from `context_menus` package → one line; drop manual `RenderBox` maths (-70 LOC).
+
+---
+
+### Ball-park savings
+
+| Source                          | LOC removed                         |
+| ------------------------------- | ----------------------------------- |
+| Design-system wrappers          | \~400                               |
+| Form auto-generation            | \~900                               |
+| Hook widgets (no State classes) | \~300                               |
+| Tile builder                    | \~120                               |
+| Constants pre-gen               | \~100                               |
+| Snack-bar helper                | \~150                               |
+| Extensions & misc               | \~130                               |
+| **Total**                       | **≈ 2 000 LOC** less (UI side only) |
+
+The project UI would level out near **≈ 1 k lines net**, without losing clarity or flexibility.
+
+---
+
+### Suggested execution order
+
+1. **Design system** (touches every widget; merge first).
+2. **Auto-form builder** (isolated to settings dialog).
+3. Hook refactor file-by-file.
+4. Constant pre-gen & helpers (safe, small PRs).
+
+Ship each as a dedicated PR to keep reviews digestible.

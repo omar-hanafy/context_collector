@@ -52,22 +52,12 @@ class ActionButtonsWidget extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsetsDirectional.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: context.primary.addOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '${selectionState.selectedFilesCount} / ${selectionState.totalFilesCount}',
-                        style: context.labelSmall?.copyWith(
-                          color: context.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                    DsChip(
+                      label:
+                          '${selectionState.selectedFilesCount} / ${selectionState.totalFilesCount}',
+                      backgroundColor: context.primary.addOpacity(0.1),
+                      textColor: context.primary,
+                      dense: true,
                     ),
                   ],
                 ),
@@ -187,109 +177,50 @@ class ActionButtonsWidget extends ConsumerWidget {
           if (selectionState.isProcessing &&
               selectionState.processingProgress != null) ...[
             const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsetsDirectional.all(12),
-              decoration: BoxDecoration(
-                color: context.primary.addOpacity(0.05),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: context.primary.addOpacity(0.2),
+            DsStatusCard(
+              title: selectionState.processingProgress!.phase.message,
+              subtitle: selectionState.processingProgress!.currentItem != null
+                  ? 'Processing: ${selectionState.processingProgress!.currentItem}'
+                  : null,
+              leading: SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    context.primary,
+                  ),
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            context.primary,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          selectionState.processingProgress!.phase.message,
-                          style: context.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        selectionState.processingProgress!.progressText,
-                        style: context.labelSmall?.copyWith(
-                          color: context.onSurface.addOpacity(0.6),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: selectionState.processingProgress!.progress,
-                      backgroundColor: context.primary.addOpacity(0.1),
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        context.primary,
-                      ),
-                      minHeight: 4,
-                    ),
-                  ),
-                  if (selectionState.processingProgress!.currentItem !=
-                      null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'Processing: ${selectionState.processingProgress!.currentItem}',
-                      style: context.labelSmall?.copyWith(
-                        color: context.onSurface.addOpacity(0.5),
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ],
+              trailing: Text(
+                selectionState.processingProgress!.progressText,
+                style: context.labelSmall?.copyWith(
+                  color: context.onSurfaceVariant,
+                ),
               ),
+              backgroundColor: context.primary.addOpacity(0.05),
+              showProgress: true,
+              progress: selectionState.processingProgress!.progress,
             ),
           ],
 
           // Loading indicator for file content loading
           if (selectionState.pendingLoadCount > 0) ...[
             const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsetsDirectional.symmetric(
-                horizontal: 16,
-                vertical: 8,
-              ),
-              decoration: BoxDecoration(
-                color: context.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 12,
-                    height: 12,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        context.onSurface.addOpacity(0.6),
-                      ),
-                    ),
+            DsStatusCard(
+              title:
+                  'Loading content for ${selectionState.pendingLoadCount} files...',
+              leading: SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    context.onSurfaceVariant,
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Loading content for ${selectionState.pendingLoadCount} files...',
-                    style: context.labelMedium?.copyWith(
-                      color: context.onSurface.addOpacity(0.6),
-                    ),
-                  ),
-                ],
+                ),
               ),
+              backgroundColor: context.surfaceContainerHighest,
             ),
           ],
         ],

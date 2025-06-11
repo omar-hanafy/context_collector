@@ -1,4 +1,4 @@
-import 'package:context_collector/src/shared/utils/extension_catalog.dart';
+import 'package:context_collector/src/features/scan/utils/extension_catalog.dart';
 import 'package:dart_helper_utils/dart_helper_utils.dart';
 import 'package:flutter/foundation.dart';
 

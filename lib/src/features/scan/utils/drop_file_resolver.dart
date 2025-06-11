@@ -115,7 +115,6 @@ class DropFileResolver {
       if (lines.isEmpty) return null;
 
       final firstLine = lines.first.trim();
-      final content = lines.join('\n');
 
       // Shebang detection
       if (firstLine.startsWith('#!')) {
@@ -129,125 +128,11 @@ class DropFileResolver {
         if (firstLine.contains('php')) return '.php';
       }
 
-      // Language-specific patterns
-      if (_isDartCode(content)) return '.dart';
-      if (_isJavaScriptCode(content)) return '.js';
-      if (_isPythonCode(content)) return '.py';
-      if (_isJavaCode(content)) return '.java';
-      if (_isCppCode(content)) return '.cpp';
-      if (_isHtmlCode(content)) return '.html';
-      if (_isCssCode(content)) return '.css';
-      if (_isJsonCode(content)) return '.json';
-      if (_isXmlCode(content)) return '.xml';
-      if (_isMarkdownCode(content)) return '.md';
-      if (_isYamlCode(content)) return '.yaml';
-      if (_isShellScript(content)) return '.sh';
-
       // Default to .txt if it's readable text
       return '.txt';
     } catch (e) {
       // If we can't read the file as text, it might be binary
       return null;
     }
-  }
-
-  static bool _isDartCode(String content) {
-    return content.contains("import 'dart:") ||
-        content.contains("import 'package:") ||
-        content.contains('class ') && content.contains(' extends ') ||
-        content.contains('void main()') ||
-        content.contains('Widget build(');
-  }
-
-  static bool _isJavaScriptCode(String content) {
-    return content.contains('function ') ||
-        content.contains('const ') ||
-        content.contains('let ') ||
-        content.contains('var ') ||
-        content.contains('=>') ||
-        content.contains('require(') ||
-        content.contains('import ') && content.contains(' from ');
-  }
-
-  static bool _isPythonCode(String content) {
-    return content.contains('def ') ||
-        content.contains('class ') && content.contains(':') ||
-        content.contains('import ') ||
-        content.contains('from ') && content.contains(' import ') ||
-        content.contains('if __name__');
-  }
-
-  static bool _isJavaCode(String content) {
-    return content.contains('public class ') ||
-        content.contains('private ') ||
-        content.contains('protected ') ||
-        content.contains('package ') ||
-        content.contains('import java.');
-  }
-
-  static bool _isCppCode(String content) {
-    return content.contains('#include ') ||
-        content.contains('using namespace ') ||
-        content.contains('int main(') ||
-        content.contains('std::');
-  }
-
-  static bool _isHtmlCode(String content) {
-    return content.contains('<!DOCTYPE') ||
-        content.contains('<html') ||
-        content.contains('<head>') ||
-        content.contains('<body>') ||
-        (content.contains('<div') && content.contains('</div>'));
-  }
-
-  static bool _isCssCode(String content) {
-    return (content.contains('{') &&
-            content.contains('}') &&
-            content.contains(':') &&
-            content.contains(';')) &&
-        (content.contains('color:') ||
-            content.contains('background:') ||
-            content.contains('margin:') ||
-            content.contains('padding:') ||
-            content.contains('font-'));
-  }
-
-  static bool _isJsonCode(String content) {
-    final trimmed = content.trim();
-    return (trimmed.startsWith('{') && trimmed.contains('}')) ||
-        (trimmed.startsWith('[') && trimmed.contains(']'));
-  }
-
-  static bool _isXmlCode(String content) {
-    return content.contains('<?xml') ||
-        (content.contains('<') &&
-            content.contains('>') &&
-            content.contains('</'));
-  }
-
-  static bool _isMarkdownCode(String content) {
-    return content.contains('# ') ||
-        content.contains('## ') ||
-        content.contains('```') ||
-        content.contains('- ') ||
-        content.contains('* ') ||
-        content.contains('[') && content.contains('](');
-  }
-
-  static bool _isYamlCode(String content) {
-    return content.contains(':') &&
-        (content.contains('  ') || content.contains('\t')) &&
-        !content.contains('{') &&
-        !content.contains('}');
-  }
-
-  static bool _isShellScript(String content) {
-    return content.contains('#!/bin/') ||
-        content.contains('echo ') ||
-        content.contains('export ') ||
-        content.contains('if [') ||
-        content.contains('then') ||
-        content.contains('fi') ||
-        content.contains('for ') && content.contains('do');
   }
 }

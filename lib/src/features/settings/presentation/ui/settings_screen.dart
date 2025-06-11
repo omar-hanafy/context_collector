@@ -1,11 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:context_collector/src/features/settings/presentation/state/preferences_notifier.dart';
-import 'package:context_collector/src/features/settings/presentation/state/theme_notifier.dart';
-import 'package:context_collector/src/features/settings/services/auto_updater_service.dart';
-import 'package:context_collector/src/shared/theme/extensions.dart';
-import 'package:context_collector/src/shared/utils/extension_catalog.dart';
+import 'package:context_collector/context_collector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -101,7 +97,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              context.ds.spaceHeight(DesignSystem.space16),
               DropdownButtonFormField<FileCategory>(
                 value: _selectedCategory,
                 decoration: const InputDecoration(
@@ -118,7 +114,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                           size: 20,
                           color: context.isDark ? Colors.white : Colors.black,
                         ),
-                        const SizedBox(width: 8),
+                        context.ds.spaceWidth(DesignSystem.space8),
                         Text(category.displayName),
                       ],
                     ),
@@ -134,11 +130,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           ),
         ),
         actions: [
-          TextButton(
+          DsButton(
             onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
-          FilledButton(
+          DsButton(
+            isFilled: true,
             onPressed: () async {
               if (_formKey.currentState!.validate()) {
                 try {
@@ -149,20 +146,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   if (mounted) {
                     Navigator.pop(dialogContext);
                     _extensionController.clear();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Extension added successfully'),
-                      ),
-                    );
+                    context.showOk('Extension added successfully');
                   }
                 } catch (e) {
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Error: $e'),
-                        backgroundColor: context.error,
-                      ),
-                    );
+                    context.showErr('Error: $e');
                   }
                 }
               }
@@ -210,62 +198,52 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   Widget _buildGeneralSettings(BuildContext context, ThemeMode currentTheme) {
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: DsDimensions.paddingMedium,
       children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.palette_rounded,
-                      color: context.primary,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Appearance',
-                      style: context.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
+        DsCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              DsSectionHeader(
+                title: 'Appearance',
+                trailing: Icon(
+                  Icons.palette_rounded,
+                  color: context.primary,
+                  size: DesignSystem.iconSizeMedium,
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  'Theme Mode',
-                  style: context.titleSmall,
-                ),
-                const SizedBox(height: 8),
-                SegmentedButton<ThemeMode>(
-                  segments: const [
-                    ButtonSegment<ThemeMode>(
-                      value: ThemeMode.system,
-                      label: Text('System'),
-                      icon: Icon(Icons.settings_brightness_rounded),
-                    ),
-                    ButtonSegment<ThemeMode>(
-                      value: ThemeMode.light,
-                      label: Text('Light'),
-                      icon: Icon(Icons.light_mode_rounded),
-                    ),
-                    ButtonSegment<ThemeMode>(
-                      value: ThemeMode.dark,
-                      label: Text('Dark'),
-                      icon: Icon(Icons.dark_mode_rounded),
-                    ),
-                  ],
-                  selected: {currentTheme},
-                  onSelectionChanged: (Set<ThemeMode> selection) {
-                    ref
-                        .read(themeProvider.notifier)
-                        .setThemeMode(selection.first);
-                  },
-                ),
-              ],
-            ),
+              ),
+              context.ds.spaceHeight(DesignSystem.space16),
+              Text(
+                'Theme Mode',
+                style: context.titleSmall,
+              ),
+              context.ds.spaceHeight(DesignSystem.space8),
+              SegmentedButton<ThemeMode>(
+                segments: const [
+                  ButtonSegment<ThemeMode>(
+                    value: ThemeMode.system,
+                    label: Text('System'),
+                    icon: Icon(Icons.settings_brightness_rounded),
+                  ),
+                  ButtonSegment<ThemeMode>(
+                    value: ThemeMode.light,
+                    label: Text('Light'),
+                    icon: Icon(Icons.light_mode_rounded),
+                  ),
+                  ButtonSegment<ThemeMode>(
+                    value: ThemeMode.dark,
+                    label: Text('Dark'),
+                    icon: Icon(Icons.dark_mode_rounded),
+                  ),
+                ],
+                selected: {currentTheme},
+                onSelectionChanged: (Set<ThemeMode> selection) {
+                  ref
+                      .read(themeProvider.notifier)
+                      .setThemeMode(selection.first);
+                },
+              ),
+            ],
           ),
         ),
       ],
@@ -289,9 +267,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 children: [
                   Text(
                     'Customize Supported File Extensions',
-                    style: context.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: context.titleBold,
                   ),
                   const Spacer(),
                   PopupMenuButton<String>(
@@ -301,22 +277,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                         case 'enable_all':
                           await notifier.enableAll();
                           if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('All extensions enabled'),
-                              ),
-                            );
+                            context.showOk('All extensions enabled');
                           }
                         case 'disable_all':
                           await notifier.disableAll();
                           if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'All default extensions disabled',
-                                ),
-                              ),
-                            );
+                            context.showOk('All default extensions disabled');
                           }
                         case 'reset':
                           await showDialog<void>(
@@ -336,14 +302,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                     await notifier.resetToDefaults();
                                     if (mounted) {
                                       Navigator.pop(dialogContext);
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'Settings reset to defaults',
-                                          ),
-                                        ),
+                                      context.showOk(
+                                        'Settings reset to defaults',
                                       );
                                     }
                                   },
@@ -393,18 +353,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              context.ds.spaceHeight(DesignSystem.space8),
               Text(
                 'Enable or disable file extensions for context collection. You can also add custom extensions.',
-                style: context.bodyMedium?.copyWith(
-                  color: context.onSurface.addOpacity(0.7),
-                ),
+                style: context.bodyMuted,
               ),
-              const SizedBox(height: 16),
-              FilledButton.icon(
+              context.ds.spaceHeight(DesignSystem.space16),
+              DsButton(
                 onPressed: () => _showAddExtensionDialog(context),
                 icon: const Icon(Icons.add_rounded),
-                label: const Text('Add Custom Extension'),
+                isFilled: true,
+                child: const Text('Add Custom Extension'),
               ),
             ],
           ),
@@ -427,16 +386,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   final extensions = groupedExtensions[category]!;
                   final enabledCount = extensions.where((e) => e.value).length;
 
-                  return Card(
+                  return DsCard(
                     margin: const EdgeInsetsDirectional.only(bottom: 16),
+                    padding: EdgeInsets.zero,
                     child: ExpansionTile(
                       leading: Icon(category.icon),
                       title: Text(category.displayName),
                       subtitle: Text(
                         '$enabledCount of ${extensions.length} enabled',
-                        style: context.bodySmall?.copyWith(
-                          color: context.onSurface.addOpacity(0.6),
-                        ),
+                        style: context.bodyMuted,
                       ),
                       children: [
                         const Divider(height: 1),
@@ -501,184 +459,145 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     final autoUpdaterService = ref.read(autoUpdaterServiceProvider);
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: DsDimensions.paddingMedium,
       children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.system_update_rounded,
-                      color: context.primary,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Automatic Updates',
-                      style: context.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
+        DsCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              DsSectionHeader(
+                title: 'Automatic Updates',
+                trailing: Icon(
+                  Icons.system_update_rounded,
+                  color: context.primary,
+                  size: DesignSystem.iconSizeMedium,
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  'Keep Context Collector up to date with the latest features and improvements.',
-                  style: context.bodyMedium?.copyWith(
-                    color: context.onSurface.addOpacity(0.7),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                FilledButton.icon(
-                  onPressed: () async {
-                    try {
-                      // Show loading indicator without awaiting it
-                      unawaited(
-                        showDialog<void>(
-                          context: context,
-                          barrierDismissible: false,
-                          builder: (dialogContext) => const Center(
-                            child: Card(
-                              child: Padding(
-                                padding: EdgeInsets.all(20),
-                                child: CircularProgressIndicator(),
-                              ),
-                            ),
+              ),
+              context.ds.spaceHeight(DesignSystem.space16),
+              Text(
+                'Keep Context Collector up to date with the latest features and improvements.',
+                style: context.bodyMuted,
+              ),
+              context.ds.spaceHeight(DesignSystem.space24),
+              DsButton(
+                onPressed: () async {
+                  try {
+                    // Show loading indicator without awaiting it
+                    unawaited(
+                      showDialog<void>(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (dialogContext) => Center(
+                          child: DsCard(
+                            child: const CircularProgressIndicator(),
                           ),
                         ),
+                      ),
+                    );
+
+                    await autoUpdaterService.checkForUpdates();
+
+                    if (mounted) {
+                      Navigator.pop(context); // Close loading dialog
+                      context.showOk(
+                        'Update check complete! If an update is available, it will download automatically.',
                       );
-
-                      await autoUpdaterService.checkForUpdates();
-
-                      if (mounted) {
-                        Navigator.pop(context); // Close loading dialog
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Update check complete! If an update is available, it will download automatically.',
-                            ),
-                          ),
-                        );
-                      }
-                    } catch (e) {
-                      if (mounted) {
-                        Navigator.pop(context); // Close loading dialog
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Failed to check for updates: $e'),
-                            backgroundColor: context.error,
-                          ),
-                        );
-                      }
                     }
-                  },
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('Check for Updates'),
+                  } catch (e) {
+                    if (mounted) {
+                      Navigator.pop(context); // Close loading dialog
+                      context.showErr('Failed to check for updates: $e');
+                    }
+                  }
+                },
+                icon: const Icon(Icons.refresh_rounded),
+                isFilled: true,
+                child: const Text('Check for Updates'),
+              ),
+              context.ds.spaceHeight(DesignSystem.space16),
+              const DsDivider(),
+              context.ds.spaceHeight(DesignSystem.space16),
+              Text(
+                'Update Settings',
+                style: context.titleBold,
+              ),
+              context.ds.spaceHeight(DesignSystem.space12),
+              Container(
+                padding: DsDimensions.paddingSmall,
+                decoration: BoxDecoration(
+                  color: context.surfaceContainerHighest,
+                  borderRadius: context.ds.radiusMedium,
                 ),
-                const SizedBox(height: 16),
-                const Divider(),
-                const SizedBox(height: 16),
-                Text(
-                  'Update Settings',
-                  style: context.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: context.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.schedule_rounded,
-                            size: 16,
-                            color: context.onSurface.addOpacity(0.6),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Automatic check interval: Every 6 hours',
-                            style: context.bodySmall?.copyWith(
-                              color: context.onSurface.addOpacity(0.6),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.cloud_download_rounded,
-                            size: 16,
-                            color: context.onSurface.addOpacity(0.6),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Updates are downloaded automatically and will be installed on next app restart',
-                              style: context.bodySmall?.copyWith(
-                                color: context.onSurface.addOpacity(0.6),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      Icons.info_outline_rounded,
-                      color: context.primary,
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.schedule_rounded,
+                          size: 16,
+                          color: context.onSurface.addOpacity(0.6),
+                        ),
+                        context.ds.spaceWidth(DesignSystem.space8),
+                        Text(
+                          'Automatic check interval: Every 6 hours',
+                          style: context.bodyMuted,
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'About',
-                      style: context.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    context.ds.spaceHeight(DesignSystem.space8),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.cloud_download_rounded,
+                          size: 16,
+                          color: context.onSurface.addOpacity(0.6),
+                        ),
+                        context.ds.spaceWidth(DesignSystem.space8),
+                        Expanded(
+                          child: Text(
+                            'Updates are downloaded automatically and will be installed on next app restart',
+                            style: context.bodyMuted,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                _buildInfoRow(
-                  context,
-                  'Version',
-                  _packageInfo == null
-                      ? 'Loading...'
-                      : '${_packageInfo!.version}${_packageInfo!.buildNumber.isNotEmpty ? '+${_packageInfo!.buildNumber}' : ''}',
+              ),
+            ],
+          ),
+        ),
+        context.ds.spaceHeight(DesignSystem.space16),
+        DsCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              DsSectionHeader(
+                title: 'About',
+                trailing: Icon(
+                  Icons.info_outline_rounded,
+                  color: context.primary,
+                  size: DesignSystem.iconSizeMedium,
                 ),
-                const SizedBox(height: 8),
-                _buildInfoRow(context, 'Platform', Platform.operatingSystem),
-                const SizedBox(height: 8),
-                _buildInfoRow(
-                  context,
-                  'Update Channel',
-                  'Stable',
-                ),
-              ],
-            ),
+              ),
+              context.ds.spaceHeight(DesignSystem.space16),
+              _buildInfoRow(
+                context,
+                'Version',
+                _packageInfo == null
+                    ? 'Loading...'
+                    : '${_packageInfo!.version}${_packageInfo!.buildNumber.isNotEmpty ? '+${_packageInfo!.buildNumber}' : ''}',
+              ),
+              context.ds.spaceHeight(DesignSystem.space8),
+              _buildInfoRow(context, 'Platform', Platform.operatingSystem),
+              context.ds.spaceHeight(DesignSystem.space8),
+              _buildInfoRow(
+                context,
+                'Update Channel',
+                'Stable',
+              ),
+            ],
           ),
         ),
       ],
@@ -686,22 +605,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   }
 
   Widget _buildInfoRow(BuildContext context, String label, String value) {
-    return Row(
-      children: [
-        Text(
-          '$label:',
-          style: context.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          value,
-          style: context.bodyMedium?.copyWith(
-            color: context.onSurface.addOpacity(0.7),
-          ),
-        ),
-      ],
+    return DsInfoRow(
+      label: '$label:',
+      value: value,
     );
   }
 }

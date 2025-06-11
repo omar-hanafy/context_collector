@@ -52,23 +52,12 @@ class TokenCountChip extends ConsumerWidget {
         richMessage: WidgetSpan(
           child: _buildTooltipContent(context, selectedModel, estimate, usage),
         ),
-        child: InkWell(
+        child: DsChip(
+          label: '~${estimate.tokens.compact()} ↯',
+          backgroundColor: context.primaryContainer.addOpacity(0.3),
+          textColor: _getTokenColor(context, usage),
           onTap: () => _showModelMenu(context, ref, calculator),
-          borderRadius: BorderRadius.circular(4),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: context.primaryContainer.addOpacity(0.3),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              '~${_formatCompactNumber(estimate.tokens)} ↯',
-              style: context.labelSmall?.copyWith(
-                color: _getTokenColor(context, usage),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
+          dense: true,
         ),
       ),
     );
@@ -100,14 +89,14 @@ class TokenCountChip extends ConsumerWidget {
               color: context.onSurface,
             ),
           ),
-          const SizedBox(height: 8),
+          context.ds.spaceHeight(DesignSystem.space8),
           Text(
-            '~${_formatFullNumber((estimate as dynamic).tokens as int)} tokens',
+            '~${(estimate as dynamic).tokens} tokens',
             style: context.bodySmall?.copyWith(
               color: context.onSurface,
             ),
           ),
-          const SizedBox(height: 12),
+          context.ds.spaceHeight(DesignSystem.space12),
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
@@ -119,19 +108,19 @@ class TokenCountChip extends ConsumerWidget {
               minHeight: 6,
             ),
           ),
-          const SizedBox(height: 6),
+          context.ds.spaceHeight(6),
           Text(
             '${(usage * 100).toStringAsFixed(1)}% of context window',
             style: context.labelSmall?.copyWith(
               color: context.onSurfaceVariant,
             ),
           ),
-          const SizedBox(height: 12),
+          context.ds.spaceHeight(DesignSystem.space12),
           Divider(
             color: context.outlineVariant,
             height: 1,
           ),
-          const SizedBox(height: 8),
+          context.ds.spaceHeight(DesignSystem.space8),
           Text(
             'Click to compare models',
             style: context.labelSmall?.copyWith(
@@ -218,24 +207,10 @@ class TokenCountChip extends ConsumerWidget {
         ),
         const SizedBox(width: 8),
         Text(
-          '~${_formatCompactNumber(estimate.tokens)}',
+          '~${estimate.tokens.compact()}',
           style: context.labelSmall?.copyWith(color: context.onSurfaceVariant),
         ),
       ],
-    );
-  }
-
-  String _formatCompactNumber(int number) {
-    if (number < 1000) return '$number';
-    if (number < 10000) return '${(number / 1000).toStringAsFixed(1)}k';
-    if (number < 1000000) return '${(number / 1000).toStringAsFixed(0)}k';
-    return '${(number / 1000000).toStringAsFixed(1)}M';
-  }
-
-  String _formatFullNumber(int number) {
-    return number.toString().replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (Match m) => '${m[1]},',
     );
   }
 

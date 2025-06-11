@@ -41,8 +41,8 @@ dependencies:
   archive: ^4.0.7
   xml: ^6.5.0
   collection: ^1.19.1
-
   cross_file: any
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

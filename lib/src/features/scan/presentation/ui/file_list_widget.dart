@@ -587,6 +587,7 @@ class _FileListItem extends StatelessWidget {
       }
     }
 
+    // Keep custom styling for branded icons
     return Container(
       width: 40,
       height: 40,

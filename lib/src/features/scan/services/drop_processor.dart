@@ -3,9 +3,9 @@ import 'dart:io';
 
 import 'package:context_collector/src/features/scan/data/file_scanner.dart';
 import 'package:context_collector/src/features/scan/domain/scanned_file.dart';
-import 'package:context_collector/src/shared/utils/drop_file_resolver.dart';
-import 'package:context_collector/src/shared/utils/extension_catalog.dart';
-import 'package:context_collector/src/shared/utils/vscode_drop_detector.dart';
+import 'package:context_collector/src/features/scan/utils/drop_file_resolver.dart';
+import 'package:context_collector/src/features/scan/utils/extension_catalog.dart';
+import 'package:context_collector/src/features/scan/utils/vscode_drop_detector.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/foundation.dart';

@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import 'package:context_collector/src/features/scan/domain/scanned_file.dart';
-import 'package:context_collector/src/shared/utils/drop_file_resolver.dart';
-import 'package:context_collector/src/shared/utils/extension_catalog.dart';
+import 'package:context_collector/src/features/scan/utils/drop_file_resolver.dart';
+import 'package:context_collector/src/features/scan/utils/extension_catalog.dart';
 import 'package:path/path.dart' as path;
 
 /// Service responsible for scanning directories and finding supported files
