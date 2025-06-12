@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:context_collector/context_collector.dart';
+import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 
@@ -103,12 +104,16 @@ class MonacoBridgePlatform extends ChangeNotifier with MonacoEditorActions {
   }
 
   /// Scrolls the editor to the first line.
-  Future<void> scrollToTop() async =>
-      executeEditorAction('editor.action.revealLine', {'lineNumber': 1});
+  Future<void> scrollToTop() async {
+    if (_webViewController == null) return;
+    await _webViewController!.runJavaScript(MonacoScripts.scrollToTopScript);
+  }
 
   /// Scrolls the editor to the last line.
-  Future<void> scrollToBottom() async =>
-      executeEditorAction('editor.action.revealLine', {'lineNumber': -1});
+  Future<void> scrollToBottom() async {
+    if (_webViewController == null) return;
+    await _webViewController!.runJavaScript(MonacoScripts.scrollToBottomScript);
+  }
 
   // --- Overridden Methods ---
 

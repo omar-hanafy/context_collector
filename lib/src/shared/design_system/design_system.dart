@@ -3,6 +3,7 @@
 library design_system;
 
 import 'package:context_collector/context_collector.dart';
+import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter/material.dart';
 
 part 'ds_colors.dart';

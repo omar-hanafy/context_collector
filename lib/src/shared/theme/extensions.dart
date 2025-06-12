@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 
-export 'package:flutter_helper_utils/flutter_helper_utils.dart';
-
 /// Extension on BuildContext to provide convenient theme color access
 extension ThemeColorsExtension on BuildContext {
   // ColorScheme colors

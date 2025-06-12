@@ -1,7 +1,9 @@
 import 'package:context_collector/context_collector.dart';
+import 'package:context_collector/src/shared/widgets/shared_drop_zone.dart';
 import 'package:enefty_icons/enefty_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -176,6 +178,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       }
     });
 
+    // View switching is now handled by parent ScanContainer
+
     return Scaffold(
       backgroundColor: context.surface,
       appBar: AppBar(
@@ -311,8 +315,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                           'Editor panels splitter. Drag to resize or use arrow keys.',
                       startPanel: Column(
                         children: [
-                          const ActionButtonsWidget(),
-                          const Expanded(child: FileListWidget()),
+                          const ActionBar(),
+                          const Expanded(child: FileListScreen()),
                           if (selectionState.isProcessing)
                             const LinearProgressIndicator(),
                         ],

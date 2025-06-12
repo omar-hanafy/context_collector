@@ -1,0 +1,378 @@
+import 'package:context_collector/context_collector.dart';
+import 'package:flutter_helper_utils/flutter_helper_utils.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+/// Simplified file list widget with original styling
+class FileListWidget extends ConsumerWidget {
+  const FileListWidget({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selectionState = ref.watch(selectionProvider);
+
+    return ListView.builder(
+      itemCount: selectionState.allFiles.length,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemBuilder: (context, index) {
+        final file = selectionState.allFiles[index];
+        return _FileListItem(
+          file: file,
+          isSelected: selectionState.selectedFileIds.contains(file.id),
+          onToggle: () =>
+              ref.read(selectionProvider.notifier).toggleFileSelection(file),
+          onRemove: () => ref.read(selectionProvider.notifier).removeFile(file),
+        );
+      },
+    );
+  }
+}
+
+class _FileListItem extends StatelessWidget {
+  const _FileListItem({
+    required this.file,
+    required this.isSelected,
+    required this.onToggle,
+    required this.onRemove,
+  });
+
+  final ScannedFile file;
+  final bool isSelected;
+  final VoidCallback onToggle;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: isSelected
+            ? colorScheme.primary.addOpacity(0.05)
+            : colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isSelected
+              ? colorScheme.primary.addOpacity(0.3)
+              : colorScheme.outline.addOpacity(0.2),
+          width: isSelected ? 1.5 : 1,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onToggle,
+          borderRadius: BorderRadius.circular(16),
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          hoverColor: isSelected
+              ? colorScheme.primary.addOpacity(0.02)
+              : colorScheme.onSurface.addOpacity(0.02),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                // Custom checkbox
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? colorScheme.primary
+                        : colorScheme.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isSelected
+                          ? colorScheme.primary
+                          : colorScheme.outline.addOpacity(0.5),
+                      width: 2,
+                    ),
+                  ),
+                  child: isSelected
+                      ? const Icon(
+                          Icons.check_rounded,
+                          size: 14,
+                          color: Colors.white,
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 12),
+                _buildFileIcon(context),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        file.name,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: colorScheme.onSurface,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          if (file.displayPath != null) ...[
+                            Tooltip(
+                              message: 'Dragged from VS Code',
+                              child: Icon(
+                                Icons.code_rounded,
+                                size: 12,
+                                color: colorScheme.onSurface.addOpacity(0.5),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                          Expanded(
+                            child: Text(
+                              file.displayPath ?? file.fullPath,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: colorScheme.onSurface.addOpacity(
+                                      0.5,
+                                    ),
+                                    fontFamily: 'monospace',
+                                    fontSize: 11,
+                                  ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          _buildStatusChip(context, file),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colorScheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              file.sizeFormatted,
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    fontSize: 11,
+                                    color: colorScheme.onSurface.addOpacity(
+                                      0.6,
+                                    ),
+                                  ),
+                            ),
+                          ),
+                          if (file.extension.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: colorScheme.primary.addOpacity(0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                file.extension,
+                                style: Theme.of(context).textTheme.labelSmall
+                                    ?.copyWith(
+                                      fontSize: 11,
+                                      fontFamily: 'monospace',
+                                      color: colorScheme.primary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                if (file.error != null)
+                  IconButton(
+                    icon: Icon(
+                      Icons.error_outline_rounded,
+                      color: colorScheme.error,
+                    ),
+                    onPressed: () => _showErrorDialog(context),
+                    tooltip: 'Show error',
+                    style: IconButton.styleFrom(
+                      backgroundColor: colorScheme.error.addOpacity(0.1),
+                    ),
+                  ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: onRemove,
+                  tooltip: 'Remove file',
+                  style: IconButton.styleFrom(
+                    foregroundColor: colorScheme.error,
+                    backgroundColor: colorScheme.error.addOpacity(0.1),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFileIcon(BuildContext context) {
+    IconData iconData;
+
+    // Simple icon selection based on extension
+    if (file.extension.isEmpty) {
+      iconData = Icons.insert_drive_file;
+    } else if ([
+      '.dart',
+      '.py',
+      '.js',
+      '.ts',
+      '.java',
+      '.cpp',
+      '.c',
+      '.rs',
+      '.go',
+    ].contains(file.extension)) {
+      iconData = Icons.code;
+    } else if ([
+      '.html',
+      '.css',
+      '.scss',
+      '.vue',
+      '.jsx',
+      '.tsx',
+    ].contains(file.extension)) {
+      iconData = Icons.web;
+    } else if ([
+      '.json',
+      '.yaml',
+      '.yml',
+      '.xml',
+      '.toml',
+      '.ini',
+    ].contains(file.extension)) {
+      iconData = Icons.settings;
+    } else if ([
+      '.md',
+      '.txt',
+      '.rst',
+      '.doc',
+      '.docx',
+    ].contains(file.extension)) {
+      iconData = Icons.description;
+    } else if ([
+      '.sh',
+      '.bash',
+      '.zsh',
+      '.ps1',
+      '.bat',
+    ].contains(file.extension)) {
+      iconData = Icons.terminal;
+    } else {
+      iconData = Icons.insert_drive_file;
+    }
+
+    return Icon(iconData, size: 24);
+  }
+
+  Widget _buildStatusChip(BuildContext context, ScannedFile file) {
+    if (file.error != null) {
+      return Chip(
+        label: const Text('Error', style: TextStyle(fontSize: 11)),
+        backgroundColor: Theme.of(context).colorScheme.error.addOpacity(0.1),
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
+      );
+    }
+
+    if (file.isVirtual) {
+      return Chip(
+        label: const Text('Virtual', style: TextStyle(fontSize: 11)),
+        backgroundColor: Colors.green.withOpacity(0.1),
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
+      );
+    }
+
+    if (file.isDirty) {
+      return Chip(
+        label: const Text('Edited', style: TextStyle(fontSize: 11)),
+        backgroundColor: Colors.orange.withOpacity(0.1),
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
+      );
+    }
+
+    if (file.content != null) {
+      return Chip(
+        label: const Text('Loaded', style: TextStyle(fontSize: 11)),
+        backgroundColor: Theme.of(context).colorScheme.primary.addOpacity(0.1),
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
+      );
+    }
+
+    return Chip(
+      label: const Text('Pending', style: TextStyle(fontSize: 11)),
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+    );
+  }
+
+  Future<void> _showErrorDialog(BuildContext context) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              Icons.error_outline,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            const SizedBox(width: 8),
+            const Text('File Error'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'File: ${file.name}',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Error: ${file.error}',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+}

@@ -101,15 +101,21 @@ class MonacoScripts {
 
   /// Script to scroll to bottom of editor
   static const String scrollToBottomScript = '''
-    if (window.editor) {
-      const lineCount = window.editor.getModel()?.getLineCount() || 1;
-      window.editor.revealLine(lineCount);
+    if (window.editor && window.editor.getModel()) {
+      const lineCount = window.editor.getModel().getLineCount();
+      window.editor.revealLineInCenterIfOutsideViewport(lineCount);
+      window.editor.setPosition({ lineNumber: lineCount, column: 1 });
     }
   ''';
 
-  /// Script to scroll to bottom of editor
-  static const String scrollToTopScript =
-      'window.editor?.setScrollPosition({ scrollTop: 0 })';
+  /// Script to scroll to top of editor
+  static const String scrollToTopScript = '''
+    if (window.editor) {
+      window.editor.setScrollPosition({ scrollTop: 0, scrollLeft: 0 });
+      window.editor.setPosition({ lineNumber: 1, column: 1 });
+      window.editor.revealLineInCenterIfOutsideViewport(1);
+    }
+  ''';
 
   /// Script to get editor statistics
   static const String getEditorStatsScript = r"""

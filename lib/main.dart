@@ -2,8 +2,6 @@
 import 'dart:io';
 
 import 'package:context_collector/context_collector.dart';
-import 'package:context_collector/src/features/settings/presentation/state/theme_notifier.dart';
-import 'package:context_collector/src/features/settings/services/auto_updater_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
@@ -143,7 +141,7 @@ class ContextCollectorApp extends ConsumerWidget {
       home: WebViewPlatformUtils.buildCompatibilityChecker(
         // Wrap with GlobalMonacoContainer to ensure editor is always present
         child: const GlobalMonacoContainer(
-          child: HomeScreen(),
+          child: HomeScreenWithDrop(),
         ),
         // The fallback is handled by buildCompatibilityChecker itself
         fallback: const SizedBox.shrink(),

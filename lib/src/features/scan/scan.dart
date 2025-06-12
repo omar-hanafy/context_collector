@@ -1,14 +1,19 @@
-// Scan feature exports
-export 'data/content_assembler.dart';
-export 'data/file_scanner.dart';
-export 'domain/scanned_file.dart';
-export 'presentation/state/selection_notifier.dart';
-export 'presentation/ui/action_buttons_widget.dart';
-export 'presentation/ui/file_list_widget.dart';
-export 'presentation/ui/home_screen.dart';
-export 'presentation/ui/home_screen_content.dart';
-export 'presentation/ui/shared_drop_zone.dart';
-export 'utils/drop_file_resolver.dart';
-export 'utils/extension_catalog.dart';
-export 'utils/language_mapper.dart';
-export 'utils/vscode_drop_detector.dart';
+// Simplified scan feature exports
+// Maintains the same public API as before
+
+// Models
+export 'models/scanned_file.dart';
+export 'models/file_category.dart';
+export 'models/scan_result.dart';
+
+// Services
+export 'services/file_scanner.dart';
+export 'services/drop_handler.dart';
+
+// State
+export 'state/file_list_state.dart';
+
+// UI
+export 'ui/file_list_screen.dart';
+export 'ui/action_bar.dart';
+export 'ui/home_screen_with_drop.dart';

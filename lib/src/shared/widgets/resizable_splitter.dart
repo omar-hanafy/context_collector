@@ -2,9 +2,9 @@
 // Production-ready Flutter splitter with bulletproof pointer handling
 // Version: 1.0.0
 
-import 'package:context_collector/context_collector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 
 // Re-export for clean imports
 export 'package:flutter/material.dart' show Axis;
@@ -293,17 +293,20 @@ class _ResizableSplitterState extends State<ResizableSplitter> {
 
         return ValueListenableBuilder<double>(
           valueListenable: _effectiveController,
-          builder: (_, ratio, __) {
+          builder: (_, ratio, _) {
             // Account for divider thickness to prevent overflow
             final availableSize = maxSize - widget.dividerThickness;
-            
+
             // Calculate panel sizes based on available space
             var first = availableSize * ratio;
             var second = availableSize - first;
-            
+
             // Ensure minimum panel sizes are respected
-            final effectiveMinPanelSize = widget.minPanelSize.clamp(0.0, availableSize / 2);
-            
+            final effectiveMinPanelSize = widget.minPanelSize.clamp(
+              0.0,
+              availableSize / 2,
+            );
+
             if (first < effectiveMinPanelSize) {
               first = effectiveMinPanelSize;
               second = availableSize - first;
@@ -327,7 +330,8 @@ class _ResizableSplitterState extends State<ResizableSplitter> {
                   minRatio: widget.minRatio,
                   maxRatio: widget.maxRatio,
                   minPanelSize: widget.minPanelSize,
-                  maxSize: availableSize, // Pass available size, not total
+                  maxSize: availableSize,
+                  // Pass available size, not total
                   dividerColor: widget.dividerColor,
                   dividerHoverColor: widget.dividerHoverColor,
                   dividerActiveColor: widget.dividerActiveColor,
@@ -420,7 +424,7 @@ class _DividerHandleState extends State<_DividerHandle> {
       color: activeColor,
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withOpacity(0.1),
+          color: Colors.black.addOpacity(0.1),
           blurRadius: 2,
         ),
       ],
@@ -456,7 +460,7 @@ class _DividerHandleState extends State<_DividerHandle> {
     // Apply constraints with proper min panel size calculation
     final minSizeRatio = widget.minPanelSize / widget.maxSize;
     final maxSizeRatio = 1.0 - minSizeRatio;
-    
+
     newRatio = newRatio.clamp(
       widget.minRatio.clamp(minSizeRatio, maxSizeRatio),
       widget.maxRatio.clamp(minSizeRatio, maxSizeRatio),
@@ -470,7 +474,7 @@ class _DividerHandleState extends State<_DividerHandle> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final hoverColor =
-        widget.dividerHoverColor ?? theme.primaryColor.withOpacity(0.6);
+        widget.dividerHoverColor ?? theme.primaryColor.addOpacity(0.6);
 
     Widget divider = MouseRegion(
       cursor: widget.axis.cursor,
@@ -501,8 +505,8 @@ class _DividerHandleState extends State<_DividerHandle> {
                         height: !widget.axis.isH ? 2 : 24,
                         decoration: BoxDecoration(
                           color: theme.brightness == Brightness.dark
-                              ? Colors.white.withOpacity(0.3)
-                              : Colors.black.withOpacity(0.3),
+                              ? Colors.white.addOpacity(0.3)
+                              : Colors.black.addOpacity(0.3),
                           borderRadius: BorderRadius.circular(1),
                         ),
                       ),

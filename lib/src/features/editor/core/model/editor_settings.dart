@@ -1,4 +1,4 @@
-// editor_settings.dart
+// ignore_for_file: invalid_annotation_target
 
 import 'package:freezed_annotation/freezed_annotation.dart';
 
@@ -360,7 +360,7 @@ abstract class EditorSettings with _$EditorSettings {
       tabSize: langConfig.tabSize ?? tabSize,
       insertSpaces: langConfig.insertSpaces ?? insertSpaces,
       wordWrap: langConfig.wordWrap ?? wordWrap,
-      rulers: langConfig.rulers ?? rulers,
+      rulers: langConfig.rulers,
       formatOnSave: langConfig.formatOnSave ?? formatOnSave,
       formatOnPaste: langConfig.formatOnPaste ?? formatOnPaste,
       formatOnType: langConfig.formatOnType ?? formatOnType,

@@ -3,7 +3,7 @@ part of 'design_system.dart';
 /// Design System color utilities
 extension DsColors on BuildContext {
   // Quick color helpers with opacity
-  Color withOpacity(Color color, double opacity) => color.addOpacity(opacity);
+  Color addOpacity(Color color, double opacity) => color.addOpacity(opacity);
 
   Color get hoverColor => onSurface.addOpacity(DesignSystem.opacityHover);
   Color get pressedColor => onSurface.addOpacity(DesignSystem.opacityPressed);
