@@ -15,5 +15,4 @@ export 'state/file_list_state.dart';
 
 // UI
 export 'ui/file_list_screen.dart';
-export 'ui/action_bar.dart';
 export 'ui/home_screen_with_drop.dart';

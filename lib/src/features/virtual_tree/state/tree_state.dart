@@ -59,58 +59,53 @@ class TreeStateNotifier extends StateNotifier<TreeState> {
   // Scanner integration callbacks
   void Function(String, String, String)? onNodeCreatedCallback;
   void Function(String, String)? onNodeEditedCallback;
-  void Function(String)? onNodeRemovedCallback;
   void Function(Set<String>)? onSelectionChangedCallback;
 
-  /// Build tree from files and metadata (merges with existing tree)
+  /// Build tree from files and metadata (performs a full rebuild)
   void buildFromFiles(List<ScannedFile> files, List<ScanMetadata> metadata) {
-    // Get existing file IDs to avoid duplicates
-    final existingFileIds = <String>{};
-    for (final node in state.nodes.values) {
-      if (node.fileId != null) {
-        existingFileIds.add(node.fileId!);
-      }
-    }
+    // 1. Preserve the old UI state before rebuilding
+    final oldExpansionState = state.expansionState;
+    final oldSelectedFileIds = state.selectedFileIds;
 
-    // Build tree with existing nodes
+    // 2. Build a brand new tree from the single source of truth.
+    //    The tree builder now handles virtual file preservation internally.
     final treeData = _treeBuilder.buildTree(
       files: files,
       scanMetadata: metadata,
-      existingNodes: state.nodes.isNotEmpty ? state.nodes : null,
-      existingFileIds: existingFileIds,
     );
 
-    // Preserve expansion state for existing nodes
+    // 3. Re-apply the preserved UI state to the new tree
+    final newNodes = treeData.nodes;
     final newExpansionState = <String, bool>{};
-    for (final entry in treeData.nodes.entries) {
-      final nodeId = entry.key;
-      final node = entry.value;
+    final newSelectedNodeIds = <String>{};
 
-      // Keep previous expansion state or use node default
-      newExpansionState[nodeId] =
-          state.expansionState[nodeId] ?? node.isExpanded;
-    }
+    for (final node in newNodes.values) {
+      // Re-apply expansion state by node ID
+      newExpansionState[node.id] = oldExpansionState[node.id] ?? node.isExpanded;
 
-    // Collect all new file nodes that were added (they're auto-selected)
-    final newSelectedIds = Set<String>.from(state.selectedNodeIds);
-    for (final node in treeData.nodes.values) {
-      if (node.type == NodeType.file &&
-          node.isSelected &&
-          !state.nodes.containsKey(node.id)) {
-        newSelectedIds.add(node.id);
+      // Re-apply selection state by matching the stable ScannedFile.id
+      if (node.fileId != null && oldSelectedFileIds.contains(node.fileId)) {
+        newSelectedNodeIds.add(node.id);
       }
     }
 
+    // Also include any files that were auto-selected during the build (i.e., new files)
+    for (final node in newNodes.values) {
+      if (node.isSelected && node.type == NodeType.file) {
+        newSelectedNodeIds.add(node.id);
+      }
+    }
+
+    // 4. Set the new, corrected state
     state = TreeState(
-      nodes: treeData.nodes,
+      nodes: newNodes,
       rootId: treeData.rootId,
       expansionState: newExpansionState,
-      selectedNodeIds: newSelectedIds,
+      selectedNodeIds: newSelectedNodeIds,
     );
 
-    // Notify scanner of the new selection
-    final fileIds = state.selectedFileIds;
-    onSelectionChangedCallback?.call(fileIds);
+    // 5. Notify the scanner that the selection may have changed
+    onSelectionChangedCallback?.call(state.selectedFileIds);
   }
 
   /// Toggle node (expand/collapse for folders, select/deselect for files)
@@ -226,73 +221,30 @@ class TreeStateNotifier extends StateNotifier<TreeState> {
     final parent = state.nodes[parentId];
     if (parent == null) return;
 
-    // Check for name conflicts and auto-increment if necessary
-    var finalName = name;
-    if (!isFolder) {
-      final existingNames = <String>{};
-      for (final childId in parent.childIds) {
-        final child = state.nodes[childId];
-        if (child != null && child.type == NodeType.file) {
-          existingNames.add(child.name);
-        }
-      }
-      
-      // If name already exists, find the next available number
-      if (existingNames.contains(finalName)) {
-        final extension = path.extension(finalName);
-        final baseName = path.basenameWithoutExtension(finalName);
-        
-        // Extract existing number if present (e.g., "file (2)" -> 2)
-        final numberMatch = RegExp(r' \((\d+)\)$').firstMatch(baseName);
-        var counter = 2;
-        
-        if (numberMatch != null) {
-          // Start from the next number after the existing one
-          counter = int.parse(numberMatch.group(1)!) + 1;
-        }
-        
-        // Find the next available name
-        do {
-          finalName = '$baseName ($counter)$extension';
-          counter++;
-        } while (existingNames.contains(finalName));
-      }
+    // For folders, we can still create them directly as they have no file data
+    if (isFolder) {
+      final virtualPath = path.join(parent.virtualPath, name);
+      final newNode = TreeNode(
+        name: name,
+        type: NodeType.folder,
+        parentId: parentId,
+        virtualPath: virtualPath,
+        isVirtual: true,
+        source: FileSource.created,
+        isExpanded: true,
+      );
+      final newNodes = Map<String, TreeNode>.from(state.nodes);
+      newNodes[newNode.id] = newNode;
+      final updatedParent = parent.copyWith(
+        childIds: [...parent.childIds, newNode.id],
+      );
+      newNodes[parentId] = updatedParent;
+      state = state.copyWith(nodes: newNodes);
+    } else {
+      // For files, simply trigger the callback.
+      // DO NOT create a TreeNode here. Let the FileListNotifier handle it.
+      onNodeCreatedCallback?.call(parent.virtualPath, name, content ?? '');
     }
-
-    final virtualPath = path.join(parent.virtualPath, finalName);
-
-    if (!isFolder && content != null) {
-      // Notify scanner to create virtual file with the final name
-      onNodeCreatedCallback?.call(parent.virtualPath, finalName, content);
-    }
-
-    // Create tree node with the final name
-    final newNode = TreeNode(
-      name: finalName,
-      type: isFolder ? NodeType.folder : NodeType.file,
-      parentId: parentId,
-      virtualPath: virtualPath,
-      isVirtual: true,
-      source: FileSource.created,
-    );
-
-    final newNodes = Map<String, TreeNode>.from(state.nodes);
-    newNodes[newNode.id] = newNode;
-
-    // Update parent's children
-    final updatedParent = parent.copyWith(
-      childIds: [...parent.childIds, newNode.id],
-    );
-    newNodes[parentId] = updatedParent;
-
-    // Expand parent folder
-    final newExpansionState = Map<String, bool>.from(state.expansionState);
-    newExpansionState[parentId] = true;
-
-    state = state.copyWith(
-      nodes: newNodes,
-      expansionState: newExpansionState,
-    );
   }
 
   /// Edit node content (for files)
@@ -302,84 +254,6 @@ class TreeStateNotifier extends StateNotifier<TreeState> {
 
     // Notify scanner of content change
     onNodeEditedCallback?.call(node.fileId!, content);
-  }
-
-  /// Remove a node and all its children
-  void removeNode(String nodeId) {
-    final node = state.nodes[nodeId];
-    if (node == null || node.type == NodeType.root) return;
-
-    // Collect all file IDs that will be removed
-    final removedFileIds = <String>{};
-    _collectFileIds(nodeId, removedFileIds);
-
-    // Remove from tree
-    final newNodes = Map<String, TreeNode>.from(state.nodes);
-    final newSelection = Set<String>.from(state.selectedNodeIds);
-    final newExpansionState = Map<String, bool>.from(state.expansionState);
-
-    _removeNodeRecursive(nodeId, newNodes, newSelection, newExpansionState);
-
-    state = state.copyWith(
-      nodes: newNodes,
-      selectedNodeIds: newSelection,
-      expansionState: newExpansionState,
-    );
-
-    // Notify scanner of all removed files
-    for (final fileId in removedFileIds) {
-      onNodeRemovedCallback?.call(fileId);
-    }
-
-    // Update selection in scanner
-    final fileIds = state.selectedFileIds;
-    onSelectionChangedCallback?.call(fileIds);
-  }
-
-  /// Collect all file IDs under a node
-  void _collectFileIds(String nodeId, Set<String> fileIds) {
-    final node = state.nodes[nodeId];
-    if (node == null) return;
-
-    if (node.type == NodeType.file && node.fileId != null) {
-      fileIds.add(node.fileId!);
-    }
-
-    for (final childId in node.childIds) {
-      _collectFileIds(childId, fileIds);
-    }
-  }
-
-  /// Recursively remove a node and all its children
-  void _removeNodeRecursive(
-    String nodeId,
-    Map<String, TreeNode> nodes,
-    Set<String> selection,
-    Map<String, bool> expansionState,
-  ) {
-    final node = nodes[nodeId];
-    if (node == null) return;
-
-    // Remove children first
-    for (final childId in List<String>.from(node.childIds)) {
-      _removeNodeRecursive(childId, nodes, selection, expansionState);
-    }
-
-    // Remove from parent's children
-    if (node.parentId.isNotEmpty) {
-      final parent = nodes[node.parentId];
-      if (parent != null) {
-        final updatedParent = parent.copyWith(
-          childIds: parent.childIds.where((id) => id != nodeId).toList(),
-        );
-        nodes[node.parentId] = updatedParent;
-      }
-    }
-
-    // Remove the node itself
-    nodes.remove(nodeId);
-    selection.remove(nodeId);
-    expansionState.remove(nodeId);
   }
 
   /// Update selection from scanner
@@ -421,9 +295,56 @@ class TreeStateNotifier extends StateNotifier<TreeState> {
       selectedNodeIds: const {},
       expansionState: const {},
     );
-    
+
     // Notify scanner of cleared selection
     onSelectionChangedCallback?.call({});
+  }
+
+  /// Directly adds a virtual file node to the tree.
+  void addVirtualFileNode({
+    required String parentNodeId,
+    required ScannedFile file,
+  }) {
+    final parent = state.nodes[parentNodeId];
+    if (parent == null || parent.type == NodeType.file) return;
+
+    final virtualPath = path.join(parent.virtualPath, file.name);
+    final nodeId = 'node_${file.id}';
+
+    // Create the new tree node, correctly linked to the ScannedFile ID
+    final newNode = TreeNode(
+      id: nodeId,
+      name: file.name,
+      type: NodeType.file,
+      parentId: parentNodeId,
+      virtualPath: virtualPath,
+      fileId: file.id,
+      isVirtual: true,
+      source: FileSource.created,
+      isSelected: true, // Auto-select the new file
+    );
+
+    // Add the new node to the tree
+    final newNodes = Map<String, TreeNode>.from(state.nodes);
+    newNodes[newNode.id] = newNode;
+
+    // Add the new node to its parent's children list
+    final updatedParent = parent.copyWith(
+      childIds: [...parent.childIds, newNode.id],
+    );
+    newNodes[parentNodeId] = updatedParent;
+
+    // Update the selection state
+    final newSelection = Set<String>.from(state.selectedNodeIds)
+      ..add(newNode.id);
+
+    state = state.copyWith(
+      nodes: newNodes,
+      selectedNodeIds: newSelection,
+    );
+
+    // Notify the FileListNotifier that the selection has changed
+    onSelectionChangedCallback?.call(state.selectedFileIds);
   }
 }
 

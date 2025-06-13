@@ -1,4 +1,5 @@
 import 'package:context_collector/context_collector.dart';
+import 'package:context_collector/src/features/scan/ui/file_display_helper.dart';
 import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -44,7 +45,7 @@ class PreferencesNotifier extends StateNotifier<ExtensionPrefsWithLoading> {
   Map<FileCategory, List<MapEntry<String, bool>>> get groupedExtensions {
     final result = <FileCategory, List<MapEntry<String, bool>>>{};
 
-    for (final entry in ExtensionCatalog.extensionCategories.entries) {
+    for (final entry in FileDisplayHelper.extensionCatalog.entries) {
       final category = entry.value;
       final isEnabled = !_prefs.disabledExtensions.contains(entry.key);
       result.putIfAbsent(category, () => []);
@@ -92,7 +93,7 @@ class PreferencesNotifier extends StateNotifier<ExtensionPrefsWithLoading> {
 
   Future<void> toggleExtension(String extension) async {
     ExtensionPrefs newPrefs;
-    final isDefault = ExtensionCatalog.extensionCategories.containsKey(
+    final isDefault = FileDisplayHelper.extensionCatalog.containsKey(
       extension,
     );
 
@@ -117,7 +118,7 @@ class PreferencesNotifier extends StateNotifier<ExtensionPrefsWithLoading> {
       throw ArgumentError('Invalid extension format');
     }
     final ext = extension.toLowerCase();
-    if (ExtensionCatalog.extensionCategories.containsKey(ext) ||
+    if (FileDisplayHelper.extensionCatalog.containsKey(ext) ||
         _prefs.customExtensions.containsKey(ext)) {
       throw ArgumentError('Extension already exists');
     }
@@ -143,7 +144,7 @@ class PreferencesNotifier extends StateNotifier<ExtensionPrefsWithLoading> {
   Future<void> disableAll() async {
     state = state.copyWith(
       prefs: _prefs.copyWith(
-        disabledExtensions: ExtensionCatalog.extensionCategories.keys.toSet(),
+        disabledExtensions: FileDisplayHelper.extensionCatalog.keys.toSet(),
       ),
     );
     await _savePreferences();

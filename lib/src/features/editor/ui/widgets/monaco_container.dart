@@ -17,12 +17,13 @@ class GlobalMonacoContainer extends ConsumerStatefulWidget {
   final Widget child;
 
   @override
-  ConsumerState<GlobalMonacoContainer> createState() => _GlobalMonacoContainerState();
+  ConsumerState<GlobalMonacoContainer> createState() =>
+      _GlobalMonacoContainerState();
 }
 
 class _GlobalMonacoContainerState extends ConsumerState<GlobalMonacoContainer> {
   Timer? _debounceTimer;
-  
+
   @override
   void dispose() {
     _debounceTimer?.cancel();
@@ -38,7 +39,7 @@ class _GlobalMonacoContainerState extends ConsumerState<GlobalMonacoContainer> {
       if (previous?.combinedContent != next.combinedContent) {
         // Cancel any pending updates
         _debounceTimer?.cancel();
-        
+
         // Debounce the update by 100ms to avoid rapid updates
         _debounceTimer = Timer(const Duration(milliseconds: 100), () {
           if (mounted) {
@@ -54,7 +55,7 @@ class _GlobalMonacoContainerState extends ConsumerState<GlobalMonacoContainer> {
 
     // Determine if the HomeScreen overlay should be visible.
     final selectionState = ref.watch(selectionProvider);
-    final showHomeOverlay = selectionState.allFiles.isEmpty;
+    final showHomeOverlay = selectionState.fileMap.isEmpty;
 
     return Material(
       child: Stack(
@@ -69,7 +70,8 @@ class _GlobalMonacoContainerState extends ConsumerState<GlobalMonacoContainer> {
             switchInCurve: Curves.easeIn,
             switchOutCurve: Curves.easeOut,
             child: showHomeOverlay
-                ? widget.child // Show the HomeScreen
+                ? widget
+                      .child // Show the HomeScreen
                 : const SizedBox.shrink(key: ValueKey('hidden')), // Hide it
           ),
         ],

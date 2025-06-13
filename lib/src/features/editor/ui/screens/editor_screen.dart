@@ -158,12 +158,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         );
   }
 
-  // Quick layout presets - using the new reset method with parameter
-  void _setLayoutPreset(double ratio) {
-    HapticFeedback.selectionClick();
-    _splitterController?.value = ratio;
-  }
-
   @override
   Widget build(BuildContext context) {
     final selectionState = ref.watch(selectionProvider);
@@ -178,11 +172,81 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       }
     });
 
-    // View switching is now handled by parent ScanContainer
-
     return Scaffold(
       backgroundColor: context.surface,
       appBar: AppBar(
+        // Compact height for desktop
+        toolbarHeight: 56,
+
+        // Left side - Primary actions
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Single Add button with dropdown
+              PopupMenuButton<String>(
+                tooltip: 'Add files or folder',
+                position: PopupMenuPosition.under,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                onSelected: (value) {
+                  if (value == 'files') {
+                    selectionNotifier.pickFiles(context);
+                  } else if (value == 'folder') {
+                    selectionNotifier.pickDirectory(context);
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'files',
+                    child: ListTile(
+                      dense: true,
+                      leading: Icon(Icons.insert_drive_file_outlined, size: 20),
+                      title: Text('Add Files'),
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'folder',
+                    child: ListTile(
+                      dense: true,
+                      leading: Icon(Icons.folder_outlined, size: 20),
+                      title: Text('Add Folder'),
+                    ),
+                  ),
+                ],
+                child: FilledButton.tonalIcon(
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text('Add'),
+                  onPressed: null, // Button is just for display
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 8),
+
+              // Save action
+              FilledButton.icon(
+                icon: const Icon(Icons.save_alt_rounded, size: 18),
+                label: const Text('Save'),
+                onPressed: selectionState.hasSelectedFiles
+                    ? selectionNotifier.saveToFile
+                    : null,
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ],
+          ),
+        ),
+        leadingWidth: 280,
+
+        // Centered title
         title: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -208,80 +272,27 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           ],
         ),
         centerTitle: true,
+
         actions: [
-          // Layout presets dropdown
-          PopupMenuButton<double>(
-            icon: Icon(
-              Icons.view_column_rounded,
-              color: context.onSurfaceVariant,
-            ),
-            tooltip: 'Layout presets',
-            onSelected: _setLayoutPreset,
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 0.25,
-                child: Row(
-                  children: [
-                    Icon(Icons.view_sidebar_rounded, size: 18),
-                    SizedBox(width: 8),
-                    Text('Compact (25%)'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 0.35,
-                child: Row(
-                  children: [
-                    Icon(Icons.dashboard_rounded, size: 18),
-                    SizedBox(width: 8),
-                    Text('Default (35%)'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 0.5,
-                child: Row(
-                  children: [
-                    Icon(Icons.view_agenda_rounded, size: 18),
-                    SizedBox(width: 8),
-                    Text('Equal (50%)'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 0.6,
-                child: Row(
-                  children: [
-                    Icon(Icons.view_quilt_rounded, size: 18),
-                    SizedBox(width: 8),
-                    Text('Wide (60%)'),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          context.ds.spaceWidth(DesignSystem.space4),
-
-          // Clear files button
-          AnimatedScale(
-            scale: selectionState.hasFiles ? 1.0 : 0.0,
-            duration: DesignSystem.durationFast,
-            child: IconButton(
-              onPressed: selectionState.hasFiles
-                  ? selectionNotifier.clearFiles
-                  : null,
-              icon: const Icon(Icons.clear_all_rounded),
-              tooltip: 'Clear all files',
-              style: context.ds.iconButtonStyle(
-                backgroundColor: context.errorOverlay,
-                foregroundColor: context.error,
-              ),
-            ),
-          ),
-          context.ds.spaceWidth(DesignSystem.space4),
-
-          // Settings button
+          // Right side - App-level actions
           IconButton(
+            icon: Icon(
+              Icons.clear_all_rounded,
+              size: 20,
+              color: selectionState.hasFiles
+                  ? context.error.withOpacity(0.8)
+                  : null,
+            ),
+            onPressed: selectionState.hasFiles
+                ? selectionNotifier.clearFiles
+                : null,
+            tooltip: 'Clear All Files',
+          ),
+
+          const SizedBox(width: 4),
+
+          IconButton(
+            icon: const Icon(Icons.settings_outlined, size: 20),
             onPressed: () {
               Navigator.push(
                 context,
@@ -290,17 +301,16 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 ),
               );
             },
-            icon: const Icon(Icons.settings_rounded),
             tooltip: 'Settings',
-            style: context.ds.iconButtonStyle(),
           ),
-          context.ds.spaceWidth(DesignSystem.space8),
+
+          const SizedBox(width: 16),
         ],
       ),
       body: DropZone(
         child: Column(
           children: [
-            // Main editor area with production ResizableSplitter(startPanel: startPanel, endPanel: endPanel)
+            // Main editor area with production ResizableSplitter
             Expanded(
               child: _isSplitterInitialized && _splitterController != null
                   ? ResizableSplitter(
@@ -315,7 +325,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                           'Editor panels splitter. Drag to resize or use arrow keys.',
                       startPanel: Column(
                         children: [
-                          const ActionBar(),
                           const Expanded(child: FileListScreen()),
                           if (selectionState.isProcessing)
                             const LinearProgressIndicator(),

@@ -33,7 +33,10 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
       onDragDone: (details) async {
         setState(() => _isDragging = false);
         if (details.files.isNotEmpty) {
-          await selectionNotifier.processDroppedItems(details.files, context: context);
+          await selectionNotifier.processDroppedItems(
+            details.files,
+            context: context,
+          );
         }
       },
       child: AnimatedContainer(
@@ -245,7 +248,8 @@ class HomeScreenContent extends ConsumerWidget {
                         ),
                         // Browse Folder button
                         OutlinedButton.icon(
-                          onPressed: () => selectionNotifier.pickDirectory(context),
+                          onPressed: () =>
+                              selectionNotifier.pickDirectory(context),
                           icon: const Icon(Icons.folder_open_rounded),
                           label: const Text('Browse Folder'),
                           style: OutlinedButton.styleFrom(

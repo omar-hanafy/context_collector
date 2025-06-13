@@ -32,12 +32,25 @@ abstract class VirtualTreeAPI {
 
   void onNodeEdited(void Function(String fileId, String content) callback);
 
-  void onNodeRemoved(void Function(String fileId) callback);
-
   void onSelectionChanged(void Function(Set<String> selectedIds) callback);
-  
+
   /// Clear the tree
   void clearTree();
+
+  /// Directly add a new virtual file node to the tree under a specific parent.
+  void addVirtualFileNode({
+    required String parentNodeId,
+    required ScannedFile file,
+  });
+
+  /// Get the virtual path of a node by its ID
+  String? getNodeVirtualPath(String nodeId);
+
+  /// Create a virtual folder in the tree
+  void createVirtualFolder({
+    required String parentNodeId,
+    required String folderName,
+  });
 }
 
 /// Tree data structure

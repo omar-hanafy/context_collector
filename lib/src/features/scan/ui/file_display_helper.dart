@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/file_category.dart';
 import '../models/scanned_file.dart';
 
 /// Shared utility for displaying file information consistently across the app
@@ -8,25 +9,75 @@ class FileDisplayHelper {
   /// Get icon for file based on extension
   static IconData getIconForExtension(String extension) {
     const codeExtensions = {
-      '.dart', '.py', '.js', '.ts', '.java', '.cpp', '.c', '.rs', '.go',
-      '.rb', '.php', '.swift', '.kt', '.scala', '.r', '.m', '.h',
+      '.dart',
+      '.py',
+      '.js',
+      '.ts',
+      '.java',
+      '.cpp',
+      '.c',
+      '.rs',
+      '.go',
+      '.rb',
+      '.php',
+      '.swift',
+      '.kt',
+      '.scala',
+      '.r',
+      '.m',
+      '.h',
     };
     const webExtensions = {
-      '.html', '.css', '.scss', '.sass', '.less', '.jsx', '.tsx', '.vue',
-      '.svelte', '.astro',
+      '.html',
+      '.css',
+      '.scss',
+      '.sass',
+      '.less',
+      '.jsx',
+      '.tsx',
+      '.vue',
+      '.svelte',
+      '.astro',
     };
     const configExtensions = {
-      '.json', '.yaml', '.yml', '.xml', '.toml', '.ini', '.conf', '.config',
-      '.env', '.properties',
+      '.json',
+      '.yaml',
+      '.yml',
+      '.xml',
+      '.toml',
+      '.ini',
+      '.conf',
+      '.config',
+      '.env',
+      '.properties',
     };
     const docExtensions = {
-      '.md', '.txt', '.rst', '.adoc', '.tex', '.doc', '.docx', '.pdf',
+      '.md',
+      '.txt',
+      '.rst',
+      '.adoc',
+      '.tex',
+      '.doc',
+      '.docx',
+      '.pdf',
     };
     const scriptExtensions = {
-      '.sh', '.bash', '.zsh', '.fish', '.ps1', '.bat', '.cmd',
+      '.sh',
+      '.bash',
+      '.zsh',
+      '.fish',
+      '.ps1',
+      '.bat',
+      '.cmd',
     };
     const dataExtensions = {
-      '.csv', '.tsv', '.xls', '.xlsx', '.sql', '.db', '.sqlite',
+      '.csv',
+      '.tsv',
+      '.xls',
+      '.xlsx',
+      '.sql',
+      '.db',
+      '.sqlite',
     };
 
     final ext = extension.toLowerCase();
@@ -159,5 +210,114 @@ class FileDisplayHelper {
     };
 
     return languageMap[extension.toLowerCase()] ?? 'plaintext';
+  }
+
+  /// Get display name for a file (handles virtual files and VS Code temp files)
+  static String getDisplayName(ScannedFile file) {
+    return file.isVirtual ? file.name : (file.displayPath ?? file.name);
+  }
+
+  /// Get language for syntax highlighting from a file
+  static String getLanguageFromFile(ScannedFile file) {
+    return file.extension.isEmpty ? 'plaintext' : getLanguageId(file.extension);
+  }
+
+  /// Get the best path to display for a file
+  /// Priority: displayPath > relativePath > fullPath
+  static String getPathForDisplay(ScannedFile file) {
+    return file.displayPath ?? file.relativePath ?? file.fullPath;
+  }
+
+  /// Comprehensive extension catalog - single source of truth
+  static const Map<String, FileCategory> extensionCatalog = {
+    // Programming Languages
+    '.dart': FileCategory.programming,
+    '.py': FileCategory.programming,
+    '.js': FileCategory.programming,
+    '.ts': FileCategory.programming,
+    '.java': FileCategory.programming,
+    '.cpp': FileCategory.programming,
+    '.c': FileCategory.programming,
+    '.cs': FileCategory.programming,
+    '.go': FileCategory.programming,
+    '.rs': FileCategory.programming,
+    '.rb': FileCategory.programming,
+    '.php': FileCategory.programming,
+    '.swift': FileCategory.programming,
+    '.kt': FileCategory.programming,
+    '.scala': FileCategory.programming,
+    '.r': FileCategory.programming,
+    '.m': FileCategory.programming,
+    '.h': FileCategory.programming,
+
+    // Web Technologies
+    '.html': FileCategory.web,
+    '.css': FileCategory.web,
+    '.scss': FileCategory.web,
+    '.sass': FileCategory.web,
+    '.less': FileCategory.web,
+    '.jsx': FileCategory.web,
+    '.tsx': FileCategory.web,
+    '.vue': FileCategory.web,
+    '.svelte': FileCategory.web,
+    '.astro': FileCategory.web,
+
+    // Data & Config
+    '.json': FileCategory.data,
+    '.yaml': FileCategory.data,
+    '.yml': FileCategory.data,
+    '.xml': FileCategory.data,
+    '.toml': FileCategory.data,
+    '.ini': FileCategory.data,
+    '.conf': FileCategory.data,
+    '.config': FileCategory.data,
+    '.env': FileCategory.data,
+    '.properties': FileCategory.data,
+
+    // Scripts
+    '.sh': FileCategory.script,
+    '.bash': FileCategory.script,
+    '.zsh': FileCategory.script,
+    '.fish': FileCategory.script,
+    '.ps1': FileCategory.script,
+    '.bat': FileCategory.script,
+    '.cmd': FileCategory.script,
+
+    // Documentation
+    '.md': FileCategory.documentation,
+    '.txt': FileCategory.documentation,
+    '.rst': FileCategory.documentation,
+    '.adoc': FileCategory.documentation,
+    '.tex': FileCategory.documentation,
+    '.doc': FileCategory.documentation,
+    '.docx': FileCategory.documentation,
+    '.pdf': FileCategory.documentation,
+
+    // Database
+    '.sql': FileCategory.database,
+    '.db': FileCategory.database,
+    '.sqlite': FileCategory.database,
+
+    // Data files
+    '.csv': FileCategory.data,
+    '.tsv': FileCategory.data,
+    '.xls': FileCategory.data,
+    '.xlsx': FileCategory.data,
+  };
+
+  /// Get file category for an extension
+  static FileCategory getCategoryForExtension(String extension) {
+    return extensionCatalog[extension.toLowerCase()] ?? FileCategory.other;
+  }
+
+  /// Get all supported extensions
+  static Set<String> get supportedExtensions => extensionCatalog.keys.toSet();
+
+  /// Get extensions for a specific category
+  static Set<String> getExtensionsForCategory(FileCategory category) {
+    return extensionCatalog.entries
+        .where((entry) => entry.value == category)
+        .map((entry) => entry.key)
+        .toSet();
   }
 }

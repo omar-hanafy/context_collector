@@ -101,19 +101,20 @@ app/
 
 ### Duplicate Detection
 **What constitutes a duplicate?**
-1. **Exact Path Match**: Same source path already in tree
+1. **Exact Path Match**: Same source path already in scan history (not just in current files)
 2. **Content Match**: Different path but identical content (future feature)
 
 ### User Decision Points
 **When to ask the user:**
-1. Dropping exact same directory
+1. Dropping exact same directory path that was previously scanned
 2. Dropping file that exists in structure
 3. Dropping subset that creates conflicts
 
 **When NOT to ask:**
-1. First time dropping anything
+1. First scan operation (empty scan history)
 2. Dropping completely new files
 3. Dropping to different virtual locations
+4. Dropping a file then its parent directory (no longer shows false duplicate)
 
 ### Duplicate Resolution Options
 
@@ -146,17 +147,26 @@ app/
 - Create new file in any folder
 - Create new folder anywhere
 - Create at root level
+- Edit content of any file (virtual or real)
 
 **Naming Rules:**
 - Virtual files start with default names (untitled-1.md)
 - Auto-increment if name exists
 - User can rename immediately
+- Name validation prevents duplicates and invalid characters
 
 ### Virtual Item Behavior
 - Treated exactly like real files in selection
 - Can be edited, moved, deleted
 - Shown with special indicator (✨)
 - Included in export/copy operations
+- Virtual file paths reflect their position in the tree hierarchy
+
+### Implementation Details
+- Virtual files are created directly in their parent folder without rebuilding the entire tree
+- File creation uses dedicated `addVirtualFileNode` API to maintain proper state synchronization
+- Virtual paths are built from the parent node's virtual path, not filesystem paths
+- Checkboxes work immediately upon creation due to proper fileId linking
 
 ## Selection Behavior
 
@@ -252,11 +262,94 @@ app/
 ## Summary of Key Decisions
 
 1. **Duplicates ARE allowed** if user chooses
-2. **Always ask** when dropping same source again
+2. **Always ask** when dropping same source again (based on scan history, not file content)
 3. **Smart merge** is the default option
 4. **Preserve user organization** over file system structure
 5. **Virtual files** are first-class citizens
 6. **Selection drives content** in real-time
 7. **Visual feedback** before any destructive operation
+
+## Technical Implementation Notes
+
+### State Synchronization (CRITICAL)
+- **FileListNotifier is the SINGLE SOURCE OF TRUTH** for all file data and scan history
+- TreeStateNotifier manages ONLY UI state (expansion, visual representation)
+- All operations that modify files MUST go through FileListNotifier:
+  - File creation: UI → FileListNotifier → TreeStateNotifier
+  - File removal: UI → FileListNotifier.removeNodes() → Tree rebuild
+  - Folder creation: UI → FileListNotifier → VirtualTreeAPI
+- Tree is ALWAYS rebuilt from FileListNotifier's state
+- This architecture prevents state synchronization bugs
+- **IMPORTANT**: TreeStateNotifier.removeNode() method has been removed to enforce this pattern
+
+### Virtual File Creation Flow
+1. User creates file in tree UI
+2. FileListNotifier creates ScannedFile with proper virtual path from parent
+3. FileListNotifier calls `addVirtualFileNode` to add the node to the tree
+4. Tree node is created with correct fileId linking
+5. Selection callback triggers content rebuild
+
+### Removal Operations (Bug Fix)
+- **CRITICAL**: All removals MUST use FileListNotifier.removeNodes()
+- This method:
+  1. Recursively collects all descendant file IDs
+  2. Removes files from the master file map
+  3. **Cleans scanHistory** to remove orphaned source paths
+  4. Rebuilds the entire tree from clean state
+- This prevents the "remove and re-add shows duplicate dialog" bug
+- Direct tree node removal is FORBIDDEN - TreeStateNotifier no longer has removeNode() method
+
+### Edge Case Handling
+- Name conflicts: Validated before showing content editor
+- Large files: Warning dialog for files over 2MB
+- Invalid characters: Prevented via form validation
+- Double-click prevention: Save button disabled while saving
+
+### Avoiding False Duplicate Detection (CRITICAL)
+
+The scan history is fundamental to duplicate detection. If not properly maintained, it can lead to false positives where the app incorrectly identifies new additions as duplicates.
+
+#### Common Causes of False Duplicates:
+1. **Incomplete History Cleanup**: When files are removed but their source paths remain in scan history
+2. **Replace Operations**: Using "Replace All" without cleaning the scan history
+3. **Partial Removals**: Removing some files from a directory but not updating the scan metadata
+
+#### Key Implementation Requirements:
+1. **Always Clean Scan History**: Any operation that removes files MUST also clean the scan history
+2. **Use Helper Methods**: The `_removePathsFromScanHistory()` helper ensures consistent cleanup
+3. **Replace Operations**: The `_applyReplaceAllAction()` MUST clean scan history before updating state
+
+#### Code Pattern for Safe Removal:
+```dart
+// WRONG - Creates false duplicates
+state = state.copyWith(
+  fileMap: newFileMap,
+  selectedFileIds: newSelection,
+  // scanHistory not updated - BUG!
+);
+
+// CORRECT - Prevents false duplicates
+final newScanHistory = _removePathsFromScanHistory(pathsToRemove);
+state = state.copyWith(
+  fileMap: newFileMap,
+  selectedFileIds: newSelection,
+  scanHistory: newScanHistory, // Clean history
+);
+```
+
+#### Testing for Regressions:
+1. Add a directory
+2. Choose "Replace All" when re-adding
+3. Clear all files
+4. Add the same directory again
+5. Should NOT show duplicate dialog (if it does, scan history isn't being cleaned)
+
+### Recent Architecture Improvements (Post-Cleanup)
+- **SelectionState.allFiles removed**: fileMap is now the single source of truth, eliminating redundancy
+- **Display logic consolidated**: All file display logic moved to FileDisplayHelper for consistency
+- **Extension catalog unified**: FileDisplayHelper.extensionCatalog is the single source for file type definitions
+- **File conflict handling refactored**: Split into smaller, focused methods for better maintainability
+- **Debug statements removed**: Production-ready code without debug prints
+- **Scan history cleanup fixed**: Prevents false duplicate detection after replace operations
 
 These rules prioritize user control and flexibility while providing smart defaults. The tree is a workspace, not just a file viewer.

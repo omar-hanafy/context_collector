@@ -5,8 +5,7 @@ import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../scan/ui/file_display_helper.dart';
-import '../models/tree_node.dart';
-import '../state/tree_state.dart';
+import 'file_edit_dialog.dart';
 
 /// Folder selection state
 enum FolderSelectionState { none, partial, all }
@@ -72,14 +71,15 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
                           isExpanded ? Icons.expand_more : Icons.chevron_right,
                           size: 18,
                         ),
-                        onPressed: () => notifier.toggleFolderExpansion(widget.node.id),
+                        onPressed: () =>
+                            notifier.toggleFolderExpansion(widget.node.id),
                         padding: EdgeInsets.zero,
                         splashRadius: 12,
                       ),
                     )
                   else
                     const SizedBox(width: 24),
-                  
+
                   // Selection checkbox (for both files and folders)
                   if (widget.node.type != NodeType.root)
                     SizedBox(
@@ -88,8 +88,10 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
                       child: widget.node.type == NodeType.file
                           ? Checkbox(
                               value: isSelected,
-                              onChanged: (value) => _handleSelectionChange(ref, value ?? false),
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              onChanged: (value) =>
+                                  _handleSelectionChange(ref, value ?? false),
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
                               visualDensity: VisualDensity.compact,
                             )
                           : _buildFolderCheckbox(ref),
@@ -235,8 +237,6 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
     );
   }
 
-  
-
   Widget _buildStatusIndicator(BuildContext context, ScannedFile file) {
     final indicator = FileDisplayHelper.buildStatusIndicator(context, file);
     if (indicator != null) {
@@ -265,10 +265,10 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
       ),
     );
   }
-  
+
   void _handleNodeTap(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(treeStateProvider.notifier);
-    
+
     if (widget.node.type == NodeType.folder) {
       // For folders, toggle expansion
       notifier.toggleFolderExpansion(widget.node.id);
@@ -277,13 +277,16 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
       notifier.toggleNode(widget.node.id);
     }
   }
-  
+
   Widget _buildFolderCheckbox(WidgetRef ref) {
     final folderState = _getFolderSelectionState(ref);
-    
+
     return Checkbox(
-      value: folderState == FolderSelectionState.all ? true : 
-             folderState == FolderSelectionState.none ? false : null,
+      value: folderState == FolderSelectionState.all
+          ? true
+          : folderState == FolderSelectionState.none
+          ? false
+          : null,
       tristate: true,
       onChanged: (value) {
         // If partially selected or none selected, select all
@@ -295,44 +298,50 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
       visualDensity: VisualDensity.compact,
     );
   }
-  
+
   FolderSelectionState _getFolderSelectionState(WidgetRef ref) {
     if (widget.node.type != NodeType.folder) return FolderSelectionState.none;
-    
+
     final treeState = ref.watch(treeStateProvider);
-    
+
     // Check selection state of all files in this folder
     final fileNodes = <String>[];
     _collectFileNodesInFolder(widget.node.id, fileNodes, treeState.nodes);
-    
+
     if (fileNodes.isEmpty) return FolderSelectionState.none;
-    
-    final selectedCount = fileNodes.where((nodeId) => treeState.selectedNodeIds.contains(nodeId)).length;
-    
+
+    final selectedCount = fileNodes
+        .where((nodeId) => treeState.selectedNodeIds.contains(nodeId))
+        .length;
+
     if (selectedCount == 0) return FolderSelectionState.none;
     if (selectedCount == fileNodes.length) return FolderSelectionState.all;
     return FolderSelectionState.partial;
   }
 
-  void _collectFileNodesInFolder(String folderId, List<String> fileNodes, Map<String, TreeNode> nodes) {
-  final folder = nodes[folderId];
-  if (folder == null) return;
+  void _collectFileNodesInFolder(
+    String folderId,
+    List<String> fileNodes,
+    Map<String, TreeNode> nodes,
+  ) {
+    final folder = nodes[folderId];
+    if (folder == null) return;
 
-  for (final childId in folder.childIds) {
-  final child = nodes[childId];
-  if (child == null) continue;
+    for (final childId in folder.childIds) {
+      final child = nodes[childId];
+      if (child == null) continue;
 
-  if (child.type == NodeType.file) {
-  fileNodes.add(childId);
-  } else {
-  _collectFileNodesInFolder(childId, fileNodes, nodes);
+      if (child.type == NodeType.file) {
+        fileNodes.add(childId);
+      } else {
+        _collectFileNodesInFolder(childId, fileNodes, nodes);
+      }
+    }
   }
-  }
-  }
-  
+
   void _handleSelectionChange(WidgetRef ref, bool selected) {
     final notifier = ref.read(treeStateProvider.notifier);
-    
+
     if (widget.node.type == NodeType.file) {
       notifier.toggleNode(widget.node.id);
     } else if (widget.node.type == NodeType.folder) {
@@ -368,7 +377,7 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
 
   List<PopupMenuEntry<String>> _buildContextMenuItems(BuildContext context) {
     final items = <PopupMenuEntry<String>>[];
-    
+
     PopupMenuItem<String> menuItem(String value, IconData icon, String text) {
       return PopupMenuItem<String>(
         value: value,
@@ -422,61 +431,118 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
       case 'copy_path':
         _copyPath();
       case 'remove':
-        notifier.removeNode(widget.node.id);
+        // Use the FileListNotifier's removeNodes method for proper cleanup
+        ref.read(selectionProvider.notifier).removeNodes({widget.node.id});
     }
   }
 
   void _createNewFile() {
+    // Get existing names in the parent folder
+    final parentNode = widget.node;
+    final existingNames = parentNode.childIds
+        .map((id) => widget.nodes[id]?.name)
+        .whereType<String>()
+        .toSet();
+
     _showCreateDialog(
       title: 'New File',
-      hint: 'Enter file name',
-      validator: (value) {
-        if (value == null || value.trim().isEmpty) {
-          return 'File name cannot be empty';
+      hint: 'Enter file name (e.g., script.js)',
+      existingNames: existingNames,
+      onConfirm: (name) async {
+        // Show the file edit dialog
+        final content = await showFileEditDialog(
+          context,
+          fileName: name,
+          initialContent: '',
+        );
+
+        // If content is not null (user clicked Save), create the file
+        if (content != null) {
+          // We now call the FileListNotifier, not the TreeStateNotifier.
+          // We pass the PARENT NODE ID so the tree knows where to put the new file.
+          ref
+              .read(selectionProvider.notifier)
+              .onVirtualFileCreated(
+                widget.node.id, // The ID of the folder node we clicked on
+                name,
+                content,
+              );
         }
-        return null;
-      },
-      onConfirm: (name) {
-        ref
-            .read(treeStateProvider.notifier)
-            .createNode(
-              parentId: widget.node.id,
-              name: name,
-              isFolder: false,
-              content: '', // Empty content for new file
-            );
       },
     );
   }
 
   void _createNewFolder() {
+    // Get existing names in the parent folder
+    final parentNode = widget.node;
+    final existingNames = parentNode.childIds
+        .map((id) => widget.nodes[id]?.name)
+        .whereType<String>()
+        .toSet();
+
     _showCreateDialog(
       title: 'New Folder',
       hint: 'Enter folder name',
-      validator: (value) {
-        if (value == null || value.trim().isEmpty) {
-          return 'Folder name cannot be empty';
-        }
-        return null;
-      },
+      existingNames: existingNames,
       onConfirm: (name) {
         ref
-            .read(treeStateProvider.notifier)
-            .createNode(
-              parentId: widget.node.id,
-              name: name,
-              isFolder: true,
+            .read(selectionProvider.notifier)
+            .onVirtualFolderCreated(
+              widget.node.id,
+              name,
             );
       },
     );
   }
 
-  void _editFile() {
-    // TODO: Show edit dialog
-    // This will be implemented when the edit UI is ready
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Edit functionality coming soon')),
+  Future<void> _editFile() async {
+    // Get the ScannedFile from the selection provider
+    final file = ref.read(selectionProvider).fileMap[widget.node.fileId];
+    if (file == null) return;
+
+    // Check for large file
+    const int largeFileThreshold = 2 * 1024 * 1024; // 2MB
+
+    if (file.size > largeFileThreshold) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Warning: Large File'),
+          content: Text(
+            'This file is ${FileDisplayHelper.formatFileSize(file.size)} and may cause performance issues. '
+            'Do you want to proceed?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Proceed'),
+            ),
+          ],
+        ),
+      );
+
+      if (proceed != true) {
+        return; // User cancelled
+      }
+    }
+
+    // Show the file edit dialog
+    final newContent = await showFileEditDialog(
+      context,
+      fileName: FileDisplayHelper.getDisplayName(file),
+      initialContent: file.effectiveContent,
     );
+
+    // If newContent is not null and different, update the file
+    if (newContent != null && newContent != file.effectiveContent) {
+      ref
+          .read(treeStateProvider.notifier)
+          .editNodeContent(widget.node.id, newContent);
+    }
   }
 
   void _copyPath() {
@@ -491,7 +557,7 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
   void _showCreateDialog({
     required String title,
     required String hint,
-    required String? Function(String?) validator,
+    required Set<String> existingNames,
     required void Function(String) onConfirm,
   }) {
     final controller = TextEditingController();
@@ -510,7 +576,19 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
               hintText: hint,
               border: const OutlineInputBorder(),
             ),
-            validator: validator,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Name cannot be empty';
+              }
+              if (existingNames.contains(value.trim())) {
+                return 'A file or folder with this name already exists';
+              }
+              // Check for invalid file name characters
+              if (RegExp(r'[\\/:*?"<>|]').hasMatch(value.trim())) {
+                return 'Name contains invalid characters';
+              }
+              return null;
+            },
             onFieldSubmitted: (_) {
               if (formKey.currentState!.validate()) {
                 Navigator.of(context).pop();

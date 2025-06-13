@@ -1,402 +1,361 @@
 import 'package:path/path.dart' as path;
-import '../../scan/models/scanned_file.dart';
-import '../../scan/models/scan_result.dart';
-import '../api/virtual_tree_api.dart';
-import '../models/tree_node.dart';
 
-/// Builds virtual tree structures from file lists
+import '../../scan/models/scan_result.dart';
+import '../../scan/models/scanned_file.dart';
+import '../api/virtual_tree_api.dart';
+
+/// Builds a virtual tree deterministically from a list of files and metadata.
 class TreeBuilder {
   static const String rootId = 'root';
-  
-  /// Build a complete tree from files and scan metadata
+
   TreeData buildTree({
     required List<ScannedFile> files,
     required List<ScanMetadata> scanMetadata,
-    Map<String, TreeNode>? existingNodes,
-    Set<String>? existingFileIds,
   }) {
-    final nodes = existingNodes != null 
-        ? Map<String, TreeNode>.from(existingNodes)
-        : <String, TreeNode>{};
-    
-    // Create or get root node
-    if (!nodes.containsKey(rootId)) {
-      final root = TreeNode(
+    final nodes = <String, TreeNode>{
+      rootId: TreeNode(
         id: rootId,
         name: 'Context Collection',
         type: NodeType.root,
         parentId: '',
         virtualPath: '/',
         isExpanded: true,
-      );
-      nodes[rootId] = root;
-    }
-    
+      ),
+    };
+
     if (files.isEmpty) {
       return TreeData(nodes: nodes, rootId: rootId);
     }
-    
-    // Filter out files that already exist
-    final newFiles = existingFileIds != null
-        ? files.where((file) => !existingFileIds.contains(file.id)).toList()
-        : files;
-    
-    // Debug: Check for duplicates in the input files
-    final uniqueFileIds = <String>{};
-    final deduplicatedFiles = <ScannedFile>[];
-    for (final file in newFiles) {
-      if (!uniqueFileIds.contains(file.id)) {
-        uniqueFileIds.add(file.id);
-        deduplicatedFiles.add(file);
-      }
-    }
-    
-    if (deduplicatedFiles.isEmpty) {
-      return TreeData(nodes: nodes, rootId: rootId);
-    }
-    
-    // Group files by their scan source
-    final filesBySource = _groupFilesBySource(deduplicatedFiles, scanMetadata);
-    
-    // Build optimal tree structure
-    for (final entry in filesBySource.entries) {
-      _buildSubtree(
-        nodes: nodes,
-        sourcePath: entry.key,
-        files: entry.value,
-        parentId: rootId,
-      );
-    }
-    
+
+    final realFiles = files.where((f) => !f.isVirtual).toList();
+    final virtualFiles = files.where((f) => f.isVirtual).toList();
+
+    _buildFromRealFiles(nodes, realFiles, scanMetadata);
+    _mergeVirtualFiles(nodes, virtualFiles);
+
     return TreeData(nodes: nodes, rootId: rootId);
   }
-  
-  /// Group files by their source paths for intelligent tree building
-  Map<String, List<ScannedFile>> _groupFilesBySource(
-    List<ScannedFile> files,
-    List<ScanMetadata> metadata,
+
+  /// PASS 1: Constructs the base tree from filesystem files.
+  void _buildFromRealFiles(
+    Map<String, TreeNode> nodes,
+    List<ScannedFile> realFiles,
+    List<ScanMetadata> scanMetadata,
   ) {
-    final groups = <String, List<ScannedFile>>{};
-    
-    // First, check if all files share a common duplicate folder prefix
-    // This happens when files are dropped with "Add as Duplicate" option
-    String? commonDuplicatePrefix;
-    bool allHaveDuplicatePrefix = true;
-    
-    for (final file in files) {
-      if (file.relativePath == null || !file.relativePath!.contains('(copy')) {
-        allHaveDuplicatePrefix = false;
-        break;
-      }
-      
-      final parts = file.relativePath!.split(path.separator);
-      if (parts.isNotEmpty && parts.first.contains('(copy')) {
-        if (commonDuplicatePrefix == null) {
-          commonDuplicatePrefix = parts.first;
-        } else if (commonDuplicatePrefix != parts.first) {
-          allHaveDuplicatePrefix = false;
-          break;
-        }
-      } else {
-        allHaveDuplicatePrefix = false;
-        break;
-      }
-    }
-    
-    // If all files share a duplicate prefix, group them together
-    if (allHaveDuplicatePrefix && commonDuplicatePrefix != null) {
-      groups[''] = files; // Empty key means no additional source folder needed
-      return groups;
-    }
-    
-    // Otherwise, use metadata to group files by their actual source paths
-    if (metadata.isNotEmpty) {
-      // Create a map to track which files have been assigned to groups
-      final assignedFiles = <String>{};
-      
-      // Process each file and assign it to exactly one group
-      for (final file in files) {
-        // Skip if already assigned
-        if (assignedFiles.contains(file.id)) {
-          continue;
-        }
-        
-        // Determine the grouping key based on the file's path
-        String groupKey = '';
-        
-        // Try to find which source path this file belongs to
-        for (final scan in metadata) {
-          for (final sourcePath in scan.sourcePaths) {
-            if (file.fullPath.startsWith(sourcePath)) {
-              groupKey = sourcePath;
-              break;
-            }
-          }
-          if (groupKey.isNotEmpty) break;
-        }
-        
-        // If no source path matched, use the file's parent directory
-        if (groupKey.isEmpty && file.fullPath.isNotEmpty) {
-          groupKey = path.dirname(file.fullPath);
-        }
-        
-        // Add file to its group and mark as assigned
-        groups.putIfAbsent(groupKey, () => []).add(file);
-        assignedFiles.add(file.id);
-      }
-    } else {
-      // Fallback: group by common ancestors
-      groups[''] = files;
-    }
-    
-    return groups;
-  }
-  
-  /// Build a subtree for a group of files from the same source
-  void _buildSubtree({
-    required Map<String, TreeNode> nodes,
-    required String sourcePath,
-    required List<ScannedFile> files,
-    required String parentId,
-  }) {
-    if (files.isEmpty) return;
-    
-    // Check if all files already have a common folder prefix in their relative paths
-    // This happens when we're adding duplicates with renamed folders
-    String? commonTopFolder;
-    bool allHaveCommonFolder = true;
-    
-    for (final file in files) {
-      if (file.relativePath == null || file.relativePath!.isEmpty) {
-        allHaveCommonFolder = false;
-        break;
-      }
-      
-      final parts = file.relativePath!.split(path.separator);
-      if (parts.length > 1) {
-        // File has folder structure in relative path
-        final topFolder = parts.first;
-        if (commonTopFolder == null) {
-          commonTopFolder = topFolder;
-        } else if (commonTopFolder != topFolder) {
-          allHaveCommonFolder = false;
-          break;
-        }
-      } else {
-        // File is at root level of relative path
-        allHaveCommonFolder = false;
-        break;
-      }
-    }
-    
-    // Decide whether to create a source folder
-    String currentParentId = parentId;
-    
-    if (allHaveCommonFolder && commonTopFolder != null && 
-        (commonTopFolder.contains('(copy') || commonTopFolder.contains('(2)'))) {
-      // Files already have the duplicate folder in their relative paths
-      // Don't create an additional source folder
-      currentParentId = parentId;
-    } else if (sourcePath.isNotEmpty) {
-      // Create a source folder to group these files
-      final folderName = _getSourceFolderName(sourcePath);
-      
-      // Check if a folder with this name already exists at this level
-      TreeNode? existingFolder;
-      final parent = nodes[parentId]!;
-      for (final childId in parent.childIds) {
-        final child = nodes[childId];
-        if (child != null && child.type == NodeType.folder && child.name == folderName) {
-          existingFolder = child;
-          break;
-        }
-      }
-      
-      if (existingFolder != null) {
-        // Use existing folder
-        currentParentId = existingFolder.id;
-      } else {
-        // Create new folder
-        final sourceFolder = _createFolderNode(
-          name: folderName,
-          parentId: parentId,
-          virtualPath: folderName,
-          sourcePath: sourcePath,
-        );
-        
-        nodes[sourceFolder.id] = sourceFolder;
-        nodes[parentId]!.childIds.add(sourceFolder.id);
-        currentParentId = sourceFolder.id;
-      }
-    }
-    
-    // Process each file
-    for (final file in files) {
-      _addFileToTree(
+    if (realFiles.isEmpty) return;
+
+    final allSourcePaths = scanMetadata
+        .expand((meta) => meta.sourcePaths)
+        .toSet();
+    final filesBySource = _groupFilesByMostSpecificSource(
+      realFiles,
+      allSourcePaths,
+    );
+    final sortedSourcePaths = filesBySource.keys.toList()
+      ..sort((a, b) => a.length.compareTo(b.length));
+
+    for (final sourcePath in sortedSourcePaths) {
+      final filesInGroup = filesBySource[sourcePath]!;
+      final parentId = _findBestParentForSource(sourcePath, nodes);
+      final parentNode = nodes[parentId]!;
+      final sourceFolderName = path.basename(sourcePath);
+      final sourceFolderNode = _findOrCreateFolder(
         nodes: nodes,
-        file: file,
-        sourceParentId: currentParentId,
+        name: sourceFolderName,
+        parentId: parentId,
+        parentVirtualPath: parentNode.virtualPath,
         sourcePath: sourcePath,
       );
+
+      for (final file in filesInGroup) {
+        final relativePath = path.relative(file.fullPath, from: sourcePath);
+        _addFileAndHierarchy(
+          nodes: nodes,
+          file: file,
+          baseNodeId: sourceFolderNode.id,
+          relativePath: relativePath,
+        );
+      }
     }
   }
-  
-  /// Add a single file to the tree, creating folders as needed
-  void _addFileToTree({
+
+  /// PASS 2: Merges virtual files by finding the best home in the real tree.
+  void _mergeVirtualFiles(
+    Map<String, TreeNode> nodes,
+    List<ScannedFile> virtualFiles,
+  ) {
+    virtualFiles.sort(
+      (a, b) =>
+          (a.relativePath?.length ?? 0).compareTo(b.relativePath?.length ?? 0),
+    );
+
+    for (final file in virtualFiles) {
+      final relativePath = file.relativePath ?? file.name;
+      final parts = path
+          .split(relativePath)
+          .where((p) => p.isNotEmpty)
+          .toList();
+      if (parts.isEmpty) continue;
+
+      final folderParts = parts.take(parts.length - 1).toList();
+      final fileName = parts.last;
+
+      // Try to find the best existing entry point for this virtual file
+      String parentId = _findBestEntryPoint(nodes, folderParts);
+      
+      // Calculate remaining path parts to create
+      final entryNode = nodes[parentId]!;
+      final entryParts = entryNode.virtualPath == '/' 
+          ? <String>[]
+          : path.split(entryNode.virtualPath).where((p) => p.isNotEmpty).toList();
+      
+      final remainingParts = _getRemainingPath(folderParts, entryParts);
+
+      // Create any remaining folders
+      for (final part in remainingParts) {
+        final parentNode = nodes[parentId]!;
+        parentId = _findOrCreateFolder(
+          nodes: nodes,
+          name: part,
+          parentId: parentId,
+          parentVirtualPath: parentNode.virtualPath,
+          isVirtual: true,
+        ).id;
+      }
+
+      // Add the file
+      final parentNode = nodes[parentId]!;
+      final fileNodeId = 'node_${file.id}';
+      if (!nodes.containsKey(fileNodeId)) {
+        nodes[fileNodeId] = TreeNode(
+          id: fileNodeId,
+          name: fileName,
+          type: NodeType.file,
+          parentId: parentId,
+          virtualPath: path.join(parentNode.virtualPath, fileName),
+          sourcePath: file.fullPath,
+          fileId: file.id,
+          isVirtual: true,
+          source: FileSource.created,
+          isSelected: true,
+        );
+        parentNode.childIds.add(fileNodeId);
+      }
+    }
+  }
+
+  /// Adds a single file to the tree, creating its folder hierarchy as needed.
+  void _addFileAndHierarchy({
     required Map<String, TreeNode> nodes,
     required ScannedFile file,
-    required String sourceParentId,
-    required String sourcePath,
+    required String baseNodeId,
+    required String relativePath,
   }) {
-    // Use relative path if available, otherwise compute it
-    String relativePath = file.relativePath ?? '';
-    
-    if (relativePath.isEmpty && sourcePath.isNotEmpty) {
-      // Try to compute relative path
-      if (file.fullPath.startsWith(sourcePath)) {
-        relativePath = path.relative(file.fullPath, from: sourcePath);
-      }
-    }
-    
-    // If still no relative path, just use the file name
-    if (relativePath.isEmpty) {
-      relativePath = file.name;
-    }
-    
-    // Split path into parts
-    final parts = relativePath.split(path.separator)
-        .where((p) => p.isNotEmpty)
-        .toList();
-    
+    final parts = path.split(relativePath).where((p) => p.isNotEmpty).toList();
     if (parts.isEmpty) return;
-    
-    // Create folder hierarchy
-    String currentParentId = sourceParentId;
-    String currentVirtualPath = nodes[sourceParentId]!.virtualPath;
-    
-    // Process all parts except the last (which is the file)
+
+    String currentParentId = baseNodeId;
     for (int i = 0; i < parts.length - 1; i++) {
       final folderName = parts[i];
-      final folderVirtualPath = path.join(currentVirtualPath, folderName);
-      
-      // Check if folder already exists
-      final existingFolder = _findChildByName(
+      final parentNode = nodes[currentParentId]!;
+      currentParentId = _findOrCreateFolder(
         nodes: nodes,
-        parentId: currentParentId,
         name: folderName,
-        type: NodeType.folder,
+        parentId: currentParentId,
+        parentVirtualPath: parentNode.virtualPath,
+        isVirtual: file.isVirtual,
+      ).id;
+    }
+
+    final fileName = parts.last;
+    final parentNode = nodes[currentParentId]!;
+    final fileNodeId = 'node_${file.id}';
+
+    if (!nodes.containsKey(fileNodeId)) {
+      nodes[fileNodeId] = TreeNode(
+        id: fileNodeId,
+        name: fileName,
+        type: NodeType.file,
+        parentId: currentParentId,
+        virtualPath: path.join(parentNode.virtualPath, fileName),
+        sourcePath: file.fullPath,
+        fileId: file.id,
+        isVirtual: file.isVirtual,
+        source: file.isVirtual ? FileSource.created : FileSource.disk,
+        isSelected: true,
       );
-      
-      if (existingFolder != null) {
-        currentParentId = existingFolder.id;
-        currentVirtualPath = existingFolder.virtualPath;
-      } else {
-        // Create new folder
-        final folder = _createFolderNode(
-          name: folderName,
-          parentId: currentParentId,
-          virtualPath: folderVirtualPath,
-        );
-        
-        nodes[folder.id] = folder;
-        nodes[currentParentId]!.childIds.add(folder.id);
-        
-        currentParentId = folder.id;
-        currentVirtualPath = folderVirtualPath;
+      parentNode.childIds.add(fileNodeId);
+    }
+  }
+
+  Map<String, List<ScannedFile>> _groupFilesByMostSpecificSource(
+    List<ScannedFile> files,
+    Set<String> allSourcePaths,
+  ) {
+    final groups = <String, List<ScannedFile>>{};
+    for (final file in files) {
+      String? bestSourcePath;
+      for (final sourcePath in allSourcePaths) {
+        if (path.isWithin(sourcePath, file.fullPath)) {
+          if (bestSourcePath == null ||
+              sourcePath.length > bestSourcePath.length) {
+            bestSourcePath = sourcePath;
+          }
+        }
+      }
+      final groupKey = bestSourcePath ?? path.dirname(file.fullPath);
+      groups.putIfAbsent(groupKey, () => []).add(file);
+    }
+    return groups;
+  }
+
+  String _findBestParentForSource(
+    String sourcePath,
+    Map<String, TreeNode> nodes,
+  ) {
+    String bestParentId = rootId;
+    int maxMatchDepth = -1;
+    for (final node in nodes.values) {
+      if (node.type != NodeType.folder ||
+          node.isVirtual ||
+          node.sourcePath == null)
+        continue;
+      if (path.isWithin(node.sourcePath!, sourcePath)) {
+        final depth = path.split(node.sourcePath!).length;
+        if (depth > maxMatchDepth) {
+          maxMatchDepth = depth;
+          bestParentId = node.id;
+        }
       }
     }
-    
-    // Create file node
-    final fileName = parts.last;
-    final fileVirtualPath = path.join(currentVirtualPath, fileName);
-    final nodeId = 'node_${file.id}';
-    
-    // Check if this node already exists (prevent duplicates)
-    if (nodes.containsKey(nodeId)) {
-      return;
-    }
-    
-    final fileNode = TreeNode(
-      id: nodeId,
-      name: fileName,
-      type: NodeType.file,
-      parentId: currentParentId,
-      virtualPath: fileVirtualPath,
-      sourcePath: file.fullPath,
-      fileId: file.id,
-      isVirtual: file.isVirtual,
-      source: file.isVirtual ? FileSource.created : FileSource.disk,
-      isSelected: true,  // Auto-select new files
-    );
-    
-    nodes[fileNode.id] = fileNode;
-    nodes[currentParentId]!.childIds.add(fileNode.id);
+    return bestParentId;
   }
-  
-  /// Create a folder node
-  TreeNode _createFolderNode({
+
+  TreeNode _findOrCreateFolder({
+    required Map<String, TreeNode> nodes,
     required String name,
     required String parentId,
-    required String virtualPath,
+    required String parentVirtualPath,
     String? sourcePath,
+    bool isVirtual = false,
   }) {
-    return TreeNode(
+    final parent = nodes[parentId]!;
+    for (final childId in parent.childIds) {
+      final child = nodes[childId];
+      if (child != null &&
+          child.name == name &&
+          child.type == NodeType.folder) {
+        // If this folder didn't have a source yet and we now know one,
+        // clone it with the new sourcePath and put it back.
+        if (sourcePath != null && child.sourcePath == null) {
+          nodes[childId] = child.copyWith(sourcePath: sourcePath);
+        }
+        return nodes[childId]!;
+      }
+    }
+    final newFolder = TreeNode(
       name: name,
       type: NodeType.folder,
       parentId: parentId,
-      virtualPath: virtualPath,
+      virtualPath: path.join(parentVirtualPath, name),
       sourcePath: sourcePath,
-      isExpanded: true, // Expand folders by default
+      isVirtual: isVirtual,
+      source: isVirtual ? FileSource.created : FileSource.disk,
+      isExpanded: true,
     );
+    nodes[newFolder.id] = newFolder;
+    parent.childIds.add(newFolder.id);
+    return newFolder;
   }
-  
-  /// Find a child node by name and type
-  TreeNode? _findChildByName({
-    required Map<String, TreeNode> nodes,
-    required String parentId,
-    required String name,
-    required NodeType type,
-  }) {
-    final parent = nodes[parentId];
-    if (parent == null) return null;
-    
-    for (final childId in parent.childIds) {
-      final child = nodes[childId];
-      if (child != null && child.name == name && child.type == type) {
-        return child;
+
+  /// Finds the best existing entry point in the tree for a virtual file path.
+  /// Prefers deeper matches and suffix matches to handle cases where virtual
+  /// files were created before real directories were added.
+  String _findBestEntryPoint(
+    Map<String, TreeNode> nodes,
+    List<String> folderParts,
+  ) {
+    String bestId = rootId;
+    int bestScore = -1;
+
+    for (final node in nodes.values) {
+      if (node.type == NodeType.file) continue;
+
+      final nodeParts = node.virtualPath == '/'
+          ? <String>[]
+          : path.split(node.virtualPath).where((p) => p.isNotEmpty).toList();
+
+      if (nodeParts.isEmpty) continue; // Skip root, already handled
+
+      // Check for prefix match (folderParts starts with nodeParts)
+      final isPrefix = nodeParts.length <= folderParts.length &&
+          _listStartsWith(folderParts, nodeParts);
+
+      // Check for suffix match (nodeParts ends with folderParts)
+      final isSuffix = folderParts.length <= nodeParts.length &&
+          _listEndsWith(nodeParts, folderParts);
+
+      if (!isPrefix && !isSuffix) continue;
+
+      // Calculate score: suffix matches get higher score to prefer deeper paths
+      int score;
+      if (isSuffix) {
+        // Suffix match: prefer deeper nodes
+        score = folderParts.length * 2000 + nodeParts.length;
+      } else {
+        // Prefix match: standard scoring
+        score = nodeParts.length * 1000 + nodeParts.length;
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestId = node.id;
       }
     }
-    
-    return null;
+
+    return bestId;
   }
-  
-  /// Get a user-friendly name for a source folder
-  String _getSourceFolderName(String sourcePath) {
-    // Get the last two parts of the path for context
-    final parts = sourcePath.split(path.separator)
-        .where((p) => p.isNotEmpty)
-        .toList();
-    
-    if (parts.isEmpty) return 'Source';
-    
-    // If it's a common project name, use just that
-    final lastPart = parts.last;
-    if (_isProjectName(lastPart)) {
-      return lastPart;
+
+  /// Gets the remaining path parts after the entry point.
+  List<String> _getRemainingPath(
+    List<String> fullPath,
+    List<String> entryParts,
+  ) {
+    // If entry is root or fullPath is shorter, return the full path
+    if (entryParts.isEmpty || fullPath.length < entryParts.length) {
+      return fullPath;
     }
-    
-    // Otherwise, use last two parts for context
-    if (parts.length >= 2) {
-      return '${parts[parts.length - 2]}/${parts.last}';
+
+    // Check if fullPath starts with entryParts (prefix match)
+    if (_listStartsWith(fullPath, entryParts)) {
+      return fullPath.sublist(entryParts.length);
     }
-    
-    return lastPart;
+
+    // Check if entryParts ends with fullPath (suffix match)
+    if (_listEndsWith(entryParts, fullPath)) {
+      return [];
+    }
+
+    // No match, return full path
+    return fullPath;
   }
-  
-  /// Check if a folder name looks like a project name
-  bool _isProjectName(String name) {
-    return name.contains(RegExp(r'[_\-.]')) || 
-           name.length > 15 || 
-           !name.contains(RegExp(r'[A-Z]'));
+
+  /// Checks if list starts with prefix.
+  bool _listStartsWith(List<String> list, List<String> prefix) {
+    if (prefix.length > list.length) return false;
+    for (int i = 0; i < prefix.length; i++) {
+      if (list[i] != prefix[i]) return false;
+    }
+    return true;
+  }
+
+  /// Checks if list ends with suffix.
+  bool _listEndsWith(List<String> list, List<String> suffix) {
+    if (suffix.length > list.length) return false;
+    final offset = list.length - suffix.length;
+    for (int i = 0; i < suffix.length; i++) {
+      if (list[offset + i] != suffix[i]) return false;
+    }
+    return true;
   }
 }

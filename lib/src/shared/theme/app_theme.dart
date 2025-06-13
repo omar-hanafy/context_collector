@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 
 class AppTheme {
   // Modern color palette inspired by modern design systems
-  static const Color _primaryColor = Color(0xFF5BA3C7); // Darker blue for better readability
+  static const Color _primaryColor = Color(
+    0xFF5BA3C7,
+  ); // Darker blue for better readability
   static const Color _secondaryColor = Color(0xFF1C9C96);
   static const Color _accentColor = Color(0xFFFF6B6B); // Coral red
   static const Color _surfaceColor = Color(0xFFF7F9FC); // Cool gray

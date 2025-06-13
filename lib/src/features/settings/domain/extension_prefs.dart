@@ -1,4 +1,5 @@
 import 'package:context_collector/src/features/scan/models/file_category.dart';
+import 'package:context_collector/src/features/scan/ui/file_display_helper.dart';
 import 'package:dart_helper_utils/dart_helper_utils.dart';
 import 'package:flutter/foundation.dart';
 
@@ -81,7 +82,7 @@ class ExtensionPrefs {
   /// Get all active extensions (catalog defaults + custom - disabled)
   Map<String, FileCategory> get activeExtensions {
     final result = Map<String, FileCategory>.from(
-      ExtensionCatalog.extensionCategories,
+      FileDisplayHelper.extensionCatalog,
     );
 
     // Remove disabled extensions

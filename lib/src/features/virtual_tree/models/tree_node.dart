@@ -13,20 +13,20 @@ class TreeNode {
   final NodeType type;
   final String parentId;
   final List<String> childIds;
-  
+
   // Source information
-  final String? sourcePath;      // Original disk path
-  final String virtualPath;       // Path in virtual tree
-  final bool isVirtual;          // Created in-app
+  final String? sourcePath; // Original disk path
+  final String virtualPath; // Path in virtual tree
+  final bool isVirtual; // Created in-app
   final FileSource source;
-  
+
   // Content management
-  final String? fileId;          // Links to ScannedFile.id
-  
+  final String? fileId; // Links to ScannedFile.id
+
   // UI state
   bool isExpanded;
   bool isSelected;
-  
+
   TreeNode({
     String? id,
     required this.name,
@@ -42,13 +42,14 @@ class TreeNode {
     List<String>? childIds,
   }) : id = id ?? const Uuid().v4(),
        childIds = childIds ?? [];
-  
+
   /// Create a copy with updated values
   TreeNode copyWith({
     String? name,
     bool? isExpanded,
     bool? isSelected,
     List<String>? childIds,
+    String? sourcePath,
   }) {
     return TreeNode(
       id: id,
@@ -56,7 +57,7 @@ class TreeNode {
       type: type,
       parentId: parentId,
       virtualPath: virtualPath,
-      sourcePath: sourcePath,
+      sourcePath: sourcePath ?? this.sourcePath,
       fileId: fileId,
       isVirtual: isVirtual,
       source: source,
@@ -65,7 +66,7 @@ class TreeNode {
       childIds: childIds ?? this.childIds,
     );
   }
-  
+
   /// Convert to map for serialization
   Map<String, dynamic> toMap() => {
     'id': id,
@@ -81,7 +82,7 @@ class TreeNode {
     'isSelected': isSelected,
     'childIds': childIds,
   };
-  
+
   /// Create from map
   factory TreeNode.fromMap(Map<String, dynamic> map) => TreeNode(
     id: map['id'] as String,
@@ -97,11 +98,10 @@ class TreeNode {
     isSelected: map['isSelected'] as bool? ?? false,
     childIds: (map['childIds'] as List<dynamic>?)?.cast<String>() ?? [],
   );
-  
+
   @override
   bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TreeNode && other.id == id;
+      identical(this, other) || other is TreeNode && other.id == id;
 
   @override
   int get hashCode => id.hashCode;

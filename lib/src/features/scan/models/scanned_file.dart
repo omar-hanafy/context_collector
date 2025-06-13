@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
 import 'scan_result.dart';
+import '../ui/file_display_helper.dart';
 
 /// Simplified ScannedFile model - same API, cleaner implementation
 @immutable
@@ -23,18 +24,23 @@ class ScannedFile {
     this.displayPath,
   });
 
-  factory ScannedFile.fromFile(File file, {String? relativePath, ScanSource source = ScanSource.browse}) {
+  factory ScannedFile.fromFile(
+    File file, {
+    String? relativePath,
+    ScanSource source = ScanSource.browse,
+  }) {
     final filePath = file.path;
     final fileName = path.basename(filePath);
     final stat = file.statSync();
-    
+
     // VS Code temp file handling - simplified
     final displayPath = filePath.contains('/tmp/Drops/') ? fileName : null;
 
     // Generate deterministic ID based on the normalized full path
     // This ensures the same file always gets the same ID
     final normalizedPath = path.normalize(filePath);
-    final id = 'file_${normalizedPath.hashCode.toUnsigned(32).toRadixString(16)}_${stat.size}';
+    final id =
+        'file_${normalizedPath.hashCode.toUnsigned(32).toRadixString(16)}_${stat.size}';
 
     return ScannedFile(
       id: id,
@@ -67,25 +73,15 @@ class ScannedFile {
 
   /// Computed properties
   bool get isDirty => editedContent != null && editedContent != content;
-  String get effectiveContent => editedContent ?? virtualContent ?? content ?? '';
-  String get displayName => isVirtual ? name : (displayPath ?? name);
-  
+  String get effectiveContent =>
+      editedContent ?? virtualContent ?? content ?? '';
+
   /// Simplified text support check - just try to read it
   bool get supportsText => true; // We'll try to read any file as text
 
-  /// Simple size formatting
-  String get sizeFormatted {
-    if (size < 1024) return '${size}B';
-    if (size < 1024 * 1024) return '${(size / 1024).toStringAsFixed(1)}KB';
-    return '${(size / (1024 * 1024)).toStringAsFixed(1)}MB';
-  }
-
-  /// Get language for syntax highlighting - just use extension
-  String get language => extension.isEmpty ? 'plaintext' : extension.substring(1);
-
   /// Generate reference for markdown
   String generateReference() {
-    final pathToShow = displayPath ?? fullPath;
+    final pathToShow = FileDisplayHelper.getPathForDisplay(this);
     return '> **Path:** $pathToShow';
   }
 
@@ -125,8 +121,7 @@ class ScannedFile {
 
   @override
   bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is ScannedFile && other.id == id;
+      identical(this, other) || other is ScannedFile && other.id == id;
 
   @override
   int get hashCode => id.hashCode;
