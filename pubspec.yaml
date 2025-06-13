@@ -46,6 +46,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  msix: ^3.16.9
   very_good_analysis: ^9.0.0
   build_runner: ^2.4.15
   json_serializable: ^6.9.5
@@ -177,3 +178,11 @@ flutter:
 
     # ─── optional: your custom themes & helpers in assets/monaco/themes ───
     - assets/monaco/themes/
+
+msix_config:
+  display_name: ContextCollector
+  identity_name: com.omarhanafy.context.collector
+  publisher_display_name: Omar Hanafy
+  msix_version: 1.0.0.0
+  logo_path: windows/runner/resources/app_icon.ico
+  capabilities: internetClient
