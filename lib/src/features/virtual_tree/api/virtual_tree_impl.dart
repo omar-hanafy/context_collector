@@ -1,13 +1,12 @@
-import '../../scan/models/scanned_file.dart';
 import '../../scan/models/scan_result.dart';
+import '../../scan/models/scanned_file.dart';
 import '../api/virtual_tree_api.dart';
 import '../state/tree_state.dart';
 
 /// Implementation of VirtualTreeAPI for scanner integration
 class VirtualTreeImpl implements VirtualTreeAPI {
-  final TreeStateNotifier _notifier;
-
   VirtualTreeImpl(this._notifier);
+  final TreeStateNotifier _notifier;
 
   @override
   Future<TreeData> buildTree({

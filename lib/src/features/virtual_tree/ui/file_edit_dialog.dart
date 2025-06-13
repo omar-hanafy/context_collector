@@ -122,7 +122,7 @@ class _FileEditDialogState extends State<FileEditDialog> {
 
             // Editor
             Expanded(
-              child: Container(
+              child: ColoredBox(
                 color: theme.colorScheme.surface.darken(0.02),
                 child: Row(
                   children: [
@@ -168,9 +168,7 @@ class _FileEditDialogState extends State<FileEditDialog> {
                             final cursorPos = _controller.selection.start;
                             final text = _controller.text;
                             final newText =
-                                text.substring(0, cursorPos) +
-                                '  ' + // 2 spaces for tab
-                                text.substring(cursorPos);
+                                '${text.substring(0, cursorPos)}  ${text.substring(cursorPos)}';
                             _controller.value = TextEditingValue(
                               text: newText,
                               selection: TextSelection.collapsed(
@@ -185,7 +183,7 @@ class _FileEditDialogState extends State<FileEditDialog> {
                           maxLines: null,
                           expands: true,
                           textAlignVertical: TextAlignVertical.top,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontFamily: 'monospace',
                             fontSize: 14,
                             height: 1.7,

@@ -102,13 +102,16 @@ class TreeBuilder {
 
       // Try to find the best existing entry point for this virtual file
       String parentId = _findBestEntryPoint(nodes, folderParts);
-      
+
       // Calculate remaining path parts to create
       final entryNode = nodes[parentId]!;
-      final entryParts = entryNode.virtualPath == '/' 
+      final entryParts = entryNode.virtualPath == '/'
           ? <String>[]
-          : path.split(entryNode.virtualPath).where((p) => p.isNotEmpty).toList();
-      
+          : path
+                .split(entryNode.virtualPath)
+                .where((p) => p.isNotEmpty)
+                .toList();
+
       final remainingParts = _getRemainingPath(folderParts, entryParts);
 
       // Create any remaining folders
@@ -218,8 +221,9 @@ class TreeBuilder {
     for (final node in nodes.values) {
       if (node.type != NodeType.folder ||
           node.isVirtual ||
-          node.sourcePath == null)
+          node.sourcePath == null) {
         continue;
+      }
       if (path.isWithin(node.sourcePath!, sourcePath)) {
         final depth = path.split(node.sourcePath!).length;
         if (depth > maxMatchDepth) {
@@ -288,11 +292,13 @@ class TreeBuilder {
       if (nodeParts.isEmpty) continue; // Skip root, already handled
 
       // Check for prefix match (folderParts starts with nodeParts)
-      final isPrefix = nodeParts.length <= folderParts.length &&
+      final isPrefix =
+          nodeParts.length <= folderParts.length &&
           _listStartsWith(folderParts, nodeParts);
 
       // Check for suffix match (nodeParts ends with folderParts)
-      final isSuffix = folderParts.length <= nodeParts.length &&
+      final isSuffix =
+          folderParts.length <= nodeParts.length &&
           _listEndsWith(nodeParts, folderParts);
 
       if (!isPrefix && !isSuffix) continue;

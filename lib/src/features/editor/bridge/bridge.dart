@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:context_collector/context_collector.dart';
-import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 
 /// A communication bridge between the Flutter application and the Monaco Editor
 /// instance running in a WebView.

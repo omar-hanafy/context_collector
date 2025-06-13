@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_helper_utils/flutter_helper_utils.dart';
+
 import '../models/file_category.dart';
 import '../models/scanned_file.dart';
 
@@ -106,7 +108,7 @@ class FileDisplayHelper {
     if (ext == '.json' || ext == '.yaml') return Colors.purple.shade600;
     if (ext == '.md') return Colors.blueGrey.shade600;
 
-    return colorScheme.onSurface.withOpacity(0.7);
+    return colorScheme.onSurface.addOpacity(0.7);
   }
 
   /// Build status indicator for file
@@ -164,7 +166,7 @@ class FileDisplayHelper {
     if (file.isVirtual) return Colors.green;
     if (file.isDirty) return Colors.orange;
     if (file.content != null) return colorScheme.primary;
-    return colorScheme.onSurface.withOpacity(0.5);
+    return colorScheme.onSurface.addOpacity(0.5);
   }
 
   /// Format file size for display

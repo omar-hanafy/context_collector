@@ -55,13 +55,12 @@ abstract class VirtualTreeAPI {
 
 /// Tree data structure
 class TreeData {
-  factory TreeData.fromJson(String json) =>
-      TreeData.fromMap(jsonDecode(json) as Map<String, dynamic>);
-
   const TreeData({
     required this.nodes,
     required this.rootId,
   });
+  factory TreeData.fromJson(String json) =>
+      TreeData.fromMap(jsonDecode(json) as Map<String, dynamic>);
 
   factory TreeData.fromMap(Map<String, dynamic> map) => TreeData(
     nodes: (map['nodes'] as Map<String, dynamic>).map(

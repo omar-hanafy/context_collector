@@ -280,7 +280,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
               Icons.clear_all_rounded,
               size: 20,
               color: selectionState.hasFiles
-                  ? context.error.withOpacity(0.8)
+                  ? context.error.addOpacity(0.8)
                   : null,
             ),
             onPressed: selectionState.hasFiles
@@ -314,7 +314,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             Expanded(
               child: _isSplitterInitialized && _splitterController != null
                   ? ResizableSplitter(
-                      controller: _splitterController!,
+                      controller: _splitterController,
                       minRatio: 0.2,
                       maxRatio: 0.6,
                       minPanelSize: 300,

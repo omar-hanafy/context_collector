@@ -17,4 +17,3 @@ enum FileCategory {
   final String displayName;
   final IconData icon;
 }
-

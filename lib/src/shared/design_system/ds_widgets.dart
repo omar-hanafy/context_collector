@@ -203,21 +203,21 @@ class DsButton extends StatelessWidget {
       if (isFilled) {
         return FilledButton.icon(
           onPressed: onPressed,
-          icon: icon!,
+          icon: icon,
           label: child,
           style: style ?? context.ds.filledButtonStyle,
         );
       } else if (isOutlined) {
         return OutlinedButton.icon(
           onPressed: onPressed,
-          icon: icon!,
+          icon: icon,
           label: child,
           style: style ?? context.ds.outlinedButtonStyle,
         );
       } else {
         return TextButton.icon(
           onPressed: onPressed,
-          icon: icon!,
+          icon: icon,
           label: child,
           style: style ?? context.ds.textButtonStyle,
         );

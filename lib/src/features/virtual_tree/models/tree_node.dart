@@ -8,6 +8,37 @@ enum FileSource { disk, created, pasted }
 
 /// Represents a node in the virtual file tree
 class TreeNode {
+  TreeNode({
+    String? id,
+    required this.name,
+    required this.type,
+    required this.parentId,
+    required this.virtualPath,
+    this.sourcePath,
+    this.fileId,
+    this.isVirtual = false,
+    this.source = FileSource.disk,
+    this.isExpanded = false,
+    this.isSelected = false,
+    List<String>? childIds,
+  }) : id = id ?? const Uuid().v4(),
+       childIds = childIds ?? [];
+
+  /// Create from map
+  factory TreeNode.fromMap(Map<String, dynamic> map) => TreeNode(
+    id: map['id'] as String,
+    name: map['name'] as String,
+    type: NodeType.values[map['type'] as int],
+    parentId: map['parentId'] as String,
+    virtualPath: map['virtualPath'] as String,
+    sourcePath: map['sourcePath'] as String?,
+    fileId: map['fileId'] as String?,
+    isVirtual: map['isVirtual'] as bool? ?? false,
+    source: FileSource.values[map['source'] as int? ?? 0],
+    isExpanded: map['isExpanded'] as bool? ?? false,
+    isSelected: map['isSelected'] as bool? ?? false,
+    childIds: (map['childIds'] as List<dynamic>?)?.cast<String>() ?? [],
+  );
   final String id;
   final String name;
   final NodeType type;
@@ -26,22 +57,6 @@ class TreeNode {
   // UI state
   bool isExpanded;
   bool isSelected;
-
-  TreeNode({
-    String? id,
-    required this.name,
-    required this.type,
-    required this.parentId,
-    required this.virtualPath,
-    this.sourcePath,
-    this.fileId,
-    this.isVirtual = false,
-    this.source = FileSource.disk,
-    this.isExpanded = false,
-    this.isSelected = false,
-    List<String>? childIds,
-  }) : id = id ?? const Uuid().v4(),
-       childIds = childIds ?? [];
 
   /// Create a copy with updated values
   TreeNode copyWith({
@@ -82,22 +97,6 @@ class TreeNode {
     'isSelected': isSelected,
     'childIds': childIds,
   };
-
-  /// Create from map
-  factory TreeNode.fromMap(Map<String, dynamic> map) => TreeNode(
-    id: map['id'] as String,
-    name: map['name'] as String,
-    type: NodeType.values[map['type'] as int],
-    parentId: map['parentId'] as String,
-    virtualPath: map['virtualPath'] as String,
-    sourcePath: map['sourcePath'] as String?,
-    fileId: map['fileId'] as String?,
-    isVirtual: map['isVirtual'] as bool? ?? false,
-    source: FileSource.values[map['source'] as int? ?? 0],
-    isExpanded: map['isExpanded'] as bool? ?? false,
-    isSelected: map['isSelected'] as bool? ?? false,
-    childIds: (map['childIds'] as List<dynamic>?)?.cast<String>() ?? [],
-  );
 
   @override
   bool operator ==(Object other) =>

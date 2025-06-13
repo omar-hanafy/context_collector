@@ -311,7 +311,7 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
     if (fileNodes.isEmpty) return FolderSelectionState.none;
 
     final selectedCount = fileNodes
-        .where((nodeId) => treeState.selectedNodeIds.contains(nodeId))
+        .where(treeState.selectedNodeIds.contains)
         .length;
 
     if (selectedCount == 0) return FolderSelectionState.none;

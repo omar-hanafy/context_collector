@@ -81,7 +81,8 @@ class TreeStateNotifier extends StateNotifier<TreeState> {
 
     for (final node in newNodes.values) {
       // Re-apply expansion state by node ID
-      newExpansionState[node.id] = oldExpansionState[node.id] ?? node.isExpanded;
+      newExpansionState[node.id] =
+          oldExpansionState[node.id] ?? node.isExpanded;
 
       // Re-apply selection state by matching the stable ScannedFile.id
       if (node.fileId != null && oldSelectedFileIds.contains(node.fileId)) {
@@ -289,11 +290,11 @@ class TreeStateNotifier extends StateNotifier<TreeState> {
 
   /// Clear all nodes (used when scanner clears files)
   void clearTree() {
-    state = TreeState(
-      nodes: const {},
+    state = const TreeState(
+      nodes: {},
       rootId: TreeBuilder.rootId,
-      selectedNodeIds: const {},
-      expansionState: const {},
+      selectedNodeIds: {},
+      expansionState: {},
     );
 
     // Notify scanner of cleared selection

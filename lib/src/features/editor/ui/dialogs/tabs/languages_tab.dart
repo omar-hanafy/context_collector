@@ -1,6 +1,6 @@
 import 'package:context_collector/context_collector.dart';
-import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 
 /// Languages settings tab
 class LanguagesTab extends StatelessWidget {

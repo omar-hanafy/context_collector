@@ -1,9 +1,11 @@
 import 'dart:io';
+
 import 'package:cross_file/cross_file.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:path/path.dart' as path;
-import '../models/scanned_file.dart';
+
 import '../models/scan_result.dart';
+import '../models/scanned_file.dart';
 import 'file_scanner.dart';
 
 /// Simplified drop handler - keeps VS Code & JetBrains edge cases

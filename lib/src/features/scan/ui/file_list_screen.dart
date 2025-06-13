@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../virtual_tree/providers/virtual_tree_provider.dart';
@@ -55,7 +56,7 @@ class _FileListScreenState extends ConsumerState<FileListScreen> {
                 Icon(
                   Icons.folder_open,
                   size: 64,
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                  color: Theme.of(context).colorScheme.primary.addOpacity(0.5),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -68,7 +69,7 @@ class _FileListScreenState extends ConsumerState<FileListScreen> {
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(
                       context,
-                    ).colorScheme.onSurface.withOpacity(0.6),
+                    ).colorScheme.onSurface.addOpacity(0.6),
                   ),
                 ),
               ],

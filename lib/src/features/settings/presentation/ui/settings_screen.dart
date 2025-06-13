@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:context_collector/context_collector.dart';
-import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -488,9 +488,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                       showDialog<void>(
                         context: context,
                         barrierDismissible: false,
-                        builder: (dialogContext) => Center(
+                        builder: (dialogContext) => const Center(
                           child: DsCard(
-                            child: const CircularProgressIndicator(),
+                            child: CircularProgressIndicator(),
                           ),
                         ),
                       ),
