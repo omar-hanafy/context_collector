@@ -1,532 +1,308 @@
-Below is the **smallest-possible change** that stops the double-folder outbreak when you create
-a *brand-new* virtual **folder + file** under an existing path (e.g. `src/features/drafts/prompt.txt`).
+Of course! I can certainly help you with this tricky focus issue. Your analysis is excellent, and you were on the exact right track. Dealing with `WebView` focus is notoriously difficult because it involves bridging the gap between Flutter's native widget tree and the web content's DOM.
 
----
+Your "self-healing" container approach is the correct architecture. The issue, as you suspected, isn't with *what* you're calling (`window.editor.focus()`), but *when* you're calling it. Using `Future.delayed` or listening to animation status is fragile.
 
-## Why the bug happens in `TreeBuilder`
+Let's implement a more robust solution using Flutter's `RouteObserver`. This will give us a definitive, reliable signal that a dialog has been dismissed, allowing us to restore focus at the perfect moment.
 
-* ` _mergeVirtualFiles()` tries to find an *“entry point”* folder that already exists in the tree.
-* Its helper `_findBestEntryPoint()` only matches a **suffix** of the desired path, so `src/features`
-  doesn’t match the **prefix** of `src/features/drafts`.
-* Failing to find a match, it falls back to `rootId` and recreates `src/` → `features/` again.
+Here are the step-by-step changes to fix the focus problem.
 
----
+### Step 1: Create and Register a Global `RouteObserver`
 
-## Two-line mental model of the fix
+First, we'll create a single `RouteObserver` instance that our application will use to listen for navigation events.
 
-> 1. Treat the **beginning** of `folderPathParts` as the thing to match (prefix, not suffix).
-> 2. Walk forward from `rootId`, re-using any folder that already exists before creating new ones.
-
----
-
-## Patch (in `virtual_tree/services/tree_builder.dart`)
-
-```diff
-@@  // --- replace the whole _mergeVirtualFiles() loop with a simpler walk ---
-
-   void _mergeVirtualFiles(
-     Map<String, TreeNode> nodes,
-     List<ScannedFile> virtualFiles,
-   ) {
-     virtualFiles.sort(
-       (a, b) =>
-           (a.relativePath?.length ?? 0).compareTo(b.relativePath?.length ?? 0),
-     );
-
-     for (final file in virtualFiles) {
-       final relativePath = file.relativePath ?? file.name;
-       final parts =
-           path.split(relativePath).where((p) => p.isNotEmpty).toList();
-       if (parts.isEmpty) continue;
-
--      // ▼▼▼ NEW: build/lookup the folder chain from the ROOT, prefix-style ▼▼▼
--      final folderParts = parts.sublist(0, parts.length - 1);
--      String currentParentId = rootId;
--      for (final folderName in folderParts) {
--        final parentNode = nodes[currentParentId]!;
--        currentParentId = _findOrCreateFolder(
--          nodes: nodes,
--          name: folderName,
--          parentId: currentParentId,
--          parentVirtualPath: parentNode.virtualPath,
--          isVirtual: true,
--        ).id;
--      }
--
--      // Finally add the file
--      final parentNode = nodes[currentParentId]!;
--      final fileName = parts.last;
--      final fileNodeId = 'node_${file.id}';
--      if (!nodes.containsKey(fileNodeId)) {
--        nodes[fileNodeId] = TreeNode(
--          id: fileNodeId,
--          name: fileName,
--          type: NodeType.file,
--          parentId: currentParentId,
--          virtualPath: path.join(parentNode.virtualPath, fileName),
--          sourcePath: file.fullPath,
--          fileId: file.id,
--          isVirtual: true,
--          source: FileSource.created,
--          isSelected: true,
--        );
--        parentNode.childIds.add(fileNodeId);
--      }
-+      final folderParts = parts.take(parts.length - 1);
-+      String parentId = rootId;
-+
-+      for (final part in folderParts) {
-+        final parentNode = nodes[parentId]!;
-+        parentId = _findOrCreateFolder(
-+          nodes: nodes,
-+          name: part,
-+          parentId: parentId,
-+          parentVirtualPath: parentNode.virtualPath,
-+          // mark as *virtual* only if we had to invent it
-+          isVirtual: !(_childFolderExists(parentNode, part, nodes)),
-+        ).id;
-+      }
-+
-+      final parentNode = nodes[parentId]!;
-+      final fileNodeId = 'node_${file.id}';
-+      if (!nodes.containsKey(fileNodeId)) {
-+        nodes[fileNodeId] = TreeNode(
-+          id: fileNodeId,
-+          name: parts.last,
-+          type: NodeType.file,
-+          parentId: parentId,
-+          virtualPath: path.join(parentNode.virtualPath, parts.last),
-+          sourcePath: file.fullPath,
-+          fileId: file.id,
-+          isVirtual: true,
-+          source: FileSource.created,
-+          isSelected: true,
-+        );
-+        parentNode.childIds.add(fileNodeId);
-+      }
-     }
-   }
-+
-+  /// Small helper – does a child folder with this name already exist?
-+  bool _childFolderExists(
-+    TreeNode parent,
-+    String folderName,
-+    Map<String, TreeNode> nodes,
-+  ) {
-+    for (final childId in parent.childIds) {
-+      final child = nodes[childId];
-+      if (child != null &&
-+          child.type == NodeType.folder &&
-+          child.name == folderName) {
-+        return true;
-+      }
-+    }
-+    return false;
-+  }
-```
-
-> **What changed?**
->
-> * We *walk* the path from `rootId`, reusing any folder that’s already there.
-> * `_findOrCreateFolder` now only creates a node when the child **doesn’t** exist.
-> * Because each segment is checked under its actual parent, we never spawn a
->   parallel `src/` → `features/` chain again.
-
----
-
-### Optional tidy-up
-
-Since this forward walk always finds the correct parent, you can **delete** the
-now-unused `_findBestEntryPoint()` and `_getRemainingPath()` helpers, which were
-only needed for the old “suffix-matching” approach.
-
----
-
-**Result:**
-Creating *any combination* of new virtual folders and files—no matter how deep—lands them inside the single existing hierarchy, with zero duplicate ancestors.
-Hello! As an AI assistant, I can help you with your coding questions. I've analyzed the bug report and the provided code context. This is indeed a classic tree-building issue where the logic for merging new virtual nodes into the existing structure is flawed, leading to duplicated parent paths.
-
-The problem lies within `virtual_tree/services/tree_builder.dart`, specifically in the `_findBestEntryPoint` and `_getRemainingPath` methods. They use suffix-based matching, which fails when a new virtual folder is nested inside an existing physical path. The correct approach is to use prefix-based matching to find the proper ancestor.
-
-Here are the necessary changes to fix the bug:
-
-### Patch for `virtual_tree/services/tree_builder.dart`
-
-I will replace the implementation of `_findBestEntryPoint` and `_getRemainingPath` with logic that correctly identifies and merges path prefixes.
+In `main.dart`, make the following additions:
 
 ```dart
-import 'package:path/path.dart' as path;
+// lib/main.dart
+import 'dart:io';
 
-import '../../scan/models/scan_result.dart';
-import '../../scan/models/scanned_file.dart';
-import '../api/virtual_tree_api.dart';
+import 'package:context_collector/context_collector.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:window_manager/window_manager.dart';
 
-/// Builds a virtual tree deterministically from a list of files and metadata.
-class TreeBuilder {
-  static const String rootId = 'root';
+// 1. Create a global RouteObserver
+final RouteObserver<ModalRoute<void>> routeObserver =
+    RouteObserver<ModalRoute<void>>();
 
-  TreeData buildTree({
-    required List<ScannedFile> files,
-    required List<ScanMetadata> scanMetadata,
-  }) {
-    final nodes = <String, TreeNode>{
-      rootId: TreeNode(
-        id: rootId,
-        name: 'Context Collection',
-        type: NodeType.root,
-        parentId: '',
-        virtualPath: '/',
-        isExpanded: true,
-      ),
-    };
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
 
-    if (files.isEmpty) {
-      return TreeData(nodes: nodes, rootId: rootId);
-    }
+  // Configure window for desktop
+  await windowManager.ensureInitialized();
 
-    final realFiles = files.where((f) => !f.isVirtual).toList();
-    final virtualFiles = files.where((f) => f.isVirtual).toList();
+  const windowOptions = WindowOptions(
+    size: Size(1400, 850),
+    minimumSize: Size(1400, 400),
+    center: true,
+    backgroundColor: Colors.transparent,
+    skipTaskbar: false,
+    titleBarStyle: TitleBarStyle.normal,
+    title: 'Context Collector',
+  );
 
-    _buildFromRealFiles(nodes, realFiles, scanMetadata);
-    _mergeVirtualFiles(nodes, virtualFiles);
+  await windowManager.waitUntilReadyToShow(windowOptions, () async {
+    await windowManager.show();
+    await windowManager.focus();
+  });
 
-    return TreeData(nodes: nodes, rootId: rootId);
-  }
+  // Create ProviderScope container for early access
+  final container = ProviderContainer();
 
-  /// PASS 1: Constructs the base tree from filesystem files.
-  void _buildFromRealFiles(
-    Map<String, TreeNode> nodes,
-    List<ScannedFile> realFiles,
-    List<ScanMetadata> scanMetadata,
-  ) {
-    if (realFiles.isEmpty) return;
+  // 🤫 START MONACO ASSETS SILENTLY IN BACKGROUND
+  _startMonacoAssetsSilently(container);
 
-    final allSourcePaths = scanMetadata
-        .expand((meta) => meta.sourcePaths)
-        .toSet();
-    final filesBySource = _groupFilesByMostSpecificSource(
-      realFiles,
-      allSourcePaths,
-    );
-    final sortedSourcePaths = filesBySource.keys.toList()
-      ..sort((a, b) => a.length.compareTo(b.length));
+  // 🚀 START EDITOR PRELOADING (will wait for assets automatically)
+  _startEditorPreloading(container);
 
-    for (final sourcePath in sortedSourcePaths) {
-      final filesInGroup = filesBySource[sourcePath]!;
-      final parentId = _findBestParentForSource(sourcePath, nodes);
-      final parentNode = nodes[parentId]!;
-      final sourceFolderName = path.basename(sourcePath);
-      final sourceFolderNode = _findOrCreateFolder(
-        nodes: nodes,
-        name: sourceFolderName,
-        parentId: parentId,
-        parentVirtualPath: parentNode.virtualPath,
-        sourcePath: sourcePath,
-      );
+  // 🔄 INITIALIZE AUTO UPDATER
+  _initializeAutoUpdater(container);
 
-      for (final file in filesInGroup) {
-        final relativePath = path.relative(file.fullPath, from: sourcePath);
-        _addFileAndHierarchy(
-          nodes: nodes,
-          file: file,
-          baseNodeId: sourceFolderNode.id,
-          relativePath: relativePath,
-        );
-      }
-    }
-  }
+  // Run the main app normally - no loading screens!
+  runApp(
+    UncontrolledProviderScope(
+      container: container,
+      child: const ContextCollectorApp(),
+    ),
+  );
+}
 
-  /// PASS 2: Merges virtual files by finding the best home in the real tree.
-  void _mergeVirtualFiles(
-    Map<String, TreeNode> nodes,
-    List<ScannedFile> virtualFiles,
-  ) {
-    virtualFiles.sort(
-      (a, b) =>
-          (a.relativePath?.length ?? 0).compareTo(b.relativePath?.length ?? 0),
-    );
+/// Start Monaco asset copying silently in background - no UI indication
+void _startMonacoAssetsSilently(ProviderContainer container) {
+  debugPrint(
+    '[ContextCollector] 🤫 Starting Monaco assets SILENTLY in background...',
+  );
 
-    for (final file in virtualFiles) {
-      final relativePath = file.relativePath ?? file.name;
-      final parts = path
-          .split(relativePath)
-          .where((p) => p.isNotEmpty)
-          .toList();
-      if (parts.isEmpty) continue;
+  // Fire and forget - completely silent, no UI changes
+  container
+      .read(monacoProvider.notifier)
+      .initialize()
+      .then((_) {
+        debugPrint('[ContextCollector] ✅ Monaco assets ready silently');
+      })
+      .catchError((dynamic error) {
+        // Silent failure - will be retried when user actually needs the editor
+        debugPrint(
+          '[ContextCollector] ⚠️ Silent Monaco asset initialization failed: $error',
+        );
+      });
+}
 
-      final folderPathParts = parts.sublist(0, parts.length - 1);
-      final fileName = parts.last;
+/// Start editor preloading - will automatically wait for assets
+void _startEditorPreloading(ProviderContainer container) {
+  debugPrint('[ContextCollector] 🚀 Starting editor preloading...');
 
-      // 1. Find the best existing folder to serve as an "entry point".
-      String parentId = _findBestEntryPoint(nodes, folderPathParts);
-      final entryPointNode = nodes[parentId]!;
+  // The service provider will automatically listen to asset status
+  // and initialize the editor when assets are ready
+  container
+    ..read(monacoEditorServiceProvider)
+    // Also listen to status for debugging
+    ..listen<EditorStatus>(
+      monacoEditorStatusProvider,
+      (previous, next) {
+        debugPrint(
+          '[ContextCollector] Editor status changed: ${previous?.lifecycle} → ${next.lifecycle}',
+        );
+        debugPrint('  Has Content: ${next.hasContent}');
+        if (next.error != null) {
+          debugPrint('  Error: ${next.error}');
+        }
+      },
+    );
 
-      // 2. Figure out which parts of the folder path we still need to create.
-      final entryPointParts = path
-          .split(entryPointNode.virtualPath)
-          .where((p) => p.isNotEmpty)
-          .toList();
-      final remainingParts = _getRemainingPath(
-        folderPathParts,
-        entryPointParts,
-      );
+  // Check initial state
+  final initialStatus = container.read(monacoEditorStatusProvider);
+  debugPrint(
+    '[ContextCollector] Initial editor status: ${initialStatus.lifecycle}',
+  );
+}
 
-      // 3. Create any necessary intermediate virtual folders.
-      for (final part in remainingParts) {
-        final parentNode = nodes[parentId]!;
-        parentId = _findOrCreateFolder(
-          nodes: nodes,
-          name: part,
-          parentId: parentId,
-          parentVirtualPath: parentNode.virtualPath,
-          isVirtual: true,
-        ).id;
-      }
+/// Initialize auto updater for automatic updates
+void _initializeAutoUpdater(ProviderContainer container) {
+  // Only initialize on supported platforms
+  if (!Platform.isMacOS && !Platform.isWindows) {
+    debugPrint(
+      '[ContextCollector] Auto updater not supported on this platform',
+    );
+    return;
+  }
 
-      // 4. Add the final file node to the correct parent.
-      final parentNode = nodes[parentId]!;
-      final fileNodeId = 'node_${file.id}';
-      if (!nodes.containsKey(fileNodeId)) {
-        nodes[fileNodeId] = TreeNode(
-          id: fileNodeId,
-          name: fileName,
-          type: NodeType.file,
-          parentId: parentId,
-          virtualPath: path.join(parentNode.virtualPath, fileName),
-          sourcePath: file.fullPath,
-          fileId: file.id,
-          isVirtual: true,
-          source: FileSource.created,
-          isSelected: true,
-        );
-        parentNode.childIds.add(fileNodeId);
-      }
-    }
-  }
+  debugPrint('[ContextCollector] 🔄 Initializing auto updater...');
 
-  /// Adds a single file to the tree, creating its folder hierarchy as needed.
-  void _addFileAndHierarchy({
-    required Map<String, TreeNode> nodes,
-    required ScannedFile file,
-    required String baseNodeId,
-    required String relativePath,
-  }) {
-    final parts = path.split(relativePath).where((p) => p.isNotEmpty).toList();
-    if (parts.isEmpty) return;
+  // Initialize auto updater service
+  container
+      .read(autoUpdaterServiceProvider)
+      .initialize()
+      .then((_) {
+        debugPrint(
+          '[ContextCollector] ✅ Auto updater initialized successfully',
+        );
+      })
+      .catchError((dynamic error) {
+        debugPrint(
+          '[ContextCollector] ⚠️ Auto updater initialization failed: $error',
+        );
+      });
+}
 
-    String currentParentId = baseNodeId;
-    for (int i = 0; i < parts.length - 1; i++) {
-      final folderName = parts[i];
-      final parentNode = nodes[currentParentId]!;
-      currentParentId = _findOrCreateFolder(
-        nodes: nodes,
-        name: folderName,
-        parentId: currentParentId,
-        parentVirtualPath: parentNode.virtualPath,
-        isVirtual: file.isVirtual,
-      ).id;
-    }
+class ContextCollectorApp extends ConsumerWidget {
+  const ContextCollectorApp({super.key});
 
-    final fileName = parts.last;
-    final parentNode = nodes[currentParentId]!;
-    final fileNodeId = 'node_${file.id}';
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(themeProvider);
 
-    if (!nodes.containsKey(fileNodeId)) {
-      nodes[fileNodeId] = TreeNode(
-        id: fileNodeId,
-        name: fileName,
-        type: NodeType.file,
-        parentId: currentParentId,
-        virtualPath: path.join(parentNode.virtualPath, fileName),
-        sourcePath: file.fullPath,
-        fileId: file.id,
-        isVirtual: file.isVirtual,
-        source: file.isVirtual ? FileSource.created : FileSource.disk,
-        isSelected: true,
-      );
-      parentNode.childIds.add(fileNodeId);
-    }
-  }
-
-  String _findBestEntryPoint(
-    Map<String, TreeNode> nodes,
-    List<String> folderParts,
-  ) {
-    String bestId = rootId;
-    int bestLen = 0;
-
-    // Find the deepest existing node that is a prefix for the target path
-    for (final node in nodes.values) {
-      if (node.type == NodeType.file) continue;
-
-      final nParts =
-          path.split(node.virtualPath).where((p) => p.isNotEmpty).toList();
-
-      if (node.type == NodeType.root) {
-        continue; // Handled by initial `bestId = rootId`
-      }
-
-      // The candidate path can't be longer than the target path
-      if (nParts.length > folderParts.length) continue;
-
-      // Check if folderParts starts with nParts (is a prefix)
-      bool isPrefix = true;
-      for (int i = 0; i < nParts.length; i++) {
-        if (nParts[i] != folderParts[i]) {
-          isPrefix = false;
-          break;
-        }
-      }
-
-      // If it's a prefix and the longest one we've found, it's our new best
-      if (isPrefix && nParts.length > bestLen) {
-        bestLen = nParts.length;
-        bestId = node.id;
-      }
-    }
-    return bestId;
-  }
-
-  List<String> _getRemainingPath(
-    List<String> fullPath,
-    List<String> entryParts,
-  ) {
-    // If the full path isn't longer than the entry path, no parts remain.
-    // This also handles the case where they are identical.
-    if (fullPath.length <= entryParts.length) {
-      return [];
-    }
-
-    // Because _findBestEntryPoint ensures entryParts is a prefix of fullPath,
-    // we can simply take the rest of the list.
-    return fullPath.sublist(entryParts.length);
-  }
-
-  Map<String, List<ScannedFile>> _groupFilesByMostSpecificSource(
-    List<ScannedFile> files,
-    Set<String> allSourcePaths,
-  ) {
-    final groups = <String, List<ScannedFile>>{};
-    for (final file in files) {
-      String? bestSourcePath;
-      for (final sourcePath in allSourcePaths) {
-        if (path.isWithin(sourcePath, file.fullPath)) {
-          if (bestSourcePath == null ||
-              sourcePath.length > bestSourcePath.length) {
-            bestSourcePath = sourcePath;
-          }
-        }
-      }
-      final groupKey = bestSourcePath ?? path.dirname(file.fullPath);
-      groups.putIfAbsent(groupKey, () => []).add(file);
-    }
-    return groups;
-  }
-
-  String _findBestParentForSource(
-    String sourcePath,
-    Map<String, TreeNode> nodes,
-  ) {
-    String bestParentId = rootId;
-    int maxMatchDepth = -1;
-    for (final node in nodes.values) {
-      if (node.type != NodeType.folder ||
-          node.isVirtual ||
-          node.sourcePath == null)
-        continue;
-      if (path.isWithin(node.sourcePath!, sourcePath)) {
-        final depth = path.split(node.sourcePath!).length;
-        if (depth > maxMatchDepth) {
-          maxMatchDepth = depth;
-          bestParentId = node.id;
-        }
-      }
-    }
-    return bestParentId;
-  }
-
-  TreeNode _findOrCreateFolder({
-    required Map<String, TreeNode> nodes,
-    required String name,
-    required String parentId,
-    required String parentVirtualPath,
-    String? sourcePath,
-    bool isVirtual = false,
-  }) {
-    final parent = nodes[parentId]!;
-    for (final childId in parent.childIds) {
-      final child = nodes[childId];
-      if (child != null &&
-          child.name == name &&
-          child.type == NodeType.folder) {
-        // If this folder didn't have a source yet and we now know one,
-        // clone it with the new sourcePath and put it back.
-        if (sourcePath != null && child.sourcePath == null) {
-          nodes[childId] = child.copyWith(sourcePath: sourcePath);
-        }
-        return nodes[childId]!;
-      }
-    }
-    final newFolder = TreeNode(
-      name: name,
-      type: NodeType.folder,
-      parentId: parentId,
-      virtualPath: path.join(parentVirtualPath, name),
-      sourcePath: sourcePath,
-      isVirtual: isVirtual,
-      source: isVirtual ? FileSource.created : FileSource.disk,
-      isExpanded: true,
-    );
-    nodes[newFolder.id] = newFolder;
-    parent.childIds.add(newFolder.id);
-    return newFolder;
-  }
+    return MaterialApp(
+      title: 'Context Collector',
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: themeMode,
+      // 2. Register the observer with the MaterialApp
+      navigatorObservers: [routeObserver],
+      home: WebViewPlatformUtils.buildCompatibilityChecker(
+        // Wrap with GlobalMonacoContainer to ensure editor is always present
+        child: const GlobalMonacoContainer(
+          child: HomeScreenWithDrop(),
+        ),
+        // The fallback is handled by buildCompatibilityChecker itself
+        fallback: const SizedBox.shrink(),
+      ),
+      debugShowCheckedModeBanner: false,
+    );
+  }
 }
 ```
 
-### Summary of Changes
+### Step 2: Make the Focus Container "Route Aware"
 
-1.  **`_findBestEntryPoint(…)`:**
-    * The logic has been completely replaced to find the deepest existing folder node whose `virtualPath` is a *prefix* of the new virtual file's folder path.
-    * This ensures that we always find the correct existing parent folder (e.g., `src/features`) to attach new virtual items to.
+Now, we'll update your `FocusAwareMonacoContainer` to use the `RouteAware` mixin. This allows it to subscribe to the `routeObserver` and receive clean callbacks when routes are pushed or popped.
 
-2.  **`_getRemainingPath(…)`:**
-    * The implementation is now a simple `sublist` operation.
-    * Since the new `_findBestEntryPoint` guarantees a correct prefix match, this reliably calculates the parts of the path that still need to be created (e.g., just `['drafts']`). The complex and incorrect suffix-based logic has been removed.
-
-These changes resolve the bug by correctly identifying existing ancestor paths and merging new virtual items into the proper location within the tree, preventing the creation of duplicate paths. Let me know if you have any other questions!
-
-
-### TL;DR
-
-* **Both patches work** because they switch the logic from **suffix-matching** to **prefix-matching**.
-* If you want the *smallest* code diff with **zero collateral impact**, apply the **other-AI’s patch** (just swaps two helpers).
-* If you’d like to **simplify the whole flow** and drop two now-redundant helpers, keep **my “walk-from-root” patch**—it’s conceptually cleaner and a bit faster on deep trees.
-* Mixing them doesn’t buy you anything: they attack the same bug in two different styles.
-
-Below is a quick side-by-side so you can choose in 30 seconds.
-
-|                               | **Other-AI Patch**                                              | **My Patch**                                                                 |
-| ----------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| **Touches**                   | `_findBestEntryPoint`, `_getRemainingPath` only                 | Whole `_mergeVirtualFiles` loop (≈30 LOC) + tiny `_childFolderExists` helper |
-| **Helpers kept**              | Keeps both helpers (simpler diff)                               | Deletes both helpers (fewer moving parts)                                    |
-| **Runtime path search**       | Still runs `_findBestEntryPoint` **O(N·folders)** per file      | Linear walk from `rootId`, re-uses dirs **O(folders)**                       |
-| **Risk of regressions**       | Lowest (same overall call graph)                                | Slightly higher (replaces one loop) but covered by same tests                |
-| **Readability / future mods** | Original three-step dance stays (entry → remainingParts → loop) | Single forward walk; easier to reason about                                  |
-| **Performance on huge trees** | Good enough (prefix check per node)                             | Marginally faster (no per-node scans)                                        |
-
-#### When to pick which
-
-* **Need a hotfix today / large team already relying on current helpers** → drop-in **other-AI patch**.
-* **You own the tree code and plan more virtual-folder work** → go with the **forward-walk refactor** (my patch) so future bugs are easier to tame.
-
-Either way **do add a regression test**:
+This is the new, more robust implementation for `focus_aware_monaco_container.dart`.
 
 ```dart
-// 1. Build tree with real path: src/features/utilities/helpers.dart
-// 2. Add virtual 'src/features/drafts/prompt.txt'
-// 3. Assert: exactly 1 node whose virtualPath == '/src/features'
+// lib/src/features/editor/ui/widgets/focus_aware_monaco_container.dart
+import 'package:context_collector/context_collector.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../../../main.dart'; // Import main.dart to access the global routeObserver
+import 'monaco_editor_integrated.dart';
+
+class FocusAwareMonacoContainer extends ConsumerStatefulWidget {
+  const FocusAwareMonacoContainer({super.key});
+
+  @override
+  ConsumerState<FocusAwareMonacoContainer> createState() =>
+      _FocusAwareMonacoContainerState();
+}
+
+// 1. Mixin RouteAware to listen to navigation events
+class _FocusAwareMonacoContainerState
+    extends ConsumerState<FocusAwareMonacoContainer> with RouteAware {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 2. Subscribe to the global routeObserver
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      routeObserver.subscribe(this, route as PageRoute);
+    }
+  }
+
+  @override
+  void dispose() {
+    // 3. Unsubscribe to avoid memory leaks
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  /// 4. This is our trigger! It's called when a route on top of this one is popped.
+  ///    This is the perfect, reliable moment to restore focus.
+  @override
+  void didPopNext() {
+    debugPrint(
+      '[FocusAwareMonaco] A route was popped. Restoring focus to editor.',
+    );
+    _restoreFocus();
+  }
+
+  void _restoreFocus() {
+    // The unreliable timer is no longer needed.
+    // The RouteAware mixin provides the correct timing.
+    try {
+      final monacoService = ref.read(monacoProvider.notifier);
+      if (monacoService.state.isReady) {
+        monacoService.focusEditor();
+        debugPrint('[FocusAwareMonaco] Focus restore command sent.');
+      } else {
+        debugPrint(
+            '[FocusAwareMonaco] Editor not ready, cannot restore focus.');
+      }
+    } catch (e) {
+      debugPrint('[FocusAwareMonaco] Could not restore focus: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // The GestureDetector is still useful for focusing on direct taps inside the container.
+    return GestureDetector(
+      onTap: () {
+        final monacoService = ref.read(monacoProvider.notifier);
+        if (monacoService.state.isReady) {
+          monacoService.focusEditor();
+        }
+      },
+      behavior: HitTestBehavior.translucent,
+      child: const MonacoEditorIntegrated(),
+    );
+  }
+
+  // Other RouteAware methods that we don't need for this specific fix.
+  @override
+  void didPop() {}
+
+  @override
+  void didPush() {}
+
+  @override
+  void didPushNext() {
+    debugPrint('[FocusAwareMonaco] A new route was pushed on top.');
+  }
+}
 ```
 
-That will scream if duplication ever creeps back. Happy to walk through the test or integrate whichever patch you choose.
+### Step 3: Simplify the Parent Container
 
+Your `MonacoEditorContainer` can now be simplified back to its original purpose, as the focus management is fully encapsulated in the new `FocusAwareMonacoContainer`.
+
+```dart
+// lib/src/features/editor/ui/widgets/monaco_editor_container.dart
+import 'package:flutter/material.dart';
+
+import 'focus_aware_monaco_container.dart';
+
+/// A simple, stateless container whose only job is to render the
+/// focus-aware Monaco editor widget.
+///
+/// This container provides automatic focus management for the Monaco editor,
+/// ensuring it regains focus after dialogs or other overlays are dismissed.
+class MonacoEditorContainer extends StatelessWidget {
+  const MonacoEditorContainer({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    // Use the focus-aware wrapper to handle focus restoration automatically
+    return const FocusAwareMonacoContainer();
+  }
+}
+```
+
+### Why This Works
+
+1.  **Reliable Signal**: `didPopNext()` is a lifecycle method from `RouteAware` that is specifically designed for this scenario. It fires reliably every time a route is popped to reveal the current route, which is exactly what happens when a dialog is dismissed.
+2.  **No More Timers**: We've removed the `Future.delayed`, eliminating the timing guesswork. The focus command is sent as soon as Flutter has finished the pop navigation.
+3.  **Encapsulation**: The logic remains neatly encapsulated within `FocusAwareMonacoContainer`. You don't need to change any of your dialogs or the places they are called from.
+4.  **Centralized Control**: By using a single global `routeObserver`, we have a centralized way to manage route-based logic that can be subscribed to by any widget that needs it.
+
+This approach should definitively solve the focus issue on both macOS and Windows in a clean, robust, and "Flutter-idiomatic" way.

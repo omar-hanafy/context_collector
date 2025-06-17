@@ -26,41 +26,51 @@ abstract class PlatformWebViewController {
 /// Flutter WebView implementation (for non-Windows platforms)
 class FlutterWebViewController implements PlatformWebViewController {
   FlutterWebViewController() {
-    _controller = wf.WebViewController();
+    _controller ??= wf.WebViewController();
   }
 
-  late wf.WebViewController _controller;
+  wf.WebViewController? _controller;
 
-  wf.WebViewController get flutterController => _controller;
+  wf.WebViewController get flutterController => _controller!;
 
   Future<Object?> setJavaScriptMode() async {
-    await _controller.setJavaScriptMode(wf.JavaScriptMode.unrestricted);
+    await _controller?.setJavaScriptMode(wf.JavaScriptMode.unrestricted);
     return null;
   }
 
   Future<Object?> setBackgroundColor(Color color) async {
-    await _controller.setBackgroundColor(color);
+    await _controller?.setBackgroundColor(color);
     return null;
   }
 
   Future<Object?> loadFlutterAsset(String asset) async {
-    await _controller.loadFlutterAsset(asset);
+    await _controller?.loadFlutterAsset(asset);
     return null;
   }
 
   Future<Object?> loadFile(String path) async {
-    await _controller.loadFile(path);
+    await _controller?.loadFile(path);
     return null;
   }
 
   void setNavigationDelegate(wf.NavigationDelegate delegate) {
-    _controller.setNavigationDelegate(delegate);
+    _controller?.setNavigationDelegate(delegate);
   }
+
+  // --- THIS METHOD IS CRITICAL FOR DEBUGGING ON MACOS ---
+  /// Allows the service to listen for console messages from the WebView.
+  Future<void> setOnConsoleMessage(
+    void Function(wf.JavaScriptConsoleMessage) onConsoleMessage,
+  ) async {
+    await _controller?.setOnConsoleMessage(onConsoleMessage);
+  }
+
+  // --- END OF NEW METHOD ---
 
   @override
   Future<Object?> runJavaScript(String script) async {
     try {
-      await _controller.runJavaScript(script);
+      await _controller?.runJavaScript(script);
     } catch (e) {
       debugPrint('[FlutterWebViewController] JS execution error: $e');
       rethrow;
@@ -71,7 +81,7 @@ class FlutterWebViewController implements PlatformWebViewController {
   @override
   Future<Object?> runJavaScriptReturningResult(String script) async {
     try {
-      return await _controller.runJavaScriptReturningResult(script);
+      return await _controller?.runJavaScriptReturningResult(script);
     } catch (e) {
       debugPrint('[FlutterWebViewController] JS result error: $e');
       rethrow;
@@ -83,7 +93,7 @@ class FlutterWebViewController implements PlatformWebViewController {
     String name,
     void Function(String) onMessage,
   ) async {
-    await _controller.addJavaScriptChannel(
+    await _controller?.addJavaScriptChannel(
       name,
       onMessageReceived: (wf.JavaScriptMessage message) {
         onMessage(message.message);
@@ -94,39 +104,41 @@ class FlutterWebViewController implements PlatformWebViewController {
 
   @override
   Future<Object?> removeJavaScriptChannel(String name) async {
-    await _controller.removeJavaScriptChannel(name);
+    await _controller?.removeJavaScriptChannel(name);
     return null;
   }
 
   @override
   void dispose() {
-    // WebViewController doesn't have explicit dispose in webview_flutter
+    // WebViewController doesn't have an explicit dispose method in webview_flutter
   }
 }
 
 /// Windows WebView implementation with better message handling
 class WindowsWebViewController implements PlatformWebViewController {
   WindowsWebViewController() {
-    _controller = ww.WebviewController();
+    if (_controller != null) {
+      _controller = ww.WebviewController();
+    }
   }
 
-  late ww.WebviewController _controller;
+  ww.WebviewController? _controller;
   final Map<String, void Function(String)> _channels = {};
   StreamSubscription<dynamic>? _webMessageSubscription;
   bool _isInitialized = false;
 
-  ww.WebviewController get windowsController => _controller;
+  ww.WebviewController get windowsController => _controller!;
 
   Future<void> initialize() async {
     if (_isInitialized) return;
 
     debugPrint('[WindowsWebViewController] Initializing WebView2...');
-    await _controller.initialize();
+    await _controller?.initialize();
     _isInitialized = true;
 
     // Set up default configuration
-    await _controller.setBackgroundColor(const Color(0xFF1E1E1E));
-    await _controller.setPopupWindowPolicy(ww.WebviewPopupWindowPolicy.deny);
+    await _controller?.setBackgroundColor(const Color(0xFF1E1E1E));
+    await _controller?.setPopupWindowPolicy(ww.WebviewPopupWindowPolicy.deny);
 
     // Set up message handler BEFORE adding any channels
     _setupWebMessageHandler();
@@ -137,8 +149,7 @@ class WindowsWebViewController implements PlatformWebViewController {
   void _setupWebMessageHandler() {
     _webMessageSubscription?.cancel();
 
-    // Use the controller's postWebMessage method to set up proper message handling
-    _webMessageSubscription = _controller.webMessage.listen((
+    _webMessageSubscription = _controller?.webMessage.listen((
       dynamic rawMessage,
     ) {
       debugPrint(
@@ -148,7 +159,6 @@ class WindowsWebViewController implements PlatformWebViewController {
       try {
         String messageStr;
 
-        // Handle different message formats
         if (rawMessage is String) {
           messageStr = rawMessage;
         } else if (rawMessage is Map) {
@@ -157,7 +167,6 @@ class WindowsWebViewController implements PlatformWebViewController {
           messageStr = rawMessage.toString();
         }
 
-        // Send to all registered channels (usually just flutterChannel)
         _channels.forEach((channelName, handler) {
           debugPrint(
             '[WindowsWebViewController] Forwarding to channel: $channelName',
@@ -174,13 +183,13 @@ class WindowsWebViewController implements PlatformWebViewController {
     debugPrint(
       '[WindowsWebViewController] Loading HTML string (length: ${html.length})',
     );
-    await _controller.loadStringContent(html);
+    await _controller?.loadStringContent(html);
   }
 
   @override
   Future<Object?> runJavaScript(String script) async {
     try {
-      return await _controller.executeScript(script);
+      return await _controller?.executeScript(script);
     } catch (e) {
       debugPrint('[WindowsWebViewController] JS execution error: $e');
       rethrow;
@@ -190,21 +199,17 @@ class WindowsWebViewController implements PlatformWebViewController {
   @override
   Future<dynamic> runJavaScriptReturningResult(String script) async {
     try {
-      // Windows WebView2 returns results differently than webview_flutter
-      final result = await _controller.executeScript(script);
+      final result = await _controller?.executeScript(script);
 
       if (result == null) return null;
 
-      // Try to parse if it's JSON
       if (result is String) {
         try {
-          // Remove quotes if it's a quoted string
           if (result.startsWith('"') &&
               result.endsWith('"') &&
               result.length > 2) {
             return result.substring(1, result.length - 1);
           }
-          // Try parsing as JSON
           if (result.startsWith('{') || result.startsWith('[')) {
             return json.decode(result);
           }
@@ -232,7 +237,7 @@ class WindowsWebViewController implements PlatformWebViewController {
 
     // For Windows, we use postWebMessage API
     // Create a channel that uses window.chrome.webview.postMessage
-    return _controller.executeScript('''
+    return _controller?.executeScript('''
       (function() {
         console.log('[Windows] Creating channel: $name');
         
@@ -272,7 +277,7 @@ class WindowsWebViewController implements PlatformWebViewController {
   Future<Object?> removeJavaScriptChannel(String name) async {
     _channels.remove(name);
 
-    return _controller.executeScript('''
+    return _controller?.executeScript('''
       if (window.$name) {
         delete window.$name;
         console.log('[Windows] Channel $name removed');
@@ -286,7 +291,7 @@ class WindowsWebViewController implements PlatformWebViewController {
     _webMessageSubscription?.cancel();
     _channels.clear();
     if (_isInitialized) {
-      _controller.dispose();
+      _controller?.dispose();
     }
   }
 }

@@ -6,6 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
+// Global RouteObserver for tracking navigation events
+final RouteObserver<ModalRoute<void>> routeObserver =
+    RouteObserver<ModalRoute<void>>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -138,6 +142,8 @@ class ContextCollectorApp extends ConsumerWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
+      // Register the route observer for navigation tracking
+      navigatorObservers: [routeObserver],
       home: WebViewPlatformUtils.buildCompatibilityChecker(
         // Wrap with GlobalMonacoContainer to ensure editor is always present
         child: const GlobalMonacoContainer(

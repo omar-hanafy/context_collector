@@ -57,8 +57,9 @@ class VirtualTreeImpl implements VirtualTreeAPI {
 
   /// Get existing file IDs in the tree
   Set<String> getExistingFileIds() {
+    final treeData = _notifier.getCurrentTreeData();
     final fileIds = <String>{};
-    for (final node in _notifier.state.nodes.values) {
+    for (final node in treeData.nodes.values) {
       if (node.fileId != null) {
         fileIds.add(node.fileId!);
       }
@@ -81,7 +82,8 @@ class VirtualTreeImpl implements VirtualTreeAPI {
 
   @override
   String? getNodeVirtualPath(String nodeId) {
-    return _notifier.state.nodes[nodeId]?.virtualPath;
+    final treeData = _notifier.getCurrentTreeData();
+    return treeData.nodes[nodeId]?.virtualPath;
   }
 
   @override
@@ -98,7 +100,7 @@ class VirtualTreeImpl implements VirtualTreeAPI {
 
   /// Force content rebuild (useful for debugging)
   void forceContentRebuild() {
-    final fileIds = _notifier.state.selectedFileIds;
+    final fileIds = _notifier.getSelectedFileIds();
     _notifier.onSelectionChangedCallback?.call(fileIds);
   }
 

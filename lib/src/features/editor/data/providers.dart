@@ -3,6 +3,8 @@ import 'package:ai_token_calculator/ai_token_calculator.dart';
 import 'package:context_collector/context_collector.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'monaco_asset_manager.dart';
+
 // --- RIVERPOD PROVIDERS ---
 final monacoProvider = StateNotifierProvider<MonacoService, EditorStatus>((
   ref,
@@ -34,4 +36,9 @@ final tokenCalculatorProvider = Provider<AITokenCalculator>(
 /// Provider for selected AI model (persisted in session)
 final selectedAIModelProvider = StateProvider<AIModel>((ref) {
   return AIModel.claudeSonnet; // Default to Claude for Context Collector
+});
+
+/// Provider for Monaco asset manager info
+final monacoAssetInfoProvider = FutureProvider<Map<String, dynamic>>((ref) {
+  return MonacoAssetManager.getAssetInfo();
 });

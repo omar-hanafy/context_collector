@@ -176,8 +176,6 @@ flutter:
     - assets/monaco/monaco-editor/min/vs/basic-languages/xml/
     - assets/monaco/monaco-editor/min/vs/basic-languages/yaml/
 
-    # ─── optional: your custom themes & helpers in assets/monaco/themes ───
-    - assets/monaco/themes/
 
 msix_config:
   display_name: ContextCollector

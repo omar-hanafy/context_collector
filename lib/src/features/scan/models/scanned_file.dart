@@ -83,8 +83,7 @@ class ScannedFile {
 
   /// Generate reference for markdown
   String generateReference() {
-    final pathToShow = FileDisplayHelper.getPathForDisplay(this);
-    return '> **Path:** $pathToShow';
+    return '> **Path:** $fullPath';
   }
 
   ScannedFile copyWith({
