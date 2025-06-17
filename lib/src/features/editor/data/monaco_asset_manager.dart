@@ -40,18 +40,52 @@ class MonacoAssetManager {
     return targetDir;
   }
 
-  /// Get the path to the HTML file
+  /// Get the path to the HTML file for the current platform
   static Future<String> getHtmlFilePath() async {
     final targetDir = await getAssetsDirectory();
     return p.join(targetDir, _htmlFileName);
+  }
+
+  /// Prepare platform-specific HTML content
+  static String preparePlatformHtml({required bool isWindows}) {
+    if (isWindows) {
+      // For Windows, we need absolute paths since loadHtmlString is used
+      return _prepareWindowsHtml();
+    } else {
+      // For macOS, use relative paths since HTML is loaded from file
+      return EditorConstants.indexHtmlContent(_relativePath);
+    }
+  }
+
+  /// Prepare Windows-specific HTML with absolute paths and channel script
+  static String _prepareWindowsHtml() {
+    // This will be called with the actual asset path when needed
+    throw UnimplementedError('Use prepareWindowsHtmlWithPath instead');
+  }
+
+  /// Prepare Windows HTML with the actual asset path
+  static String prepareWindowsHtmlWithPath(String assetPath) {
+    final vsPath = p.join(assetPath, 'monaco-editor', 'min', 'vs');
+    final absoluteVsPath = Uri.file(vsPath).toString();
+    final htmlContent = EditorConstants.indexHtmlContent(absoluteVsPath);
+
+    // Add Windows-specific flutter channel script
+    const channelScript =
+        '''
+<script>
+${MonacoScripts.windowsFlutterChannelScript}
+</script>
+''';
+
+    return htmlContent.replaceFirst('<head>', '<head>\n$channelScript');
   }
 
   /// Ensure the HTML file exists and is up to date
   static Future<void> _ensureHtmlFile(String targetDir) async {
     final htmlFile = File(p.join(targetDir, _htmlFileName));
 
-    // Generate HTML content with relative paths
-    final htmlContent = EditorConstants.indexHtmlFile(_relativePath);
+    // For file-based loading (macOS), always use relative paths
+    final htmlContent = EditorConstants.indexHtmlContent(_relativePath);
 
     // Always write/overwrite to ensure it's current with any EditorConstants changes
     await htmlFile.writeAsString(htmlContent);

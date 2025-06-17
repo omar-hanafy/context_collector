@@ -5,7 +5,6 @@ import 'package:context_collector/context_collector.dart';
 import 'package:context_collector/src/features/editor/data/monaco_asset_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path/path.dart' as p;
 import 'package:webview_flutter/webview_flutter.dart' as wf;
 import 'package:webview_windows/webview_windows.dart' as ww;
 
@@ -48,7 +47,9 @@ class EditorStatus {
   }
 
   bool get isReady => lifecycle == EditorLifecycle.ready;
+
   bool get isLoading => !isReady && lifecycle != EditorLifecycle.error;
+
   bool get hasError => lifecycle == EditorLifecycle.error;
 }
 
@@ -168,7 +169,7 @@ class MonacoService extends StateNotifier<EditorStatus> {
     );
 
     // Settings are loaded but applied after editor is ready
-    final settings = await EditorSettingsServiceHelper.load();
+    await EditorSettingsServiceHelper.load();
     debugPrint('[MonacoService] Settings loaded.');
   }
 
@@ -204,13 +205,10 @@ class MonacoService extends StateNotifier<EditorStatus> {
       bridge.handleJavaScriptMessage,
     );
 
-    // Prepare HTML with absolute paths and Windows-specific scripts
-    final vsPath = p.join(_assetPath!, 'monaco-editor', 'min', 'vs');
-    final absoluteVsPath = Uri.file(vsPath).toString();
-    var htmlContent = EditorConstants.indexHtmlFile(absoluteVsPath);
-
-    // Add Windows flutter channel script
-    htmlContent = _addWindowsChannelScript(htmlContent);
+    // Get platform-specific HTML from MonacoAssetManager
+    final htmlContent = MonacoAssetManager.prepareWindowsHtmlWithPath(
+      _assetPath!,
+    );
 
     // Load HTML directly
     await controller.loadHtmlString(htmlContent);
@@ -282,16 +280,6 @@ class MonacoService extends StateNotifier<EditorStatus> {
     } else {
       await bridge.setContent('');
     }
-  }
-
-  String _addWindowsChannelScript(String html) {
-    const channelScript =
-        '''
-<script>
-${MonacoScripts.windowsFlutterChannelScript}
-</script>
-''';
-    return html.replaceFirst('<head>', '<head>\n$channelScript');
   }
 
   void _handleError(dynamic error, StackTrace stackTrace) {

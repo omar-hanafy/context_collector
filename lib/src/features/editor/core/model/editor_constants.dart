@@ -155,7 +155,7 @@ class EditorConstants {
   static const String defaultLanguage = 'markdown';
   static const String defaultKeybindingPreset = 'vscode';
 
-  static String indexHtmlFile(String vsPath) =>
+  static String indexHtmlContent(String vsPath) =>
       '''
 <!DOCTYPE html>
 <html>
