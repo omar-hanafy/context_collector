@@ -9,10 +9,10 @@ class VirtualTreeImpl implements VirtualTreeAPI {
   final TreeStateNotifier _notifier;
 
   @override
-  Future<TreeData> buildTree({
+  TreeData buildTree({
     required List<ScannedFile> files,
     required List<ScanMetadata> scanMetadata,
-  }) async {
+  }) {
     _notifier.buildFromFiles(files, scanMetadata);
 
     return _notifier.getCurrentTreeData();

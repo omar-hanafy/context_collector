@@ -5,6 +5,7 @@ import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../scan/ui/file_display_helper.dart';
+import '../../scan/ui/paste_paths_dialog.dart';
 import 'file_edit_dialog.dart';
 
 /// Folder selection state
@@ -395,6 +396,7 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
       items.addAll([
         menuItem('new_file', Icons.note_add, 'New File'),
         menuItem('new_folder', Icons.create_new_folder, 'New Folder'),
+        menuItem('paste_paths', Icons.content_paste_go, 'Paste Paths...'),
         const PopupMenuDivider(),
         menuItem('select_all', Icons.select_all, 'Select All Files'),
       ]);
@@ -424,6 +426,8 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
         _createNewFile();
       case 'new_folder':
         _createNewFolder();
+      case 'paste_paths':
+        _pastePaths();
       case 'select_all':
         notifier.selectFolder(widget.node.id);
       case 'edit':
@@ -493,6 +497,10 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
             );
       },
     );
+  }
+
+  void _pastePaths() {
+    PastePathsDialog.show(context);
   }
 
   Future<void> _editFile() async {

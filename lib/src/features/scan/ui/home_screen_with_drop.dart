@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../shared/consts.dart';
 import '../../settings/presentation/ui/settings_screen.dart';
 import '../state/file_list_state.dart';
+import 'paste_paths_dialog.dart';
 
 /// Beautiful home screen with drop zone functionality
 class HomeScreenWithDrop extends ConsumerStatefulWidget {
@@ -35,7 +36,6 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
         if (details.files.isNotEmpty) {
           await selectionNotifier.processDroppedItems(
             details.files,
-            context: context,
           );
         }
       },
@@ -216,7 +216,7 @@ class HomeScreenContent extends ConsumerWidget {
 
                     // Subtitle
                     Text(
-                      'Drag and drop files or directories to combine their content\ninto a single, organized collection',
+                      'Drag and drop files or directories, browse for them,\nor paste file paths to combine content into a single collection',
                       style: theme.textTheme.bodyLarge?.copyWith(
                         color: theme.colorScheme.onSurface.addOpacity(0.7),
                       ),
@@ -252,6 +252,22 @@ class HomeScreenContent extends ConsumerWidget {
                               selectionNotifier.pickDirectory(context),
                           icon: const Icon(Icons.folder_open_rounded),
                           label: const Text('Browse Folder'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 16,
+                            ),
+                            textStyle: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        // Paste Paths button
+                        OutlinedButton.icon(
+                          onPressed: () => PastePathsDialog.show(context),
+                          icon: const Icon(Icons.content_paste_go),
+                          label: const Text('Paste Paths'),
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 24,

@@ -9,7 +9,7 @@ export '../models/tree_node.dart';
 /// Virtual Tree API contract for scanner integration
 abstract class VirtualTreeAPI {
   /// Build tree from files and metadata
-  Future<TreeData> buildTree({
+  TreeData buildTree({
     required List<ScannedFile> files,
     required List<ScanMetadata> scanMetadata,
   });

@@ -12,6 +12,7 @@ import '../models/scanned_file.dart';
 import '../services/drop_handler.dart';
 import '../services/file_scanner.dart';
 import '../services/markdown_builder.dart';
+import '../services/path_parser_service.dart';
 
 /// Selection state - enhanced with file map and scan history
 @immutable
@@ -81,6 +82,11 @@ class SelectionState {
   }
 }
 
+/// Provider for path parser service
+final pathParserServiceProvider = Provider<PathParserService>(
+  (ref) => PathParserService(),
+);
+
 /// Provider - same API
 final selectionProvider =
     StateNotifierProvider<FileListNotifier, SelectionState>((ref) {
@@ -94,7 +100,7 @@ final selectionProvider =
       );
     });
 
-/// Enhanced notifier with virtual tree integration
+/// Enhanced notifier with virtual tree integration.
 class FileListNotifier extends StateNotifier<SelectionState> {
   FileListNotifier({
     required this.ref,
@@ -108,214 +114,211 @@ class FileListNotifier extends StateNotifier<SelectionState> {
   final DropHandler dropHandler;
   final MarkdownBuilder markdownBuilder;
 
-  // Optional virtual tree integration
   VirtualTreeAPI? virtualTree;
 
-  /// Initialize virtual tree and wire up callbacks
   void initializeVirtualTree(VirtualTreeAPI tree) {
     virtualTree = tree;
-
-    // Wire up callbacks from tree to this notifier
     tree
       ..onNodeCreated(onVirtualFileCreated)
       ..onNodeEdited(onFileContentChanged)
       ..onSelectionChanged(updateSelectionFromTree);
   }
 
-  /// Process dropped items - main orchestrator method
-  Future<void> processDroppedItems(
+  //============================================================================
+  // MAIN PROCESSING METHOD
+  //============================================================================
+
+  /// The single master method for processing all new files/directories.
+  Future<void> _processNewItems(
     List<XFile> items, {
-    BuildContext? context,
+    required ScanSource source,
   }) async {
     state = state.copyWith(isProcessing: true, clearError: true);
 
     try {
-      // Read the blacklist from settings
       final filterSettings = ref.read(preferencesProvider).settings;
       final blacklist = filterSettings.blacklistedExtensions;
+      final sourcePaths = <String>{};
 
-      // Step 1: Scan the dropped items
-      final scanResult = await dropHandler.processDroppedItems(
+      await dropHandler.processDroppedItemsIncremental(
         items,
         blacklist: blacklist,
+        source: source,
+        onFileFound: (file) {
+          _addFileToState(file);
+          // Fire-and-forget content load
+          _loadFileContent(file);
+        },
+        onScanComplete: (paths) {
+          sourcePaths.addAll(paths);
+          final scanMetadata = ScanMetadata(
+            sourcePaths: sourcePaths.toList(),
+            timestamp: DateTime.now(),
+            source: source,
+          );
+          state = state.copyWith(
+            scanHistory: [...state.scanHistory, scanMetadata],
+          );
+          // Final rebuild to ensure everything is in sync
+          _rebuildTreeFromState();
+          _rebuildCombinedContent();
+        },
       );
-
-      if (scanResult.files.isEmpty) {
-        state = state.copyWith(
-          isProcessing: false,
-          error: 'No new files to add',
-        );
-        return;
-      }
-
-      // Step 4: Apply changes to state
-      await _applyScanResultToState(scanResult);
     } catch (e) {
-      state = state.copyWith(error: 'Failed to process files: $e');
+      state = state.copyWith(error: 'Failed to process new items: $e');
     } finally {
       state = state.copyWith(isProcessing: false);
     }
   }
 
-  /// Apply scan result to state
-  Future<void> _applyScanResultToState(ScanResult scanResult) async {
-    // Build new file map
+  /// Add a single file to the state and update UI immediately
+  void _addFileToState(ScannedFile file) {
     final newFileMap = Map<String, ScannedFile>.from(state.fileMap);
-    for (final file in scanResult.files) {
-      newFileMap[file.id] = file;
-    }
-
-    // Update scan history
-    final newScanHistory = [...state.scanHistory, scanResult.metadata];
-
-    // Auto-select new files
-    final updatedSelection = {
-      ...state.selectedFileIds,
-      ...scanResult.files.map((f) => f.id),
-    };
-
-    // Build virtual tree if available
-    if (virtualTree != null) {
-      final treeData = await virtualTree!.buildTree(
-        files: newFileMap.values.toList(),
-        scanMetadata: newScanHistory,
-      );
-
-      state = state.copyWith(
-        fileMap: newFileMap,
-        selectedFileIds: updatedSelection,
-        scanHistory: newScanHistory,
-        virtualTreeJson: treeData.toJson(),
-      );
-    } else {
-      state = state.copyWith(
-        fileMap: newFileMap,
-        selectedFileIds: updatedSelection,
-        scanHistory: newScanHistory,
-      );
-    }
-
-    // Load content for new files
-    await _loadFileContents(scanResult.files);
-  }
-
-  /// Load file contents - updated to use file map
-  Future<void> _loadFileContents(List<ScannedFile> files) async {
-    // Load all files first without updating state
-    final loadedFiles = <ScannedFile>[];
-    for (final file in files) {
-      final loadedFile = await fileScanner.loadFileContent(file);
-      loadedFiles.add(loadedFile);
-    }
-
-    // Update file map with loaded content
-    final newFileMap = Map<String, ScannedFile>.from(state.fileMap);
-    for (final loadedFile in loadedFiles) {
-      newFileMap[loadedFile.id] = loadedFile;
-    }
-
-    // Build combined content before updating state
-    final selectedFiles = state.selectedFileIds
-        .map((id) => newFileMap[id])
-        .whereType<ScannedFile>()
-        .toList();
-    final content = await markdownBuilder.buildMarkdown(selectedFiles);
-
-    // Single state update with everything
-    state = state.copyWith(
-      fileMap: newFileMap,
-      combinedContent: content,
-    );
-  }
-
-  /// Update selection from tree - called when tree selection changes
-  void updateSelectionFromTree(Set<String> fileIds) {
-    // Update selection and rebuild content
-    _updateSelectionAndContent(fileIds);
-  }
-
-  /// Toggle file selection - updated to use IDs
-  void toggleFileSelection(ScannedFile file) {
-    final currentSelection = Set<String>.from(state.selectedFileIds);
-    if (currentSelection.contains(file.id)) {
-      currentSelection.remove(file.id);
-    } else {
-      currentSelection.add(file.id);
-    }
-
-    _updateSelectionAndContent(currentSelection);
-  }
-
-  /// Update selection and rebuild content
-  void _updateSelectionAndContent(Set<String> newSelection) {
-    // Build content from selected files
-    final selectedFiles = newSelection
-        .map((id) => state.fileMap[id])
-        .whereType<ScannedFile>()
-        .toList();
-
-    // Update state and build content
-    markdownBuilder.buildMarkdown(selectedFiles).then((content) {
-      if (mounted) {
-        state = state.copyWith(
-          selectedFileIds: newSelection,
-          combinedContent: content,
-        );
-
-        // Notify virtual tree of selection change
-        virtualTree?.setSelectedFileIds(newSelection);
-      }
-    });
-  }
-
-  /// Select all files
-  void selectAll() {
-    final allIds = state.fileMap.keys.toSet();
-    _updateSelectionAndContent(allIds);
-  }
-
-  /// Deselect all files
-  void deselectAll() {
-    _updateSelectionAndContent({});
-  }
-
-  /// Remove a file
-  void removeFile(ScannedFile file) {
-    final newFileMap = Map<String, ScannedFile>.from(state.fileMap)
-      ..remove(file.id);
+    newFileMap[file.id] = file;
 
     final updatedSelection = Set<String>.from(state.selectedFileIds)
-      ..remove(file.id);
+      ..add(file.id);
 
-    // Update state and rebuild content
     state = state.copyWith(
       fileMap: newFileMap,
       selectedFileIds: updatedSelection,
     );
 
-    // Rebuild content
-    _rebuildCombinedContent();
+    // INSTANT UI UPDATE - No debouncing!
+    _rebuildTreeFromState();
   }
 
-  /// Clear all files
-  void clearFiles() {
-    // Clear virtual tree first
-    virtualTree?.clearTree();
-
-    // Reset state
-    state = const SelectionState();
-  }
-
-  /// Copy to clipboard
-  Future<void> copyToClipboard() async {
-    if (state.combinedContent.isEmpty) {
-      state = state.copyWith(error: 'No content to copy');
-      return;
+  /// Loads content for a single file and updates the state.
+  Future<void> _loadFileContent(ScannedFile file) async {
+    final loadedFile = await fileScanner.loadFileContent(file);
+    if (mounted && state.fileMap.containsKey(loadedFile.id)) {
+      final newFileMap = Map<String, ScannedFile>.from(state.fileMap);
+      newFileMap[loadedFile.id] = loadedFile;
+      state = state.copyWith(fileMap: newFileMap);
+      // Update combined content when file content is loaded
+      _rebuildCombinedContent();
     }
-    await Clipboard.setData(ClipboardData(text: state.combinedContent));
   }
 
-  /// Save to file
+  //============================================================================
+  // PUBLIC API
+  //============================================================================
+
+  Future<void> pickFiles(BuildContext context) async {
+    final files = await openFiles();
+    if (files.isNotEmpty) {
+      await _processNewItems(files, source: ScanSource.browse);
+    }
+  }
+
+  Future<void> pickDirectory(BuildContext context) async {
+    final directoryPath = await getDirectoryPath();
+    if (directoryPath != null) {
+      await _processNewItems(
+        [XFile(directoryPath)],
+        source: ScanSource.browse,
+      );
+    }
+  }
+
+  Future<void> processDroppedItems(List<XFile> items) async {
+    await _processNewItems(items, source: ScanSource.drop);
+  }
+
+  Future<void> processPastedPaths(
+    String pastedText,
+    BuildContext context,
+  ) async {
+    state = state.copyWith(isProcessing: true, clearError: true);
+    try {
+      final pathParser = ref.read(pathParserServiceProvider);
+      final parseResult = await pathParser.parse(pastedText);
+
+      final filesToProcess = <XFile>[];
+      final errorPaths = <String>[];
+      final existingPaths = <String>[];
+
+      await Future.wait(
+        parseResult.validPaths.map((path) async {
+          if (state.fileMap.values.any((f) => f.fullPath == path)) {
+            existingPaths.add(path);
+            return;
+          }
+          try {
+            final type = FileSystemEntity.typeSync(path);
+            if (type != FileSystemEntityType.notFound) {
+              filesToProcess.add(XFile(path));
+            } else {
+              errorPaths.add(path);
+            }
+          } catch (_) {
+            errorPaths.add(path);
+          }
+        }),
+      );
+
+      // Process the validated items
+      if (filesToProcess.isNotEmpty) {
+        await _processNewItems(filesToProcess, source: ScanSource.paste);
+      }
+
+      // Build summary notification
+      if (context.mounted) {
+        final summary = <String>[];
+        if (filesToProcess.isNotEmpty) {
+          summary.add('${filesToProcess.length} new items added');
+        }
+        if (existingPaths.isNotEmpty) {
+          summary.add('${existingPaths.length} already exist');
+        }
+        if (errorPaths.isNotEmpty) {
+          summary.add('${errorPaths.length} not found');
+        }
+
+        if (summary.isNotEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(summary.join(' • ')),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      state = state.copyWith(error: 'Failed to process pasted paths: $e');
+    } finally {
+      state = state.copyWith(isProcessing: false);
+    }
+  }
+
+  //============================================================================
+  // UI REBUILD HELPERS - INSTANT, NO DEBOUNCING
+  //============================================================================
+
+  void _rebuildCombinedContent() {
+    final content = markdownBuilder.buildMarkdown(state.selectedFiles);
+    if (mounted) {
+      state = state.copyWith(combinedContent: content);
+    }
+  }
+
+  void _rebuildTreeFromState() {
+    if (virtualTree != null && mounted) {
+      final treeData = virtualTree!.buildTree(
+        files: state.fileMap.values.toList(),
+        scanMetadata: state.scanHistory,
+      );
+      if (mounted) {
+        state = state.copyWith(virtualTreeJson: treeData.toJson());
+      }
+    }
+  }
+
+  //============================================================================
+  // STANDARD STATE MANAGEMENT METHODS
+  //============================================================================
+
+  /// Saves the combined content of all selected files to a new text file.
   Future<void> saveToFile() async {
     if (state.combinedContent.isEmpty) {
       state = state.copyWith(error: 'No content to save');
@@ -324,7 +327,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
 
     try {
       final fileName =
-          'context_collection_${DateTime.now().millisecondsSinceEpoch}.txt';
+          'context_collection_${DateTime.now().millisecondsSinceEpoch}.md';
       final filePath = await getSaveLocation(suggestedName: fileName);
       if (filePath != null) {
         await File(filePath.path).writeAsString(state.combinedContent);
@@ -334,71 +337,74 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     }
   }
 
-  /// Pick files manually
-  Future<void> pickFiles(BuildContext context) async {
-    state = state.copyWith(isProcessing: true, clearError: true);
-    try {
-      final files = await openFiles();
-      if (files.isNotEmpty) {
-        await processDroppedItems(files, context: context);
-      }
-    } catch (e) {
-      state = state.copyWith(error: 'Error picking files: $e');
-    } finally {
-      state = state.copyWith(isProcessing: false);
+  /// Copies the combined content to the system clipboard.
+  Future<void> copyToClipboard() async {
+    if (state.combinedContent.isEmpty) {
+      state = state.copyWith(error: 'No content to copy');
+      return;
     }
+    await Clipboard.setData(ClipboardData(text: state.combinedContent));
   }
 
-  /// Pick directory
-  Future<void> pickDirectory(BuildContext context) async {
-    state = state.copyWith(isProcessing: true, clearError: true);
-    try {
-      final directoryPath = await getDirectoryPath();
-      if (directoryPath != null) {
-        // Process as a dropped directory
-        await processDroppedItems([XFile(directoryPath)], context: context);
-      }
-    } catch (e) {
-      state = state.copyWith(error: 'Error picking directory: $e');
-    } finally {
-      state = state.copyWith(isProcessing: false);
-    }
-  }
-
-  /// Clear error
+  /// Clears the current error message from the state.
   void clearError() {
     state = state.copyWith(clearError: true);
   }
 
-  /// Rebuild combined content from current selection
-  Future<void> _rebuildCombinedContent() async {
-    final selectedFiles = state.selectedFileIds
-        .map((id) => state.fileMap[id])
-        .whereType<ScannedFile>()
-        .toList();
-
-    final content = await markdownBuilder.buildMarkdown(selectedFiles);
-
-    if (mounted) {
-      state = state.copyWith(combinedContent: content);
-    }
+  void updateSelectionFromTree(Set<String> fileIds) {
+    _updateSelectionAndContent(fileIds);
   }
 
-  // Virtual tree callback methods
+  void toggleFileSelection(ScannedFile file) {
+    final currentSelection = Set<String>.from(state.selectedFileIds);
+    if (currentSelection.contains(file.id)) {
+      currentSelection.remove(file.id);
+    } else {
+      currentSelection.add(file.id);
+    }
+    _updateSelectionAndContent(currentSelection);
+  }
 
-  /// Called when file content is edited
+  void selectAll() {
+    _updateSelectionAndContent(state.fileMap.keys.toSet());
+  }
+
+  void deselectAll() {
+    _updateSelectionAndContent({});
+  }
+
+  void _updateSelectionAndContent(Set<String> newSelection) {
+    if (!mounted) return;
+    state = state.copyWith(selectedFileIds: newSelection);
+    // Instant update - no debouncing
+    _rebuildCombinedContent();
+    virtualTree?.setSelectedFileIds(newSelection);
+  }
+
+  void removeFile(ScannedFile file) {
+    final newFileMap = Map<String, ScannedFile>.from(state.fileMap)
+      ..remove(file.id);
+    final newSelectedIds = Set<String>.from(state.selectedFileIds)
+      ..remove(file.id);
+    state = state.copyWith(
+      fileMap: newFileMap,
+      selectedFileIds: newSelectedIds,
+    );
+    _rebuildTreeFromState();
+    _rebuildCombinedContent();
+  }
+
+  void clearFiles() {
+    virtualTree?.clearTree();
+    state = const SelectionState();
+  }
+
   void onFileContentChanged(String fileId, String newContent) {
     final file = state.fileMap[fileId];
     if (file == null) return;
-
-    final updatedFile = file.copyWith(editedContent: newContent);
     final newFileMap = Map<String, ScannedFile>.from(state.fileMap);
-    newFileMap[fileId] = updatedFile;
-
-    state = state.copyWith(
-      fileMap: newFileMap,
-    );
-
+    newFileMap[fileId] = file.copyWith(editedContent: newContent);
+    state = state.copyWith(fileMap: newFileMap);
     _rebuildCombinedContent();
   }
 
@@ -438,9 +444,6 @@ class FileListNotifier extends StateNotifier<SelectionState> {
       parentNodeId: parentNodeId,
       file: virtualFile,
     );
-
-    // No need to call _rebuildCombinedContent here, because the tree notifier
-    // will call back with the updated selection, which triggers the rebuild.
   }
 
   /// Called when a virtual folder is created
@@ -469,10 +472,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
   /// The scanHistory cleanup (step 3) is CRITICAL. Without it, removing files
   /// and then re-adding the same directory will incorrectly trigger the duplicate
   /// detection dialog, even though the files are no longer in the tree.
-  ///
-  /// Implementation note: This method delegates the actual tree removal to a full
-  /// rebuild from the cleaned state, ensuring the tree always reflects the truth.
-  Future<void> removeNodes(Set<String> topLevelNodeIds) async {
+  void removeNodes(Set<String> topLevelNodeIds) {
     if (virtualTree == null) return;
 
     final allNodes = virtualTree!.getCurrentTree()?.nodes ?? {};
@@ -525,36 +525,12 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     );
 
     // This rebuilds the tree from the now-clean master state
-    await _rebuildTreeFromState();
-    await _rebuildCombinedContent();
-  }
-
-  /// Helper to rebuild the virtual tree from the current state
-  Future<void> _rebuildTreeFromState() async {
-    if (virtualTree != null) {
-      final treeData = await virtualTree!.buildTree(
-        files: state.fileMap.values.toList(),
-        scanMetadata: state.scanHistory,
-      );
-      state = state.copyWith(virtualTreeJson: treeData.toJson());
-    }
+    _rebuildTreeFromState();
+    _rebuildCombinedContent();
   }
 
   /// Removes a set of source paths from the scan history and returns the
   /// clean history. This is critical for preventing incorrect duplicate detection.
-  ///
-  /// Why this is needed:
-  /// The scan history tracks all directories that have been scanned. When files
-  /// are removed from the tree, their source paths must also be removed from
-  /// the history. Otherwise, re-adding the same directory will be incorrectly
-  /// identified as a duplicate, even though those files are no longer present.
-  ///
-  /// Example bug this prevents:
-  /// 1. User adds /project/src/ (path recorded in scan history)
-  /// 2. User removes all files from /project/src/
-  /// 3. User adds /project/src/ again
-  /// 4. WITHOUT this cleanup: "Duplicate detected" dialog appears (incorrect)
-  /// 5. WITH this cleanup: Files are added normally (correct)
   List<ScanMetadata> _removePathsFromScanHistory(
     Iterable<String> pathsToRemove,
   ) {

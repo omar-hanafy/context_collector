@@ -7,6 +7,8 @@ import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../scan/ui/paste_paths_dialog.dart';
+
 /// Refactored editor screen with production-ready ResizableSplitter(startPanel: startPanel, endPanel: endPanel)
 class EditorScreen extends ConsumerStatefulWidget {
   const EditorScreen({super.key});
@@ -196,6 +198,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                     selectionNotifier.pickFiles(context);
                   } else if (value == 'folder') {
                     selectionNotifier.pickDirectory(context);
+                  } else if (value == 'paste_paths') {
+                    PastePathsDialog.show(context);
                   }
                 },
                 itemBuilder: (context) => [
@@ -213,6 +217,15 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                       dense: true,
                       leading: Icon(Icons.folder_outlined, size: 20),
                       title: Text('Add Folder'),
+                    ),
+                  ),
+                  const PopupMenuDivider(),
+                  const PopupMenuItem(
+                    value: 'paste_paths',
+                    child: ListTile(
+                      dense: true,
+                      leading: Icon(Icons.content_paste_go, size: 20),
+                      title: Text('Paste Paths...'),
                     ),
                   ),
                 ],

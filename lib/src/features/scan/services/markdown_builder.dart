@@ -4,7 +4,7 @@ import '../ui/file_display_helper.dart';
 /// Service responsible for building markdown output from selected files
 class MarkdownBuilder {
   /// Build markdown from selected files
-  Future<String> buildMarkdown(List<ScannedFile> selectedFiles) async {
+  String buildMarkdown(List<ScannedFile> selectedFiles) {
     final buffer = StringBuffer()
       ..writeln('# Context Collection')
       ..writeln();
