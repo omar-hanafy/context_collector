@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
 
-import '../ui/file_display_helper.dart';
 import 'scan_result.dart';
 
 /// Simplified ScannedFile model - same API, cleaner implementation

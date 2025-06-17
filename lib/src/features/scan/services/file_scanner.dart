@@ -7,9 +7,12 @@ import '../models/scanned_file.dart';
 
 /// Simplified file scanner - combines scanning and content assembly
 class FileScanner {
-  /// Scan directory for files (no extension filtering)
+  /// Scan directory for files, ignoring those in the blacklist.
   /// Now returns ScanResult with metadata
-  Future<ScanResult> scanDirectory(String directoryPath) async {
+  Future<ScanResult> scanDirectory(
+    String directoryPath, {
+    required Set<String> blacklist,
+  }) async {
     final directory = Directory(directoryPath);
     if (!directory.existsSync()) {
       throw FileSystemException('Directory not found: $directoryPath');
@@ -22,9 +25,30 @@ class FileScanner {
       followLinks: false,
     )) {
       if (entity is File) {
-        // Skip hidden files (like .DS_Store)
         final fileName = path.basename(entity.path);
-        if (fileName.startsWith('.')) continue;
+
+        // Skip hidden files
+        if (fileName.startsWith('.')) {
+          continue;
+        }
+
+        // Check if filename matches any blacklist pattern
+        bool isBlacklisted = false;
+        for (final pattern in blacklist) {
+          // Check if the filename ENDS WITH the blacklist pattern.
+          // This handles all cases:
+          // - '.log' matches my_app.log
+          // - '.g.dart' matches my_file.g.dart
+          // - 'pubspec.lock' matches pubspec.lock
+          if (fileName.toLowerCase().endsWith(pattern.toLowerCase())) {
+            isBlacklisted = true;
+            break;
+          }
+        }
+
+        if (isBlacklisted) {
+          continue;
+        }
 
         try {
           // Calculate relative path from the scanned directory

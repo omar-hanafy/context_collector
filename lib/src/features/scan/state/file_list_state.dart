@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../settings/presentation/state/preferences_notifier.dart';
 import '../../virtual_tree/api/virtual_tree_api.dart';
 import '../models/scan_result.dart';
 import '../models/scanned_file.dart';
@@ -86,6 +87,7 @@ final selectionProvider =
       final fileScanner = FileScanner();
       final markdownBuilder = MarkdownBuilder();
       return FileListNotifier(
+        ref: ref,
         fileScanner: fileScanner,
         dropHandler: DropHandler(fileScanner: fileScanner),
         markdownBuilder: markdownBuilder,
@@ -95,11 +97,13 @@ final selectionProvider =
 /// Enhanced notifier with virtual tree integration
 class FileListNotifier extends StateNotifier<SelectionState> {
   FileListNotifier({
+    required this.ref,
     required this.fileScanner,
     required this.dropHandler,
     required this.markdownBuilder,
   }) : super(const SelectionState());
 
+  final Ref ref;
   final FileScanner fileScanner;
   final DropHandler dropHandler;
   final MarkdownBuilder markdownBuilder;
@@ -126,8 +130,15 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     state = state.copyWith(isProcessing: true, clearError: true);
 
     try {
+      // Read the blacklist from settings
+      final filterSettings = ref.read(preferencesProvider).settings;
+      final blacklist = filterSettings.blacklistedExtensions;
+
       // Step 1: Scan the dropped items
-      final scanResult = await dropHandler.processDroppedItems(items);
+      final scanResult = await dropHandler.processDroppedItems(
+        items,
+        blacklist: blacklist,
+      );
 
       if (scanResult.files.isEmpty) {
         state = state.copyWith(

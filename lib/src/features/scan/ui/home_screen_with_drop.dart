@@ -499,7 +499,8 @@ class HomeScreenContent extends ConsumerWidget {
                       Text(
                         'Context Collector supports all text-based files. '
                         'Simply drop any file and it will try to read it as text. '
-                        'Binary files will be automatically skipped.',
+                        'Binary files will be automatically skipped.\n\n'
+                        'You can blacklist specific extensions in Settings to exclude them from scanning.',
                         style: theme.textTheme.bodyLarge,
                       ),
                       const SizedBox(height: 24),

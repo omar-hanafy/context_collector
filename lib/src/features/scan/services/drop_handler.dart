@@ -15,7 +15,10 @@ class DropHandler {
   final FileScanner fileScanner;
 
   /// Process dropped items - now returns ScanResult with metadata
-  Future<ScanResult> processDroppedItems(List<XFile> items) async {
+  Future<ScanResult> processDroppedItems(
+    List<XFile> items, {
+    required Set<String> blacklist,
+  }) async {
     final allFiles = <ScannedFile>[];
     final processedPaths = <String>{};
     final sourcePaths = <String>{};
@@ -66,7 +69,10 @@ class DropHandler {
 
     // Process directories
     for (final dirPath in directories) {
-      final scanResult = await fileScanner.scanDirectory(dirPath);
+      final scanResult = await fileScanner.scanDirectory(
+        dirPath,
+        blacklist: blacklist,
+      );
       sourcePaths.add(dirPath);
       for (final file in scanResult.files) {
         if (!processedPaths.contains(file.fullPath)) {
@@ -91,6 +97,19 @@ class DropHandler {
         }
 
         final fileName = path.basename(filePath);
+
+        // Check if filename matches any blacklist pattern
+        bool isBlacklisted = false;
+        for (final pattern in blacklist) {
+          if (fileName.toLowerCase().endsWith(pattern.toLowerCase())) {
+            isBlacklisted = true;
+            break;
+          }
+        }
+
+        if (isBlacklisted) {
+          continue;
+        }
 
         final file = ScannedFile.fromFile(
           File(filePath),
