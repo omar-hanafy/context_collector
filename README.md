@@ -31,9 +31,9 @@ Every chunk includes full file paths and metadata, making it ideal for working s
 
 ## 🖥️ Platform Support
 
-| Platform | Status | Requirements |
-|----------|--------|--------------|
-| **macOS** | ✅ Fully Supported | macOS 10.13 or later |
+| Platform    | Status            | Requirements                                                                                          |
+|-------------|-------------------|-------------------------------------------------------------------------------------------------------|
+| **macOS**   | ✅ Fully Supported | macOS 10.13 or later                                                                                  |
 | **Windows** | ✅ Fully Supported | Windows 10/11 with [WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) |
 
 > **Note for Windows users:** The app will prompt you to install WebView2 Runtime if it's not already installed. This is required for the Monaco editor integration.
@@ -132,16 +132,17 @@ flutter run  # or flutter build macos / windows
 
 ### Drag & Drop
 
-| Application | Limitation | Workaround |
-|-------------|------------|------------|
-| **JetBrains IDEs** | Multi-file selection only drops the first file | Drop files one at a time or use finder/explorer
-| **VS Code** | Dropped files show only the filename | The full content is still processed correctly |
+| Application        | Limitation                                     | Workaround                                      |
+|--------------------|------------------------------------------------|-------------------------------------------------|
+| **JetBrains IDEs** | Multi-file selection only drops the first file | Drop files one at a time or use finder/explorer |
+| **VS Code**        | Dropped files show only the filename           | The full content is still processed correctly   |
 
 ---
 
 ## 🔮 Roadmap
 * ✅ ~~Add Windows support.~~ **Done!**
-* 📟 Export as file.
+* 📟 ~~Export as file.~~ **Done!**
+* ~~📂 Add tree view.~~ **Done!**
 * 🗂️ Import from GitHub repos.
 * 🌐 Add web support.
 * 🤖 AI summarization of context.
