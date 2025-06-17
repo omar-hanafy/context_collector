@@ -21,7 +21,7 @@
 > **Combine files & folders into a clean, AI-ready text bundle — powered by Flutter and Monaco Editor.**
 
 Context Collector is a lightweight desktop app (macOS • Windows) that lets you drag-and-drop source files, logs, configurations, or entire directories and outputs a neatly annotated document.
-Every chunk includes full file paths and metadata, making it ideal for working smoothly with large-language models (LLMs) without the hassle of manual copying and pasting.
+Every chunk includes full file paths and metadata, making it ideal for working smoothly with AIs and LLMs without the hassle of manual copying and pasting.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/omar-hanafy/context_collector/refs/heads/main/readme-assets/home.png" width="100%" alt="Context Collector main window (dark theme)">
@@ -179,31 +179,12 @@ Context Collector is open-source software licensed under the **MIT License**—s
 
 ## 🙏 Acknowledgements
 
-This project was made possible by the vibrant open-source community and these fantastic technologies:
+Context Collector is built with:
 
-*   **Core Technologies**:
-    *   [Flutter](https://flutter.dev) & [Dart](https://dart.dev): For the framework and language that built this app.
-    *   [Monaco Editor](https://github.com/microsoft/monaco-editor): For the powerful in-app code editing experience.
+*   **[Flutter](https://flutter.dev)** & **[Dart](https://dart.dev)** - The cross-platform framework powering this app
+*   **[Monaco Editor](https://github.com/microsoft/monaco-editor)** - Microsoft's powerful code editor integrated via webview
+*   **Open Source Community** - Special thanks to all contributors and the maintainers of our dependencies
 
-*   **State Management & UI**:
-    *   [`flutter_riverpod`](https://pub.dev/packages/flutter_riverpod): For efficient state management throughout the app.
-    *   [`dart_helper_utils`](https://pub.dev/packages/dart_helper_utils) & [`flutter_helper_utils`](https://pub.dev/packages/flutter_helper_utils): For foundational utilities.
+> 📦 For a complete list of dependencies, see [`pubspec.yaml`](pubspec.yaml)
 
-*   **File System & I/O**:
-    *   [`desktop_drop`](https://pub.dev/packages/desktop_drop): Enabling intuitive drag-and-drop.
-    *   [`file_picker`](https://pub.dev/packages/file_picker): For selecting files from the system.
-    *   [`file_selector`](https://pub.dev/packages/file_selector): Cross-platform file selection handling.
-    *   [`path`](https://pub.dev/packages/path) & [`path_provider`](https://pub.dev/packages/path_provider): Essential for file path operations.
-
-*   **Desktop Integration**:
-    *   [`window_manager`](https://pub.dev/packages/window_manager): For native window management.
-    *   [`flutter_inappwebview`](https://pub.dev/packages/flutter_inappwebview): Crucial for integrating Monaco editor.
-
-*   **Data Handling & Persistence**:
-    *   [`shared_preferences`](https://pub.dev/packages/shared_preferences): For saving app settings.
-    *   [`synchronized`](https://pub.dev/packages/synchronized): For thread-safe operations.
-    *   [`intl`](https://pub.dev/packages/intl): For internationalization and formatting.
-    *   [`diff_match_patch`](https://pub.dev/packages/diff_match_patch): For comparing and merging content.
-
-*   **Community**:
-    *   A heartfelt thank you to everyone who stars the repository, contributes code, reports issues, or offers feedback. Your support is invaluable! ❤️
+A heartfelt thank you to everyone who stars the repository, contributes code, reports issues, or offers feedback. Your support is invaluable! ❤️
