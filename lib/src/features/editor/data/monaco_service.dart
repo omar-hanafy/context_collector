@@ -205,13 +205,15 @@ class MonacoService extends StateNotifier<EditorStatus> {
       bridge.handleJavaScriptMessage,
     );
 
-    // Get platform-specific HTML from MonacoAssetManager
-    final htmlContent = MonacoAssetManager.prepareWindowsHtmlWithPath(
-      _assetPath!,
-    );
+    // FIXED: Use file-based loading for Windows too!
+    // Get HTML file path from MonacoAssetManager (same as macOS)
+    final htmlFilePath = await MonacoAssetManager.getHtmlFilePath();
 
-    // Load HTML directly
-    await controller.loadHtmlString(htmlContent);
+    debugPrint('[MonacoService] Loading HTML from file: $htmlFilePath');
+
+    // Load from file URL
+    final htmlUri = Uri.file(htmlFilePath);
+    await controller.loadUrl(htmlUri.toString());
   }
 
   Future<void> _initializeMacOSWebView() async {
