@@ -1,6 +1,4 @@
 // ignore_for_file: use_setters_to_change_properties
-// Production-ready Flutter splitter with bulletproof pointer handling
-// Version: 1.0.0
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,7 +7,7 @@ import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 // Re-export for clean imports
 export 'package:flutter/material.dart' show Axis;
 
-/// Axis helpers to eliminate H/V duplication
+/// Axis helpers to eliminate H/V duplication.
 extension _AxisHelpers on Axis {
   bool get isH => this == Axis.horizontal;
 
@@ -21,26 +19,17 @@ extension _AxisHelpers on Axis {
       isH ? SystemMouseCursors.resizeColumn : SystemMouseCursors.resizeRow;
 }
 
-/// A controller for managing splitter position with automatic persistence support.
+/// A controller for managing splitter position.
 ///
 /// The controller maintains the split ratio (0.0 to 1.0) and provides
-/// methods for programmatic control. It automatically handles global
-/// pointer events to prevent stuck drags.
-///
-/// Example:
-/// ```dart
-/// final controller = SplitterController(initialRatio: 0.3);
-/// // Later...
-/// controller.reset(); // Returns to default position
-/// ```
+/// methods for programmatic control. It uses a global pointer router to
+/// prevent stuck drags.
 class SplitterController extends ValueNotifier<double> {
   /// Creates a splitter controller with the given initial ratio.
-  ///
-  /// The [initialRatio] must be between 0.0 and 1.0.
   SplitterController({double initialRatio = 0.5})
     : assert(
         initialRatio >= 0.0 && initialRatio <= 1.0,
-        'initialRatio >= 0.0 && initialRatio <= 1.0',
+        'initialRatio must be between 0.0 and 1.0',
       ),
       super(initialRatio) {
     _globalRouter.register(this);
@@ -54,9 +43,7 @@ class SplitterController extends ValueNotifier<double> {
     super.dispose();
   }
 
-  /// Updates the ratio with optional threshold to prevent chatty updates.
-  ///
-  /// Only notifies listeners if the change exceeds [threshold].
+  /// Updates the ratio with an optional threshold to prevent chatty updates.
   void updateRatio(double newRatio, {double threshold = 0.002}) {
     final clamped = newRatio.clamp(0.0, 1.0);
     if ((clamped - value).abs() > threshold) {
@@ -64,11 +51,9 @@ class SplitterController extends ValueNotifier<double> {
     }
   }
 
-  /// Resets the splitter to the specified position.
-  ///
-  /// If [to] is not provided, defaults to 0.5 (center).
+  /// Resets the splitter to the specified position, defaulting to center.
   void reset([double to = 0.5]) {
-    assert(to >= 0.0 && to <= 1.0, 'to >= 0.0 && to <= 1.0');
+    assert(to >= 0.0 && to <= 1.0, 'to must be between 0.0 and 1.0');
     value = to;
   }
 
@@ -86,8 +71,7 @@ class SplitterController extends ValueNotifier<double> {
   static void resetGlobalRouter() => _globalRouter.dispose();
 }
 
-/// Singleton global pointer router with drag throttling.
-/// Handles pointer events globally to prevent stuck drags.
+/// Singleton global pointer router to handle drag completion events.
 class _GlobalPointerRouter {
   factory _GlobalPointerRouter() => _instance;
 
@@ -125,9 +109,7 @@ class _GlobalPointerRouter {
   }
 
   void _handleGlobal(PointerEvent event) {
-    // Note: Firefox may send PointerCancel without PointerUp
     if (event is PointerUpEvent || event is PointerCancelEvent) {
-      // Throttled: only notify the currently dragging controller
       _currentlyDragging?._stopDrag();
       _currentlyDragging = null;
     }
@@ -143,25 +125,13 @@ class _GlobalPointerRouter {
   }
 }
 
-/// A high-performance resizable splitter widget with native-like behavior.
+/// A high-performance resizable splitter widget with robust pointer handling.
 ///
-/// This splitter provides smooth dragging, keyboard navigation, and proper
-/// handling of edge cases like stuck drags. It works correctly inside
-/// scrollable widgets and supports both mouse and touch input.
-///
-/// Example:
-/// ```dart
-/// ResizableSplitter(
-///   startPanel: LeftPanel(),
-///   endPanel: RightPanel(),
-///   onRatioChanged: (ratio) => savePreference('split_ratio', ratio),
-/// )
-/// ```
+/// This splitter supports smooth dragging, keyboard navigation, and works
+/// correctly with embedded platform views (like WebViews) that can steal
+/// pointer events.
 class ResizableSplitter extends StatefulWidget {
   /// Creates a resizable splitter widget.
-  ///
-  /// The [startPanel] and [endPanel] are required and represent the
-  /// two panels being split.
   const ResizableSplitter({
     required this.startPanel,
     required this.endPanel,
@@ -181,17 +151,17 @@ class ResizableSplitter extends StatefulWidget {
     this.semanticsLabel,
   }) : assert(
          initialRatio >= 0.0 && initialRatio <= 1.0,
-         'initialRatio >= 0.0 && initialRatio <= 1.0',
+         'initialRatio must be between 0.0 and 1.0',
        ),
        assert(
          minRatio >= 0.0 && minRatio <= 1.0,
-         'minRatio >= 0.0 && minRatio <= 1.0',
+         'minRatio must be between 0.0 and 1.0',
        ),
        assert(
          maxRatio >= 0.0 && maxRatio <= 1.0,
-         'maxRatio >= 0.0 && maxRatio <= 1.0',
+         'maxRatio must be between 0.0 and 1.0',
        ),
-       assert(minRatio < maxRatio, 'minRatio < maxRatio');
+       assert(minRatio < maxRatio, 'minRatio must be less than maxRatio');
 
   /// The widget to display in the start position (left/top).
   final Widget startPanel;
@@ -220,7 +190,7 @@ class ResizableSplitter extends StatefulWidget {
   /// Thickness of the divider handle in pixels.
   final double dividerThickness;
 
-  /// Color of the divider in idle state.
+  /// Color of the divider in its idle state.
   final Color? dividerColor;
 
   /// Color of the divider when hovered.
@@ -261,10 +231,9 @@ class _ResizableSplitterState extends State<ResizableSplitter> {
   @override
   void didUpdateWidget(ResizableSplitter oldWidget) {
     super.didUpdateWidget(oldWidget);
-
-    // Clean up focus node if widget is being replaced
-    if (oldWidget.controller != widget.controller && !mounted) {
-      _focusNode.dispose();
+    if (oldWidget.controller == null && widget.controller != null) {
+      _internalController?.dispose();
+      _internalController = null;
     }
   }
 
@@ -294,14 +263,11 @@ class _ResizableSplitterState extends State<ResizableSplitter> {
         return ValueListenableBuilder<double>(
           valueListenable: _effectiveController,
           builder: (_, ratio, _) {
-            // Account for divider thickness to prevent overflow
             final availableSize = maxSize - widget.dividerThickness;
 
-            // Calculate panel sizes based on available space
             var first = availableSize * ratio;
             var second = availableSize - first;
 
-            // Ensure minimum panel sizes are respected
             final effectiveMinPanelSize = widget.minPanelSize.clamp(
               0.0,
               availableSize / 2,
@@ -331,7 +297,6 @@ class _ResizableSplitterState extends State<ResizableSplitter> {
                   maxRatio: widget.maxRatio,
                   minPanelSize: widget.minPanelSize,
                   maxSize: availableSize,
-                  // Pass available size, not total
                   dividerColor: widget.dividerColor,
                   dividerHoverColor: widget.dividerHoverColor,
                   dividerActiveColor: widget.dividerActiveColor,
@@ -354,7 +319,7 @@ class _ResizableSplitterState extends State<ResizableSplitter> {
   }
 }
 
-/// Internal divider handle widget
+/// Internal widget for the draggable divider handle.
 class _DividerHandle extends StatefulWidget {
   const _DividerHandle({
     required this.axis,
@@ -394,70 +359,119 @@ class _DividerHandle extends StatefulWidget {
 
 class _DividerHandleState extends State<_DividerHandle> {
   bool _isDragging = false;
+  bool _isHovering = false;
   double? _dragStartPosition;
   double? _dragStartRatio;
+  OverlayEntry? _dragOverlay;
 
-  // Cached decorations
   late BoxDecoration _idleDecoration;
+  late BoxDecoration _hoverDecoration;
   late BoxDecoration _activeDecoration;
 
   @override
   void initState() {
     super.initState();
-    // Decorations will be initialized in didChangeDependencies
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _updateDecorations();
+  }
 
-    // Safe to access Theme here
+  @override
+  void didUpdateWidget(_DividerHandle oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.dividerColor != widget.dividerColor ||
+        oldWidget.dividerHoverColor != widget.dividerHoverColor ||
+        oldWidget.dividerActiveColor != widget.dividerActiveColor) {
+      _updateDecorations();
+    }
+  }
+
+  @override
+  void dispose() {
+    _removeOverlay();
+    super.dispose();
+  }
+
+  void _updateDecorations() {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
-    final baseColor =
-        widget.dividerColor ?? (isDark ? Colors.grey[800]! : Colors.grey[300]!);
+    final baseColor = widget.dividerColor ?? theme.primaryColor.addOpacity(0.6);
+    final hoverColor =
+        widget.dividerHoverColor ?? theme.primaryColor.addOpacity(0.8);
     final activeColor = widget.dividerActiveColor ?? theme.primaryColor;
 
     _idleDecoration = BoxDecoration(color: baseColor);
+    _hoverDecoration = BoxDecoration(color: hoverColor);
     _activeDecoration = BoxDecoration(
       color: activeColor,
       boxShadow: [
         BoxShadow(
           color: Colors.black.addOpacity(0.1),
           blurRadius: 2,
+          spreadRadius: 0,
         ),
       ],
     );
   }
 
   void _startDrag(Offset globalPosition) {
+    if (_isDragging) return;
+
     setState(() => _isDragging = true);
     _dragStartRatio = widget.controller.value;
     _dragStartPosition = widget.axis.pos(globalPosition);
 
-    // Register as currently dragging for throttling
     SplitterController._globalRouter.setDragging(widget.controller);
+    widget.controller._setDragCallback(_stopDrag);
 
-    widget.controller._setDragCallback(() {
-      if (mounted) setState(() => _isDragging = false);
-    });
-
+    _insertOverlay();
     HapticFeedback.selectionClick();
     widget.focusNode.requestFocus();
   }
 
+  void _stopDrag() {
+    if (!mounted) return;
+
+    setState(() => _isDragging = false);
+    _removeOverlay();
+
+    _dragStartPosition = null;
+    _dragStartRatio = null;
+  }
+
+  void _insertOverlay() {
+    if (_dragOverlay != null) return;
+
+    _dragOverlay = OverlayEntry(
+      builder: (context) => _DragOverlay(axis: widget.axis),
+    );
+
+    // Use the root overlay to ensure the shield is rendered on top of
+    // platform views, which may have their own rendering surface.
+    Overlay.of(context, rootOverlay: true).insert(_dragOverlay!);
+  }
+
+  void _removeOverlay() {
+    if (_dragOverlay?.mounted ?? false) {
+      _dragOverlay?.remove();
+    }
+    _dragOverlay = null;
+  }
+
   void _updateDrag(Offset globalPosition) {
-    if (_dragStartPosition == null || _dragStartRatio == null) return;
+    if (!_isDragging || _dragStartPosition == null || _dragStartRatio == null) {
+      return;
+    }
 
     final currentPos = widget.axis.pos(globalPosition);
     final delta = currentPos - _dragStartPosition!;
-    // Use the available size (excluding divider) for ratio calculation
     final deltaRatio = delta / widget.maxSize;
 
     var newRatio = _dragStartRatio! + deltaRatio;
 
-    // Apply constraints with proper min panel size calculation
     final minSizeRatio = widget.minPanelSize / widget.maxSize;
     final maxSizeRatio = 1.0 - minSizeRatio;
 
@@ -472,53 +486,50 @@ class _DividerHandleState extends State<_DividerHandle> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final hoverColor =
-        widget.dividerHoverColor ?? theme.primaryColor.addOpacity(0.6);
+    BoxDecoration currentDecoration;
+    if (_isDragging) {
+      currentDecoration = _activeDecoration;
+    } else if (_isHovering) {
+      currentDecoration = _hoverDecoration;
+    } else {
+      currentDecoration = _idleDecoration;
+    }
 
     Widget divider = MouseRegion(
       cursor: widget.axis.cursor,
-      child: GestureDetector(
+      onEnter: (_) => setState(() => _isHovering = true),
+      onExit: (_) => setState(() => _isHovering = false),
+      child: Listener(
         behavior: HitTestBehavior.opaque,
-        // Use onPan for better scroll compatibility
-        onPanStart: (details) => _startDrag(details.globalPosition),
-        onPanUpdate: (details) => _updateDrag(details.globalPosition),
-        child: TweenAnimationBuilder<Color?>(
-          duration: const Duration(milliseconds: 120),
-          tween: ColorTween(
-            begin: _idleDecoration.color,
-            end: _isDragging ? _activeDecoration.color : hoverColor,
-          ),
-          builder: (context, color, _) {
-            return Container(
-              width: widget.axis.isH ? widget.thickness : null,
-              height: !widget.axis.isH ? widget.thickness : null,
-              decoration: _isDragging
-                  ? _activeDecoration
-                  : BoxDecoration(
-                      color: color,
+        onPointerDown: (details) => _startDrag(details.position),
+        onPointerMove: (details) {
+          if (_isDragging) {
+            _updateDrag(details.position);
+          }
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: widget.axis.isH ? widget.thickness : null,
+          height: !widget.axis.isH ? widget.thickness : null,
+          decoration: currentDecoration,
+          child: _isDragging || _isHovering
+              ? Center(
+                  child: Container(
+                    width: widget.axis.isH ? 2 : 24,
+                    height: !widget.axis.isH ? 2 : 24,
+                    decoration: BoxDecoration(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.addOpacity(0.3),
+                      borderRadius: BorderRadius.circular(1),
                     ),
-              child: _isDragging || color != _idleDecoration.color
-                  ? Center(
-                      child: Container(
-                        width: widget.axis.isH ? 2 : 24,
-                        height: !widget.axis.isH ? 2 : 24,
-                        decoration: BoxDecoration(
-                          color: theme.brightness == Brightness.dark
-                              ? Colors.white.addOpacity(0.3)
-                              : Colors.black.addOpacity(0.3),
-                          borderRadius: BorderRadius.circular(1),
-                        ),
-                      ),
-                    )
-                  : null,
-            );
-          },
+                  ),
+                )
+              : null,
         ),
       ),
     );
 
-    // Wrap with semantics (without focused parameter)
     divider = Semantics(
       label:
           widget.semanticsLabel ??
@@ -567,6 +578,44 @@ class _DividerHandleState extends State<_DividerHandle> {
   }
 }
 
+/// An invisible overlay that acts as a shield to block pointer events
+/// from reaching platform views during a drag operation.
+class _DragOverlay extends StatelessWidget {
+  const _DragOverlay({required this.axis});
+
+  final Axis axis;
+
+  /// For debugging: set to true to visualize the overlay.
+  static const bool _debugShowOverlay = false;
+
+  @override
+  Widget build(BuildContext context) {
+    // This color is critical. A completely transparent color can be ignored
+    // by the renderer in some cases. A near-invisible color forces it to
+    // be rendered, ensuring it can block pointer events.
+    final blockerColor = _debugShowOverlay
+        ? context.themeData.primaryColor.addOpacity(0.2) // Visible debug color
+        : Colors.black.addOpacity(0.01); // Near-invisible but effective blocker
+
+    return Positioned.fill(
+      child: ExcludeSemantics(
+        child: MouseRegion(
+          cursor: axis.cursor,
+          child: Listener(
+            behavior: HitTestBehavior.opaque,
+            // This Listener greedily consumes all pointer events.
+            // No callbacks are needed because its only purpose is to act
+            // as a shield, allowing the handle's Listener to receive
+            // the uninterrupted event stream.
+            child: Container(color: blockerColor),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Intent for keyboard-based splitter adjustment.
 class _AdjustIntent extends Intent {
   const _AdjustIntent(this.delta);
 
