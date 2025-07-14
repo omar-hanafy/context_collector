@@ -40,7 +40,7 @@ Map<String, dynamic> _$LanguageConfigToJson(_LanguageConfig instance) =>
       'customTheme': instance.customTheme,
     };
 
-const Map<WordWrap, String> _$WordWrapEnumMap = {
+const _$WordWrapEnumMap = {
   WordWrap.off: 'off',
   WordWrap.on: 'on',
   WordWrap.wordWrapColumn: 'wordWrapColumn',
@@ -244,20 +244,20 @@ Map<String, dynamic> _$EditorSettingsToJson(
   'editor_letter_spacing': instance.letterSpacing,
   'editor_show_line_numbers': instance.showLineNumbers,
   'editor_line_numbers_style':
-      _$LineNumbersStyleEnumMap[instance.lineNumbersStyle],
+      _$LineNumbersStyleEnumMap[instance.lineNumbersStyle]!,
   'editor_show_minimap': instance.showMinimap,
-  'editor_minimap_side': _$MinimapSideEnumMap[instance.minimapSide],
+  'editor_minimap_side': _$MinimapSideEnumMap[instance.minimapSide]!,
   'editor_minimap_render_characters': instance.minimapRenderCharacters,
   'editor_minimap_size': instance.minimapSize,
   'editor_show_indent_guides': instance.showIndentGuides,
   'editor_render_whitespace':
-      _$RenderWhitespaceEnumMap[instance.renderWhitespace],
+      _$RenderWhitespaceEnumMap[instance.renderWhitespace]!,
   'editor_rulers': instance.rulers,
   'editor_sticky_scroll': instance.stickyScroll,
   'editor_show_folding_controls': instance.showFoldingControls,
   'editor_glyph_margin': instance.glyphMargin,
   'editor_render_line_highlight': instance.renderLineHighlight,
-  'editor_word_wrap': _$WordWrapEnumMap[instance.wordWrap],
+  'editor_word_wrap': _$WordWrapEnumMap[instance.wordWrap]!,
   'editor_word_wrap_column': instance.wordWrapColumn,
   'editor_tab_size': instance.tabSize,
   'editor_insert_spaces': instance.insertSpaces,
@@ -271,12 +271,12 @@ Map<String, dynamic> _$EditorSettingsToJson(
   'editor_smooth_scrolling': instance.smoothScrolling,
   'editor_fast_scroll_sensitivity': instance.fastScrollSensitivity,
   'editor_scroll_predominant_axis': instance.scrollPredominantAxis,
-  'editor_cursor_blinking': _$CursorBlinkingEnumMap[instance.cursorBlinking],
+  'editor_cursor_blinking': _$CursorBlinkingEnumMap[instance.cursorBlinking]!,
   'editor_cursor_smooth_caret_animation': instance.cursorSmoothCaretAnimation,
-  'editor_cursor_style': _$CursorStyleEnumMap[instance.cursorStyle],
+  'editor_cursor_style': _$CursorStyleEnumMap[instance.cursorStyle]!,
   'editor_cursor_width': instance.cursorWidth,
   'editor_multi_cursor_modifier':
-      _$MultiCursorModifierEnumMap[instance.multiCursorModifier],
+      _$MultiCursorModifierEnumMap[instance.multiCursorModifier]!,
   'editor_multi_cursor_merge_overlapping': instance.multiCursorMergeOverlapping,
   'editor_format_on_save': instance.formatOnSave,
   'editor_format_on_paste': instance.formatOnPaste,
@@ -285,13 +285,13 @@ Map<String, dynamic> _$EditorSettingsToJson(
   'editor_quick_suggestions_delay': instance.quickSuggestionsDelay,
   'editor_suggest_on_trigger_characters': instance.suggestOnTriggerCharacters,
   'editor_accept_suggestion_on_enter':
-      _$AcceptSuggestionOnEnterEnumMap[instance.acceptSuggestionOnEnter],
+      _$AcceptSuggestionOnEnterEnumMap[instance.acceptSuggestionOnEnter]!,
   'editor_accept_suggestion_on_commit_character':
       instance.acceptSuggestionOnCommitCharacter,
   'editor_snippet_suggestions':
-      _$SnippetSuggestionsEnumMap[instance.snippetSuggestions],
+      _$SnippetSuggestionsEnumMap[instance.snippetSuggestions]!,
   'editor_word_based_suggestions':
-      _$WordBasedSuggestionsEnumMap[instance.wordBasedSuggestions],
+      _$WordBasedSuggestionsEnumMap[instance.wordBasedSuggestions]!,
   'editor_parameter_hints': instance.parameterHints,
   'editor_hover': instance.hover,
   'editor_context_menu': instance.contextMenu,
@@ -299,7 +299,7 @@ Map<String, dynamic> _$EditorSettingsToJson(
   'editor_seed_search_string_from_selection':
       instance.seedSearchStringFromSelection,
   'editor_accessibility_support':
-      _$AccessibilitySupportEnumMap[instance.accessibilitySupport],
+      _$AccessibilitySupportEnumMap[instance.accessibilitySupport]!,
   'editor_accessibility_page_size': instance.accessibilityPageSize,
   'editor_render_validation_decorations': instance.renderValidationDecorations,
   'editor_render_control_characters': instance.renderControlCharacters,
@@ -311,7 +311,7 @@ Map<String, dynamic> _$EditorSettingsToJson(
     (k, e) => MapEntry(k, e.toJson()),
   ),
   'editor_keybinding_preset':
-      _$KeybindingPresetEnumEnumMap[instance.keybindingPreset],
+      _$KeybindingPresetEnumEnumMap[instance.keybindingPreset]!,
   'editor_custom_keybindings': instance.customKeybindings,
   'editor_read_only': instance.readOnly,
   'editor_dom_read_only': instance.domReadOnly,
@@ -330,19 +330,19 @@ Map<String, dynamic> _$EditorSettingsToJson(
   'editor_experimental_features': instance.experimentalFeatures,
 };
 
-const Map<LineNumbersStyle, String> _$LineNumbersStyleEnumMap = {
+const _$LineNumbersStyleEnumMap = {
   LineNumbersStyle.off: 'off',
   LineNumbersStyle.on: 'on',
   LineNumbersStyle.relative: 'relative',
   LineNumbersStyle.interval: 'interval',
 };
 
-const Map<MinimapSide, String> _$MinimapSideEnumMap = {
+const _$MinimapSideEnumMap = {
   MinimapSide.left: 'left',
   MinimapSide.right: 'right',
 };
 
-const Map<RenderWhitespace, String> _$RenderWhitespaceEnumMap = {
+const _$RenderWhitespaceEnumMap = {
   RenderWhitespace.none: 'none',
   RenderWhitespace.boundary: 'boundary',
   RenderWhitespace.selection: 'selection',
@@ -350,7 +350,7 @@ const Map<RenderWhitespace, String> _$RenderWhitespaceEnumMap = {
   RenderWhitespace.all: 'all',
 };
 
-const Map<CursorBlinking, String> _$CursorBlinkingEnumMap = {
+const _$CursorBlinkingEnumMap = {
   CursorBlinking.blink: 'blink',
   CursorBlinking.smooth: 'smooth',
   CursorBlinking.phase: 'phase',
@@ -358,7 +358,7 @@ const Map<CursorBlinking, String> _$CursorBlinkingEnumMap = {
   CursorBlinking.solid: 'solid',
 };
 
-const Map<CursorStyle, String> _$CursorStyleEnumMap = {
+const _$CursorStyleEnumMap = {
   CursorStyle.line: 'line',
   CursorStyle.block: 'block',
   CursorStyle.underline: 'underline',
@@ -367,38 +367,38 @@ const Map<CursorStyle, String> _$CursorStyleEnumMap = {
   CursorStyle.underlineThin: 'underlineThin',
 };
 
-const Map<MultiCursorModifier, String> _$MultiCursorModifierEnumMap = {
+const _$MultiCursorModifierEnumMap = {
   MultiCursorModifier.ctrlCmd: 'ctrlCmd',
   MultiCursorModifier.alt: 'alt',
 };
 
-const Map<AcceptSuggestionOnEnter, String> _$AcceptSuggestionOnEnterEnumMap = {
+const _$AcceptSuggestionOnEnterEnumMap = {
   AcceptSuggestionOnEnter.on: 'on',
   AcceptSuggestionOnEnter.off: 'off',
   AcceptSuggestionOnEnter.smart: 'smart',
 };
 
-const Map<SnippetSuggestions, String> _$SnippetSuggestionsEnumMap = {
+const _$SnippetSuggestionsEnumMap = {
   SnippetSuggestions.top: 'top',
   SnippetSuggestions.bottom: 'bottom',
   SnippetSuggestions.inline: 'inline',
   SnippetSuggestions.none: 'none',
 };
 
-const Map<WordBasedSuggestions, String> _$WordBasedSuggestionsEnumMap = {
+const _$WordBasedSuggestionsEnumMap = {
   WordBasedSuggestions.off: 'off',
   WordBasedSuggestions.currentDocument: 'currentDocument',
   WordBasedSuggestions.matchingDocuments: 'matchingDocuments',
   WordBasedSuggestions.allDocuments: 'allDocuments',
 };
 
-const Map<AccessibilitySupport, String> _$AccessibilitySupportEnumMap = {
+const _$AccessibilitySupportEnumMap = {
   AccessibilitySupport.auto: 'auto',
   AccessibilitySupport.off: 'off',
   AccessibilitySupport.on: 'on',
 };
 
-const Map<KeybindingPresetEnum, String> _$KeybindingPresetEnumEnumMap = {
+const _$KeybindingPresetEnumEnumMap = {
   KeybindingPresetEnum.vscode: 'vscode',
   KeybindingPresetEnum.intellij: 'intellij',
   KeybindingPresetEnum.vim: 'vim',

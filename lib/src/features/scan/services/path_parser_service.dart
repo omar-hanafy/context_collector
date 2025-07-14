@@ -126,6 +126,14 @@ class PathParserService {
         continue;
       }
 
+      // Expand tilde to home directory on Unix-like systems
+      if ((Platform.isMacOS || Platform.isLinux) && path.startsWith('~/')) {
+        final homeDir = Platform.environment['HOME'];
+        if (homeDir != null) {
+          path = p.join(homeDir, path.substring(2));
+        }
+      }
+
       // Normalize the path
       try {
         final normalized = p.normalize(path);
