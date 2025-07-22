@@ -28,6 +28,33 @@
       <enclosure url="https://github.com/omar-hanafy/context_collector/releases/download/untagged-0eb025062ab86254d79c/ContextCollector-2.1.0.dmg" length="31617599" type="application/octet-stream" sparkle:version="untagged-0eb025062ab86254d79c" sparkle:shortVersionString="untagged-0eb025062ab86254d79c" sparkle:os="macos"/>
     </item>
     <item>
+      <title>Version release-2.2.0</title>
+      <pubDate>Tue, 22 Jul 2025 17:55:04 -0000</pubDate>
+      <description><![CDATA[## Version 2.2.0 - The Simplification Update!
+
+This release introduces a major simplification of the file tree logic and a series of UX improvements to make starting a new session faster and more intuitive. We've focused on reducing complexity and refining the core user workflows.
+
+### ✨ New Features & Enhancements
+
+* **New "Start with a New File" Workflow**: The home screen now features a "Start with a New File" button. Instead of just showing an empty screen, it immediately kicks off the process for creating your first virtual file, letting you name it and add content right away.
+* **Centralized Actions**: We've added a new toolbar at the top of the file tree with icons for:
+    * 🔄 **Refresh Content**: Reloads all original files from the disk, discarding any in-app edits.
+    * 📄 **New Virtual File**: The only way to create new virtual files now, keeping the UI clean and simple.
+* **Reliable "Copy Content"**: The copy button is now smarter! It pulls the absolute latest text directly from the editor, ensuring even your most recent keystrokes are included.
+* **"Paste Paths" on Folders**: You can now right-click any folder in the tree and select "Paste Paths..." to add more files.
+
+### 🐛 Bug Fixes
+
+* **macOS Keyboard Fix**: Fixed a critical bug on macOS where the keyboard would stop working in the editor after closing a dialog (like Settings or Paste Paths). Your keyboard focus will now be correctly restored.
+* **Simplified Tree View**: All files and folders (both real and virtual) now live under a single, collapsible `tree/` root directory. This makes the file structure much easier to understand and manage.
+
+### 🧹 Housekeeping
+
+* **Removed Virtual Folders**: To streamline the experience for quick notes and scratchpads, we've removed the ability to create empty virtual folders. All virtual files now live at the top level.
+* Updated various dependencies to their latest versions for improved performance and security.]]></description>
+      <enclosure url="https://github.com/omar-hanafy/context_collector/releases/download/release-2.2.0/ContextCollector-2.2.0.dmg" length="31624822" type="application/octet-stream" sparkle:version="release-2.2.0" sparkle:shortVersionString="release-2.2.0" sparkle:os="macos"/>
+    </item>
+    <item>
       <title>Version releases</title>
       <pubDate>Thu, 29 May 2025 02:53:30 -0000</pubDate>
       <description><![CDATA[*First stable release*
