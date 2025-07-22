@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path/path.dart' as path;
 
 import '../../scan/models/scan_result.dart';
 import '../../scan/models/scanned_file.dart';
@@ -30,9 +29,9 @@ class TreeState {
       .map((node) => node.fileId!)
       .toSet();
 
-  /// Check if tree has any nodes
+  /// Check if tree has any nodes under the main 'tree' folder
   bool get hasNodes =>
-      nodes.isNotEmpty && nodes.length > 1; // More than just root
+      nodes[TreeBuilder.treeRootId]?.childIds.isNotEmpty ?? false;
 
   /// Create a copy with updated values
   TreeState copyWith({
@@ -52,12 +51,17 @@ class TreeState {
 
 /// State notifier for virtual tree
 class TreeStateNotifier extends StateNotifier<TreeState> {
-  TreeStateNotifier() : super(const TreeState(nodes: {}, rootId: ''));
+  TreeStateNotifier()
+    : super(
+        const TreeState(
+          nodes: {},
+          rootId: TreeBuilder.rootId,
+        ),
+      );
 
   final TreeBuilder _treeBuilder = TreeBuilder();
 
   // Scanner integration callbacks
-  void Function(String, String, String)? onNodeCreatedCallback;
   void Function(String, String)? onNodeEditedCallback;
   void Function(Set<String>)? onSelectionChangedCallback;
 
@@ -68,7 +72,6 @@ class TreeStateNotifier extends StateNotifier<TreeState> {
     final oldSelectedFileIds = state.selectedFileIds;
 
     // 2. Build a brand new tree from the single source of truth.
-    //    The tree builder now handles virtual file preservation internally.
     final treeData = _treeBuilder.buildTree(
       files: files,
       scanMetadata: metadata,
@@ -212,41 +215,6 @@ class TreeStateNotifier extends StateNotifier<TreeState> {
     }
   }
 
-  /// Create a new node (file or folder)
-  void createNode({
-    required String parentId,
-    required String name,
-    required bool isFolder,
-    String? content,
-  }) {
-    final parent = state.nodes[parentId];
-    if (parent == null) return;
-
-    // For folders, we can still create them directly as they have no file data
-    if (isFolder) {
-      final virtualPath = path.join(parent.virtualPath, name);
-      final newNode = TreeNode(
-        name: name,
-        type: NodeType.folder,
-        parentId: parentId,
-        virtualPath: virtualPath,
-        isVirtual: true,
-        source: FileSource.created,
-        isExpanded: true,
-      );
-      final newNodes = Map<String, TreeNode>.from(state.nodes);
-      newNodes[newNode.id] = newNode;
-      final updatedParent = parent.copyWith(
-        childIds: [...parent.childIds, newNode.id],
-      );
-      newNodes[parentId] = updatedParent;
-      state = state.copyWith(nodes: newNodes);
-    } else {
-      // For files, simply trigger the callback.
-      // DO NOT create a TreeNode here. Let the FileListNotifier handle it.
-      onNodeCreatedCallback?.call(parent.virtualPath, name, content ?? '');
-    }
-  }
 
   /// Edit node content (for files)
   void editNodeContent(String nodeId, String content) {
@@ -299,53 +267,6 @@ class TreeStateNotifier extends StateNotifier<TreeState> {
 
     // Notify scanner of cleared selection
     onSelectionChangedCallback?.call({});
-  }
-
-  /// Directly adds a virtual file node to the tree.
-  void addVirtualFileNode({
-    required String parentNodeId,
-    required ScannedFile file,
-  }) {
-    final parent = state.nodes[parentNodeId];
-    if (parent == null || parent.type == NodeType.file) return;
-
-    final virtualPath = path.join(parent.virtualPath, file.name);
-    final nodeId = 'node_${file.id}';
-
-    // Create the new tree node, correctly linked to the ScannedFile ID
-    final newNode = TreeNode(
-      id: nodeId,
-      name: file.name,
-      type: NodeType.file,
-      parentId: parentNodeId,
-      virtualPath: virtualPath,
-      fileId: file.id,
-      isVirtual: true,
-      source: FileSource.created,
-      isSelected: true, // Auto-select the new file
-    );
-
-    // Add the new node to the tree
-    final newNodes = Map<String, TreeNode>.from(state.nodes);
-    newNodes[newNode.id] = newNode;
-
-    // Add the new node to its parent's children list
-    final updatedParent = parent.copyWith(
-      childIds: [...parent.childIds, newNode.id],
-    );
-    newNodes[parentNodeId] = updatedParent;
-
-    // Update the selection state
-    final newSelection = Set<String>.from(state.selectedNodeIds)
-      ..add(newNode.id);
-
-    state = state.copyWith(
-      nodes: newNodes,
-      selectedNodeIds: newSelection,
-    );
-
-    // Notify the FileListNotifier that the selection has changed
-    onSelectionChangedCallback?.call(state.selectedFileIds);
   }
 }
 

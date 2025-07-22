@@ -22,6 +22,7 @@ class SelectionState {
     this.selectedFileIds = const {},
     this.scanHistory = const [],
     this.isProcessing = false,
+    this.sessionStarted = false, // New: Tracks if an editor session is active
     this.error,
     this.combinedContent = '',
     this.virtualTreeJson,
@@ -32,6 +33,7 @@ class SelectionState {
   final Set<String> selectedFileIds; // Now using IDs instead of paths
   final List<ScanMetadata> scanHistory;
   final bool isProcessing;
+  final bool sessionStarted;
   final String? error;
   final String combinedContent;
   final String? virtualTreeJson;
@@ -65,6 +67,7 @@ class SelectionState {
     Set<String>? selectedFileIds,
     List<ScanMetadata>? scanHistory,
     bool? isProcessing,
+    bool? sessionStarted,
     String? error,
     bool clearError = false,
     String? combinedContent,
@@ -75,6 +78,7 @@ class SelectionState {
       selectedFileIds: selectedFileIds ?? this.selectedFileIds,
       scanHistory: scanHistory ?? this.scanHistory,
       isProcessing: isProcessing ?? this.isProcessing,
+      sessionStarted: sessionStarted ?? this.sessionStarted,
       error: clearError ? null : error ?? this.error,
       combinedContent: combinedContent ?? this.combinedContent,
       virtualTreeJson: virtualTreeJson ?? this.virtualTreeJson,
@@ -119,7 +123,6 @@ class FileListNotifier extends StateNotifier<SelectionState> {
   void initializeVirtualTree(VirtualTreeAPI tree) {
     virtualTree = tree;
     tree
-      ..onNodeCreated(onVirtualFileCreated)
       ..onNodeEdited(onFileContentChanged)
       ..onSelectionChanged(updateSelectionFromTree);
   }
@@ -133,7 +136,11 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     List<XFile> items, {
     required ScanSource source,
   }) async {
-    state = state.copyWith(isProcessing: true, clearError: true);
+    state = state.copyWith(
+      isProcessing: true,
+      clearError: true,
+      sessionStarted: true,
+    );
 
     try {
       final filterSettings = ref.read(preferencesProvider).settings;
@@ -182,6 +189,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     state = state.copyWith(
       fileMap: newFileMap,
       selectedFileIds: updatedSelection,
+      sessionStarted: true, // Adding any file starts the session
     );
 
     // INSTANT UI UPDATE - No debouncing!
@@ -203,6 +211,31 @@ class FileListNotifier extends StateNotifier<SelectionState> {
   //============================================================================
   // PUBLIC API
   //============================================================================
+
+  /// New: Refreshes the content of all non-virtual files from disk.
+  Future<void> refreshAllContents() async {
+    state = state.copyWith(isProcessing: true);
+    final filesToRefresh = state.fileMap.values.where((f) => !f.isVirtual);
+    final newFileMap = Map<String, ScannedFile>.from(state.fileMap);
+
+    for (final file in filesToRefresh) {
+      try {
+        // Reload content from disk
+        final reloadedFile = await fileScanner.loadFileContent(file);
+        // Overwrite the file in the map, discarding any edits
+        newFileMap[reloadedFile.id] = reloadedFile.copyWith(
+          editedContent: null,
+        );
+      } catch (_) {
+        // Ignore errors for single file reloads
+      }
+    }
+
+    state = state.copyWith(fileMap: newFileMap, isProcessing: false);
+    // Trigger UI rebuilds
+    _rebuildCombinedContent();
+    _rebuildTreeFromState();
+  }
 
   Future<void> pickFiles(BuildContext context) async {
     final files = await openFiles();
@@ -408,58 +441,20 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     _rebuildCombinedContent();
   }
 
-  /// Called when a virtual file is created
-  void onVirtualFileCreated(
-    String parentNodeId,
-    String fileName,
-    String content,
-  ) {
-    // Get the parent node's virtual path from the tree
-    final parentVirtualPath =
-        virtualTree?.getNodeVirtualPath(parentNodeId) ?? '';
-
-    // Build the correct virtual path for the new file
-    final virtualPath = parentVirtualPath.isEmpty
-        ? fileName
-        : '$parentVirtualPath/$fileName';
-
-    // Create the ScannedFile data object with the correct path
+  /// New: Called from UI to create a virtual file.
+  /// This creates the data object and triggers a tree rebuild.
+  void createVirtualFile(String fileName, String content) {
+    // Virtual path is just the file name, as it will live at the top level
     final virtualFile = fileScanner.createVirtualFile(
       name: fileName,
       content: content,
-      virtualPath: virtualPath,
+      virtualPath: fileName,
     );
 
-    // Add the new file to our central file map
-    final newFileMap = Map<String, ScannedFile>.from(state.fileMap);
-    newFileMap[virtualFile.id] = virtualFile;
-
-    // Update the state with the new file
-    state = state.copyWith(
-      fileMap: newFileMap,
-    );
-
-    // NOW, command the virtual tree to add the UI node for this new file
-    virtualTree?.addVirtualFileNode(
-      parentNodeId: parentNodeId,
-      file: virtualFile,
-    );
+    // Add to state and rebuild everything. This is simpler and more robust.
+    _addFileToState(virtualFile);
   }
 
-  /// Called when a virtual folder is created
-  void onVirtualFolderCreated(
-    String parentNodeId,
-    String folderName,
-  ) {
-    if (virtualTree == null) return;
-
-    // For virtual folders, we delegate directly to the tree state
-    // since folders don't have associated file data
-    virtualTree!.createVirtualFolder(
-      parentNodeId: parentNodeId,
-      folderName: folderName,
-    );
-  }
 
   /// Removes a set of nodes and all their descendants from the state.
   /// This is the ONLY way to remove items to ensure proper cleanup.
@@ -518,10 +513,15 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     final newScanHistory = _removePathsFromScanHistory(sourcePathsToRemove);
 
     // --- Step 4: Update state and trigger a full tree rebuild ---
+    final shouldResetSession =
+        newFileMap.isEmpty && state.sessionStarted && !state.hasFiles;
+
     state = state.copyWith(
       fileMap: newFileMap,
       selectedFileIds: newSelectedFileIds,
       scanHistory: newScanHistory,
+      // If all files are removed, end the session to return to home screen
+      sessionStarted: shouldResetSession ? false : state.sessionStarted,
     );
 
     // This rebuilds the tree from the now-clean master state

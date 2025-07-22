@@ -41,11 +41,6 @@ class VirtualTreeImpl implements VirtualTreeAPI {
   }
 
   @override
-  void onNodeCreated(void Function(String, String, String) callback) {
-    _notifier.onNodeCreatedCallback = callback;
-  }
-
-  @override
   void onNodeEdited(void Function(String, String) callback) {
     _notifier.onNodeEditedCallback = callback;
   }
@@ -73,30 +68,11 @@ class VirtualTreeImpl implements VirtualTreeAPI {
   }
 
   @override
-  void addVirtualFileNode({
-    required String parentNodeId,
-    required ScannedFile file,
-  }) {
-    _notifier.addVirtualFileNode(parentNodeId: parentNodeId, file: file);
-  }
-
-  @override
   String? getNodeVirtualPath(String nodeId) {
     final treeData = _notifier.getCurrentTreeData();
     return treeData.nodes[nodeId]?.virtualPath;
   }
 
-  @override
-  void createVirtualFolder({
-    required String parentNodeId,
-    required String folderName,
-  }) {
-    _notifier.createNode(
-      parentId: parentNodeId,
-      name: folderName,
-      isFolder: true,
-    );
-  }
 
   /// Force content rebuild (useful for debugging)
   void forceContentRebuild() {

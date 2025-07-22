@@ -5,7 +5,6 @@ import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../scan/ui/file_display_helper.dart';
-import '../../scan/ui/paste_paths_dialog.dart';
 import 'file_edit_dialog.dart';
 
 /// Folder selection state
@@ -129,18 +128,6 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
 
                   // Hover actions
                   if (_isHovered) ...[
-                    if (widget.node.type == NodeType.folder) ...[
-                      _buildHoverAction(
-                        icon: Icons.create_new_folder_outlined,
-                        tooltip: 'New Folder',
-                        onPressed: _createNewFolder,
-                      ),
-                      _buildHoverAction(
-                        icon: Icons.note_add_outlined,
-                        tooltip: 'New File',
-                        onPressed: _createNewFile,
-                      ),
-                    ],
                     if (widget.node.type == NodeType.file && file != null) ...[
                       _buildHoverAction(
                         icon: Icons.edit_outlined,
@@ -392,12 +379,9 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
       );
     }
 
+    // Note: New File/Folder actions are now in the VirtualTreeView header
     if (widget.node.type == NodeType.folder) {
       items.addAll([
-        menuItem('new_file', Icons.note_add, 'New File'),
-        menuItem('new_folder', Icons.create_new_folder, 'New Folder'),
-        menuItem('paste_paths', Icons.content_paste_go, 'Paste Paths...'),
-        const PopupMenuDivider(),
         menuItem('select_all', Icons.select_all, 'Select All Files'),
       ]);
     }
@@ -410,24 +394,20 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
     }
 
     // Common actions
-    items.addAll([
-      const PopupMenuDivider(),
-      menuItem('remove', Icons.delete_outline, 'Remove'),
-    ]);
+    // Add a divider if there were previous items
+    if (items.isNotEmpty) {
+      items.add(const PopupMenuDivider());
+    }
+    items.add(menuItem('remove', Icons.delete_outline, 'Remove'));
 
     return items;
   }
 
   void _handleContextMenuAction(String action) {
     final notifier = ref.read(treeStateProvider.notifier);
+    final selectionNotifier = ref.read(selectionProvider.notifier);
 
     switch (action) {
-      case 'new_file':
-        _createNewFile();
-      case 'new_folder':
-        _createNewFolder();
-      case 'paste_paths':
-        _pastePaths();
       case 'select_all':
         notifier.selectFolder(widget.node.id);
       case 'edit':
@@ -436,72 +416,10 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
         _copyPath();
       case 'remove':
         // Use the FileListNotifier's removeNodes method for proper cleanup
-        ref.read(selectionProvider.notifier).removeNodes({widget.node.id});
+        selectionNotifier.removeNodes({widget.node.id});
     }
   }
 
-  void _createNewFile() {
-    // Get existing names in the parent folder
-    final parentNode = widget.node;
-    final existingNames = parentNode.childIds
-        .map((id) => widget.nodes[id]?.name)
-        .whereType<String>()
-        .toSet();
-
-    _showCreateDialog(
-      title: 'New File',
-      hint: 'Enter file name (e.g., script.js)',
-      existingNames: existingNames,
-      onConfirm: (name) async {
-        // Show the file edit dialog
-        final content = await showFileEditDialog(
-          context,
-          fileName: name,
-          initialContent: '',
-        );
-
-        // If content is not null (user clicked Save), create the file
-        if (content != null) {
-          // We now call the FileListNotifier, not the TreeStateNotifier.
-          // We pass the PARENT NODE ID so the tree knows where to put the new file.
-          ref
-              .read(selectionProvider.notifier)
-              .onVirtualFileCreated(
-                widget.node.id, // The ID of the folder node we clicked on
-                name,
-                content,
-              );
-        }
-      },
-    );
-  }
-
-  void _createNewFolder() {
-    // Get existing names in the parent folder
-    final parentNode = widget.node;
-    final existingNames = parentNode.childIds
-        .map((id) => widget.nodes[id]?.name)
-        .whereType<String>()
-        .toSet();
-
-    _showCreateDialog(
-      title: 'New Folder',
-      hint: 'Enter folder name',
-      existingNames: existingNames,
-      onConfirm: (name) {
-        ref
-            .read(selectionProvider.notifier)
-            .onVirtualFolderCreated(
-              widget.node.id,
-              name,
-            );
-      },
-    );
-  }
-
-  void _pastePaths() {
-    PastePathsDialog.show(context);
-  }
 
   Future<void> _editFile() async {
     // Get the ScannedFile from the selection provider
@@ -562,65 +480,4 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
     );
   }
 
-  void _showCreateDialog({
-    required String title,
-    required String hint,
-    required Set<String> existingNames,
-    required void Function(String) onConfirm,
-  }) {
-    final controller = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Form(
-          key: formKey,
-          child: TextFormField(
-            controller: controller,
-            autofocus: true,
-            decoration: InputDecoration(
-              hintText: hint,
-              border: const OutlineInputBorder(),
-            ),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Name cannot be empty';
-              }
-              if (existingNames.contains(value.trim())) {
-                return 'A file or folder with this name already exists';
-              }
-              // Check for invalid file name characters
-              if (RegExp(r'[\\/:*?"<>|]').hasMatch(value.trim())) {
-                return 'Name contains invalid characters';
-              }
-              return null;
-            },
-            onFieldSubmitted: (_) {
-              if (formKey.currentState!.validate()) {
-                Navigator.of(context).pop();
-                onConfirm(controller.text.trim());
-              }
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                Navigator.of(context).pop();
-                onConfirm(controller.text.trim());
-              }
-            },
-            child: const Text('Create'),
-          ),
-        ],
-      ),
-    );
-  }
 }
