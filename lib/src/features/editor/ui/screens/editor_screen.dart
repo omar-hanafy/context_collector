@@ -149,15 +149,55 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     if (newSettings != null && mounted) {
       await _saveAndApplySettings(newSettings);
     }
+
+    // *** THE FIX ***
+    // 1. Force Flutter's native text input plugin to release the keyboard.
+    //    This is the key to solving the "dead keyboard" issue on macOS.
+    await SystemChannels.textInput.invokeMethod<void>('TextInput.clearClient');
+    
+    // 2. Wait a brief moment for the engine to process the channel message.
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    
+    // 3. Now that the path is clear, tell Monaco to take focus.
+    if (mounted) {
+      ref.read(monacoEditorServiceProvider).bridge.requestFocus();
+    }
   }
 
-  void _copyToClipboard(BuildContext context, String content) {
-    Clipboard.setData(ClipboardData(text: content))
-        .then((_) => context.showOk('Content copied to clipboard!'))
-        .catchError(
-          (dynamic error) =>
-              context.showErr('Error copying to clipboard: $error'),
-        );
+  /// NEW: A single, reliable method to copy the editor's current content
+  Future<void> _copyEditorContentToClipboard() async {
+    String content = '';
+
+    try {
+      // 1. Try to get the live content from the Monaco editor
+      final bridge = ref.read(monacoEditorServiceProvider).bridge;
+      content = await bridge.getCurrentContent();
+    } catch (e) {
+      debugPrint('[EditorScreen] Failed to get live content: $e');
+    }
+
+    // 2. If we couldn't get content from the editor, fall back to the state
+    if (content.isEmpty) {
+      content = ref.read(selectionProvider).combinedContent;
+    }
+
+    // 3. Copy to clipboard and show feedback
+    if (content.isNotEmpty) {
+      try {
+        await Clipboard.setData(ClipboardData(text: content));
+        if (mounted) {
+          context.showOk('Editor content copied to clipboard!');
+        }
+      } catch (e) {
+        if (mounted) {
+          context.showErr('Error copying to clipboard: $e');
+        }
+      }
+    } else {
+      if (mounted) {
+        context.showInfo('Nothing to copy.');
+      }
+    }
   }
 
   @override
@@ -193,13 +233,24 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
-                onSelected: (value) {
+                onSelected: (value) async {
                   if (value == 'files') {
                     selectionNotifier.pickFiles(context);
                   } else if (value == 'folder') {
                     selectionNotifier.pickDirectory(context);
                   } else if (value == 'paste_paths') {
-                    PastePathsDialog.show(context);
+                    await PastePathsDialog.show(context);
+                    // *** THE FIX ***
+                    // 1. Force Flutter's native text input plugin to release the keyboard.
+                    await SystemChannels.textInput.invokeMethod<void>('TextInput.clearClient');
+                    
+                    // 2. Wait a brief moment for the engine to process.
+                    await Future<void>.delayed(const Duration(milliseconds: 50));
+                    
+                    // 3. Now tell Monaco to take focus.
+                    if (context.mounted) {
+                      ref.read(monacoEditorServiceProvider).bridge.requestFocus();
+                    }
                   }
                 },
                 itemBuilder: (context) => [
@@ -403,12 +454,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                                                   _showEnhancedEditorSettings(
                                                     context,
                                                   ),
-                                              onCopyContent: () =>
-                                                  _copyToClipboard(
-                                                    context,
-                                                    selectionState
-                                                        .combinedContent,
-                                                  ),
+                                              onCopyContent:
+                                                  _copyEditorContentToClipboard,
                                             ),
                                           ),
                                         )
@@ -532,8 +579,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             if (editorStatus.isReady)
               MonacoEditorInfoBar(
                 bridge: ref.read(monacoEditorServiceProvider).bridge,
-                onCopy: () =>
-                    _copyToClipboard(context, selectionState.combinedContent),
+                onCopy: _copyEditorContentToClipboard,
               ),
           ],
         ),

@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/consts.dart';
 import '../../settings/presentation/ui/settings_screen.dart';
+import '../../virtual_tree/ui/virtual_tree_view.dart';
 import '../state/file_list_state.dart';
 import 'paste_paths_dialog.dart';
 
@@ -24,9 +25,6 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
   @override
   Widget build(BuildContext context) {
     final selectionNotifier = ref.read(selectionProvider.notifier);
-    // State watching is no longer needed here since parent handles switching
-
-    // State is now handled by parent ScanContainer
 
     return DropTarget(
       onDragEntered: (_) => setState(() => _isDragging = true),
@@ -216,7 +214,7 @@ class HomeScreenContent extends ConsumerWidget {
 
                     // Subtitle
                     Text(
-                      'Drag and drop files or directories, browse for them,\nor paste file paths to combine content into a single collection',
+                      'Drag and drop, browse, paste paths, or start with an empty tree.',
                       style: theme.textTheme.bodyLarge?.copyWith(
                         color: theme.colorScheme.onSurface.addOpacity(0.7),
                       ),
@@ -280,6 +278,36 @@ class HomeScreenContent extends ConsumerWidget {
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Or divider
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Expanded(child: Divider(endIndent: 16)),
+                        Text(
+                          'OR',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurface.addOpacity(0.5),
+                          ),
+                        ),
+                        const Expanded(child: Divider(indent: 16)),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    // New "Start Empty" button
+                    TextButton.icon(
+                      onPressed: () =>
+                          VirtualTreeView.showCreateVirtualFileFlow(context, ref),
+                      icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
+                      label: const Text('Start with a New File'),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 16),
 

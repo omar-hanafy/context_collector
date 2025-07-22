@@ -115,6 +115,35 @@ class MonacoBridgePlatform extends ChangeNotifier with MonacoEditorActions {
     await _webViewController!.runJavaScript(MonacoScripts.scrollToBottomScript);
   }
 
+  /// Gets the current content directly from the Monaco editor instance.
+  ///
+  /// This is the most reliable way to get the latest content, including any
+  /// user edits that haven't been pushed back to the Flutter state.
+  Future<String> getCurrentContent() async {
+    if (_webViewController == null) return '';
+    try {
+      // Use 'window.editor?.getValue()' for safety. It won't throw an error
+      // if the editor isn't ready, and '?? ""' handles the null case.
+      final result = await _webViewController!
+          .runJavaScriptReturningResult('window.editor?.getValue() ?? ""');
+      return result?.toString() ?? '';
+    } catch (e) {
+      debugPrint('[MonacoBridgePlatform] Failed to get editor content: $e');
+      return ''; // Return empty string on error
+    }
+  }
+
+  /// Programmatically sets focus on the Monaco editor instance in the WebView.
+  ///
+  /// This is crucial for restoring keyboard input on macOS after a Flutter
+  /// dialog or modal has been shown and dismissed.
+  Future<void> requestFocus() async {
+    if (_webViewController == null) return;
+    // The editor.focus() call is the official Monaco API to grab focus.
+    await _webViewController!.runJavaScript('window.editor?.focus()');
+    debugPrint('[MonacoBridgePlatform] Focus requested.');
+  }
+
   // --- Overridden Methods ---
 
   @override

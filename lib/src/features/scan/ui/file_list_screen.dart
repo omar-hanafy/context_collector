@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../virtual_tree/providers/virtual_tree_provider.dart';
@@ -28,7 +27,6 @@ class _FileListScreenState extends ConsumerState<FileListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final selectionState = ref.watch(selectionProvider);
     final selectionNotifier = ref.read(selectionProvider.notifier);
 
     // Listen for errors
@@ -47,33 +45,9 @@ class _FileListScreenState extends ConsumerState<FileListScreen> {
       }
     });
 
-    return selectionState.hasFiles
-        ? const VirtualTreeView()
-        : Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.folder_open,
-                  size: 64,
-                  color: Theme.of(context).colorScheme.primary.addOpacity(0.5),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Drop files or directories here',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Or use the buttons in the app bar',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.addOpacity(0.6),
-                  ),
-                ),
-              ],
-            ),
-          );
+    // The FileListScreen now always shows the VirtualTreeView.
+    // The parent widget is responsible for switching between the HomeScreen and this screen.
+    // The VirtualTreeView itself handles the display of an empty state.
+    return const VirtualTreeView();
   }
 }
