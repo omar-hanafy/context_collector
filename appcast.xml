@@ -6,6 +6,28 @@
     <description>Most recent changes with links to updates.</description>
     <language>en</language>
     <item>
+      <title>Version untagged-0eb025062ab86254d79c</title>
+      <pubDate>Tue, 22 Jul 2025 17:46:31 -0000</pubDate>
+      <description><![CDATA[### A Major Overhaul for a Better Experience
+
+**A New User Interface:**
+* The application has been completely redesigned for a cleaner, more modern, and intuitive user experience.
+
+**Smarter File Management:**
+* Files are now organized in a structured **File Tree** instead of a flat list, making it easier to navigate complex projects.
+
+**Enhanced Code Editor:**
+* Enhanced separator between the virtual tree and the Monaco.
+* The info bar below the editor has been updated and now includes a **Token Counter** to estimate context size.
+* The main settings dialog is now organized more organized.
+* File filtering has been simplified to a **blacklist** system for excluding specific files or extensions.
+* You can import files/directories through their paths.
+
+**Improved Performance and Reliability:**
+* The application's core has been re-architected to be faster, more stable, and more efficient.]]></description>
+      <enclosure url="https://github.com/omar-hanafy/context_collector/releases/download/untagged-0eb025062ab86254d79c/ContextCollector-2.1.0.dmg" length="31617599" type="application/octet-stream" sparkle:version="untagged-0eb025062ab86254d79c" sparkle:shortVersionString="untagged-0eb025062ab86254d79c" sparkle:os="macos"/>
+    </item>
+    <item>
       <title>Version releases</title>
       <pubDate>Thu, 29 May 2025 02:53:30 -0000</pubDate>
       <description><![CDATA[*First stable release*
@@ -13,6 +35,7 @@
 MacOS: Universal
 Windows: 64/86
 ]]></description>
+      <enclosure url="https://github.com/omar-hanafy/context_collector/releases/download/releases/ContextCollector-v1.1.0%2B1.dmg" length="31647353" type="application/octet-stream" sparkle:version="releases" sparkle:shortVersionString="releases" sparkle:os="macos"/>
     </item>
   </channel>
 </rss>
