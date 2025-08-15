@@ -9,11 +9,15 @@ class MonacoEditorInfoBar extends ConsumerWidget {
   const MonacoEditorInfoBar({
     required this.bridge,
     required this.onCopy,
+    this.onCopyFullPaths,
+    this.onCopyAiPaths,
     super.key,
   });
 
   final MonacoBridgePlatform bridge;
   final VoidCallback onCopy;
+  final VoidCallback? onCopyFullPaths;
+  final VoidCallback? onCopyAiPaths;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -86,12 +90,26 @@ class MonacoEditorInfoBar extends ConsumerWidget {
         tooltip: 'Format Content',
         onPressed: bridge.format,
       ),
-      IconButton(
-        icon: const Icon(EneftyIcons.copy_outline, size: 20),
-        tooltip: 'Copy Content',
-        onPressed: onCopy,
+      GestureDetector(
+        onSecondaryTapUp: (details) {
+          if (onCopyFullPaths != null) {
+            _showCopyMenu(context, details.globalPosition);
+          }
+        },
+        child: IconButton(
+          icon: const Icon(EneftyIcons.copy_outline, size: 20),
+          tooltip: 'Copy Content (Right-click for full paths)',
+          onPressed: onCopy, // Left-click is the default action
+        ),
       ),
     ];
+  }
+
+  void _showCopyMenu(BuildContext context, Offset position) {
+    // Simplified: just show copy full paths option
+    if (onCopyFullPaths != null) {
+      onCopyFullPaths!();
+    }
   }
 }
 

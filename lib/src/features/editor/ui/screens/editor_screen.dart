@@ -164,6 +164,34 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     }
   }
 
+  /// Copy full paths of selected files to clipboard
+  Future<void> _copyFullPathsToClipboard() async {
+    try {
+      await ref.read(selectionProvider.notifier).copyFullPathsToClipboard();
+      if (mounted) {
+        context.showOk('Full paths copied to clipboard!');
+      }
+    } catch (e) {
+      if (mounted) {
+        context.showErr('Error copying paths: $e');
+      }
+    }
+  }
+
+  /// Copy AI-formatted paths of selected files to clipboard
+  Future<void> _copyAiPathsToClipboard() async {
+    try {
+      await ref.read(selectionProvider.notifier).copyAiPathsToClipboard();
+      if (mounted) {
+        context.showOk('AI paths copied to clipboard!');
+      }
+    } catch (e) {
+      if (mounted) {
+        context.showErr('Error copying AI paths: $e');
+      }
+    }
+  }
+
   /// NEW: A single, reliable method to copy the editor's current content
   Future<void> _copyEditorContentToClipboard() async {
     String content = '';
@@ -580,6 +608,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
               MonacoEditorInfoBar(
                 bridge: ref.read(monacoEditorServiceProvider).bridge,
                 onCopy: _copyEditorContentToClipboard,
+                onCopyFullPaths: _copyFullPathsToClipboard,
+                onCopyAiPaths: _copyAiPathsToClipboard,
               ),
           ],
         ),

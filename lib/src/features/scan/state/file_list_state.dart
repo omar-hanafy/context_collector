@@ -1,9 +1,11 @@
 import 'dart:io';
+import 'dart:math';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
 
 import '../../settings/presentation/state/preferences_notifier.dart';
 import '../../virtual_tree/api/virtual_tree_api.dart';
@@ -370,13 +372,85 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     }
   }
 
-  /// Copies the combined content to the system clipboard.
-  Future<void> copyToClipboard() async {
+  /// Copies the combined markdown context to the system clipboard.
+  Future<void> copyContextToClipboard() async {
     if (state.combinedContent.isEmpty) {
       state = state.copyWith(error: 'No content to copy');
       return;
     }
     await Clipboard.setData(ClipboardData(text: state.combinedContent));
+    // NOTE: The calling UI should show a confirmation SnackBar.
+  }
+
+  /// Copies the full paths of selected files to the clipboard.
+  Future<void> copyFullPathsToClipboard() async {
+    final selectedRealFiles =
+        state.selectedFiles.where((f) => !f.isVirtual).toList();
+    if (selectedRealFiles.isEmpty) {
+      state = state.copyWith(error: 'No real files selected to copy paths');
+      return;
+    }
+
+    final paths = selectedRealFiles.map((f) => f.fullPath).toList();
+    paths.sort();
+
+    final content = paths.join('\n');
+    await Clipboard.setData(ClipboardData(text: content));
+    // NOTE: The calling UI should show a confirmation SnackBar.
+  }
+
+  /// Copies the AI-formatted relative paths of selected files to the clipboard.
+  Future<void> copyAiPathsToClipboard() async {
+    final selectedRealFiles =
+        state.selectedFiles.where((f) => !f.isVirtual).toList();
+    if (selectedRealFiles.isEmpty) {
+      state = state.copyWith(error: 'No real files selected to copy AI paths');
+      return;
+    }
+
+    final aiPaths = <String>[];
+
+    // Find the common base path from all selected files
+    final commonBasePath = _findCommonBasePath(
+      selectedRealFiles.map((f) => f.fullPath).toList(),
+    );
+
+    // Generate relative paths for real files
+    for (final file in selectedRealFiles) {
+      final relative = p.relative(file.fullPath, from: commonBasePath);
+      aiPaths.add('@${relative.replaceAll(r'\', '/')}');
+    }
+
+    aiPaths.sort();
+    final content = aiPaths.join('\n');
+    await Clipboard.setData(ClipboardData(text: content));
+    // NOTE: The calling UI should show a confirmation SnackBar.
+  }
+
+  /// Finds the longest common directory path from a list of file paths.
+  String _findCommonBasePath(List<String> paths) {
+    if (paths.isEmpty) return '';
+    if (paths.length == 1) return p.dirname(paths.first);
+
+    // Split all paths into components
+    final componentsList = paths.map((path) => p.split(path)).toList();
+
+    // Find the shortest path to limit our search
+    final minLength = componentsList.map((c) => c.length).reduce(min);
+
+    // Find common components
+    final commonComponents = <String>[];
+    for (int i = 0; i < minLength - 1; i++) {
+      // -1 to exclude the filename
+      final component = componentsList[0][i];
+      if (componentsList.every((components) => components[i] == component)) {
+        commonComponents.add(component);
+      } else {
+        break;
+      }
+    }
+
+    return p.joinAll(commonComponents);
   }
 
   /// Clears the current error message from the state.

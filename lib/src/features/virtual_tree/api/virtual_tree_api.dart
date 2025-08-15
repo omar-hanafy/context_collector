@@ -25,6 +25,9 @@ abstract class VirtualTreeAPI {
   /// Content building (handled by scanner in our case)
   Future<String> buildCombinedContent(Set<String> selectedIds);
 
+  /// NEW: Build AI-formatted paths from a set of selected file IDs.
+  String buildAiPaths(Set<String> selectedFileIds);
+
   /// Tree operations callbacks
   void onNodeEdited(void Function(String fileId, String content) callback);
 
