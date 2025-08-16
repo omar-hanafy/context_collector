@@ -34,10 +34,7 @@ void main() async {
   // Create ProviderScope container for early access
   final container = ProviderContainer();
 
-  // 🤫 START MONACO ASSETS SILENTLY IN BACKGROUND
-  _startMonacoAssetsSilently(container);
-
-  // 🚀 START EDITOR PRELOADING (will wait for assets automatically)
+  // 🚀 START EDITOR PRELOADING
   _startEditorPreloading(container);
 
   // 🔄 INITIALIZE AUTO UPDATER
@@ -52,53 +49,24 @@ void main() async {
   );
 }
 
-/// Start Monaco asset copying silently in background - no UI indication
-void _startMonacoAssetsSilently(ProviderContainer container) {
-  debugPrint(
-    '[ContextCollector] 🤫 Starting Monaco assets SILENTLY in background...',
-  );
-
-  // Fire and forget - completely silent, no UI changes
-  container
-      .read(monacoProvider.notifier)
-      .initialize()
-      .then((_) {
-        debugPrint('[ContextCollector] ✅ Monaco assets ready silently');
-      })
-      .catchError((dynamic error) {
-        // Silent failure - will be retried when user actually needs the editor
-        debugPrint(
-          '[ContextCollector] ⚠️ Silent Monaco asset initialization failed: $error',
-        );
-      });
-}
-
-/// Start editor preloading - will automatically wait for assets
+/// Start editor preloading
 void _startEditorPreloading(ProviderContainer container) {
   debugPrint('[ContextCollector] 🚀 Starting editor preloading...');
 
-  // The service provider will automatically listen to asset status
-  // and initialize the editor when assets are ready
-  container
-    ..read(monacoEditorServiceProvider)
-    // Also listen to status for debugging
-    ..listen<EditorStatus>(
-      monacoEditorStatusProvider,
-      (previous, next) {
-        debugPrint(
-          '[ContextCollector] Editor status changed: ${previous?.lifecycle} → ${next.lifecycle}',
-        );
-        debugPrint('  Has Content: ${next.hasContent}');
-        if (next.error != null) {
-          debugPrint('  Error: ${next.error}');
-        }
-      },
-    );
+  // Initialize the Monaco service
+  container.read(monacoEditorStatusProvider.notifier).initialize();
 
-  // Check initial state
-  final initialStatus = container.read(monacoEditorStatusProvider);
-  debugPrint(
-    '[ContextCollector] Initial editor status: ${initialStatus.lifecycle}',
+  // Listen to status for debugging
+  container.listen<EditorStatus>(
+    monacoEditorStatusProvider,
+    (previous, next) {
+      debugPrint(
+        '[ContextCollector] Editor status changed: ${previous?.lifecycle} → ${next.lifecycle}',
+      );
+      if (next.error != null) {
+        debugPrint('  Error: ${next.error}');
+      }
+    },
   );
 }
 
@@ -144,13 +112,8 @@ class ContextCollectorApp extends ConsumerWidget {
       themeMode: themeMode,
       // Register the route observer for navigation tracking
       navigatorObservers: [routeObserver],
-      home: WebViewPlatformUtils.buildCompatibilityChecker(
-        // Wrap with GlobalMonacoContainer to ensure editor is always present
-        child: const GlobalMonacoContainer(
-          child: HomeScreenWithDrop(),
-        ),
-        // The fallback is handled by buildCompatibilityChecker itself
-        fallback: const SizedBox.shrink(),
+      home: const GlobalMonacoContainer(
+        child: HomeScreenWithDrop(),
       ),
       debugShowCheckedModeBanner: false,
     );

@@ -1,13 +1,15 @@
-import 'package:context_collector/context_collector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_helper_utils/flutter_helper_utils.dart';
+import 'package:flutter_monaco/flutter_monaco.dart';
+
+import '../../../../../context_collector.dart';
 
 /// Quick sidebar for editor settings
 class QuickSidebar extends StatelessWidget {
   const QuickSidebar({
-    required this.settings,
+    required this.options,
     required this.selectionState,
-    required this.onSettingsChanged,
+    required this.onOptionsChanged,
     required this.onWordWrapToggle,
     required this.onIncreaseFontSize,
     required this.onDecreaseFontSize,
@@ -16,9 +18,9 @@ class QuickSidebar extends StatelessWidget {
     super.key,
   });
 
-  final EditorSettings settings;
+  final EditorOptions options;
   final SelectionState selectionState;
-  final ValueChanged<EditorSettings> onSettingsChanged;
+  final ValueChanged<EditorOptions> onOptionsChanged;
   final VoidCallback onWordWrapToggle;
   final VoidCallback onIncreaseFontSize;
   final VoidCallback onDecreaseFontSize;
@@ -47,7 +49,7 @@ class QuickSidebar extends StatelessWidget {
           const SectionTitle(title: 'Font Size'),
           const SizedBox(height: 8),
           FontSizeControl(
-            fontSize: settings.fontSize,
+            fontSize: options.fontSize,
             onIncrease: onIncreaseFontSize,
             onDecrease: onDecreaseFontSize,
           ),
@@ -61,34 +63,36 @@ class QuickSidebar extends StatelessWidget {
           ToggleTile(
             icon: Icons.wrap_text,
             title: 'Word Wrap',
-            value: settings.wordWrap != WordWrap.off,
+            value: options.wordWrap,
             onChanged: (_) => onWordWrapToggle(),
           ),
 
           ToggleTile(
             icon: Icons.format_list_numbered,
             title: 'Line Numbers',
-            value: settings.showLineNumbers,
+            value: options.lineNumbers,
             onChanged: (value) {
-              onSettingsChanged(settings.copyWith(showLineNumbers: value));
+              onOptionsChanged(options.copyWith(
+                lineNumbers: value,
+              ));
             },
           ),
 
           ToggleTile(
             icon: Icons.map_outlined,
             title: 'Minimap',
-            value: settings.showMinimap,
+            value: options.minimap,
             onChanged: (value) {
-              onSettingsChanged(settings.copyWith(showMinimap: value));
+              onOptionsChanged(options.copyWith(minimap: value));
             },
           ),
 
           ToggleTile(
-            icon: settings.readOnly ? Icons.edit_off : Icons.edit,
+            icon: options.readOnly ? Icons.edit_off : Icons.edit,
             title: 'Edit Mode',
-            value: !settings.readOnly,
+            value: !options.readOnly,
             onChanged: (isEditable) {
-              onSettingsChanged(settings.copyWith(readOnly: !isEditable));
+              onOptionsChanged(options.copyWith(readOnly: !isEditable));
             },
           ),
 
@@ -162,9 +166,9 @@ class QuickSidebar extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         ThemeDropdown(
-          currentTheme: settings.theme,
+          currentTheme: options.theme,
           onThemeChanged: (theme) {
-            onSettingsChanged(settings.copyWith(theme: theme));
+            onOptionsChanged(options.copyWith(theme: theme));
           },
         ),
       ],
@@ -245,54 +249,33 @@ class ThemeDropdown extends StatelessWidget {
     super.key,
   });
 
-  final String currentTheme;
-  final ValueChanged<String> onThemeChanged;
+  final MonacoTheme currentTheme;
+  final ValueChanged<MonacoTheme> onThemeChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Theme(
-      data: Theme.of(context).copyWith(
-        popupMenuTheme: PopupMenuThemeData(
-          color: context.surface,
-          elevation: 8,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
+    return Container(
+      decoration: BoxDecoration(
+        color: context.surface,
+        borderRadius: BorderRadius.circular(8),
       ),
-      child: Container(
-        decoration: BoxDecoration(
-          color: context.surface,
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<MonacoTheme>(
+          isExpanded: true,
+          value: currentTheme,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           borderRadius: BorderRadius.circular(8),
-        ),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            isExpanded: true,
-            value: currentTheme,
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 4,
-            ),
-            borderRadius: BorderRadius.circular(8),
-            dropdownColor: context.surface,
-            menuMaxHeight: 300,
-            items: EditorConstants.themeNames.entries
-                .map(
-                  (entry) => DropdownMenuItem(
-                    value: entry.key,
-                    child: Text(
-                      entry.value,
-                      style: context.bodyMedium,
-                    ),
-                  ),
-                )
-                .toList(),
-            onChanged: (value) {
-              if (value != null) {
-                onThemeChanged(value);
-              }
-            },
-          ),
+          dropdownColor: context.surface,
+          menuMaxHeight: 300,
+          items: MonacoTheme.values
+              .map((theme) => DropdownMenuItem(
+                    value: theme,
+                    child: Text(theme.label, style: context.bodyMedium),
+                  ))
+              .toList(),
+          onChanged: (value) {
+            if (value != null) onThemeChanged(value);
+          },
         ),
       ),
     );

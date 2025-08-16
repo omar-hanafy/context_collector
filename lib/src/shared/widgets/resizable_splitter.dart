@@ -149,6 +149,7 @@ class ResizableSplitter extends StatefulWidget {
     this.onRatioChanged,
     this.enableKeyboard = true,
     this.semanticsLabel,
+    this.blockerColor,
   }) : assert(
          initialRatio >= 0.0 && initialRatio <= 1.0,
          'initialRatio must be between 0.0 and 1.0',
@@ -207,6 +208,9 @@ class ResizableSplitter extends StatefulWidget {
 
   /// Accessibility label for the divider.
   final String? semanticsLabel;
+
+  /// todo add docs
+  final Color? blockerColor;
 
   @override
   State<ResizableSplitter> createState() => _ResizableSplitterState();
@@ -296,6 +300,7 @@ class _ResizableSplitterState extends State<ResizableSplitter> {
                   minRatio: widget.minRatio,
                   maxRatio: widget.maxRatio,
                   minPanelSize: widget.minPanelSize,
+                  blockerColor: widget.blockerColor,
                   maxSize: availableSize,
                   dividerColor: widget.dividerColor,
                   dividerHoverColor: widget.dividerHoverColor,
@@ -330,6 +335,7 @@ class _DividerHandle extends StatefulWidget {
     required this.minPanelSize,
     required this.maxSize,
     required this.dividerColor,
+    required this.blockerColor,
     required this.dividerHoverColor,
     required this.dividerActiveColor,
     required this.onRatioChanged,
@@ -346,6 +352,7 @@ class _DividerHandle extends StatefulWidget {
   final double minPanelSize;
   final double maxSize;
   final Color? dividerColor;
+  final Color? blockerColor;
   final Color? dividerHoverColor;
   final Color? dividerActiveColor;
   final ValueChanged<double>? onRatioChanged;
@@ -446,7 +453,10 @@ class _DividerHandleState extends State<_DividerHandle> {
     if (_dragOverlay != null) return;
 
     _dragOverlay = OverlayEntry(
-      builder: (context) => _DragOverlay(axis: widget.axis),
+      builder: (context) => _DragOverlay(
+        axis: widget.axis,
+        blockerColor: widget.blockerColor,
+      ),
     );
 
     // Use the root overlay to ensure the shield is rendered on top of
@@ -581,21 +591,21 @@ class _DividerHandleState extends State<_DividerHandle> {
 /// An invisible overlay that acts as a shield to block pointer events
 /// from reaching platform views during a drag operation.
 class _DragOverlay extends StatelessWidget {
-  const _DragOverlay({required this.axis});
+  const _DragOverlay({required this.axis, this.blockerColor});
 
   final Axis axis;
 
-  /// For debugging: set to true to visualize the overlay.
-  static const bool _debugShowOverlay = false;
+  final Color? blockerColor;
 
   @override
   Widget build(BuildContext context) {
     // This color is critical. A completely transparent color can be ignored
     // by the renderer in some cases. A near-invisible color forces it to
     // be rendered, ensuring it can block pointer events.
-    final blockerColor = _debugShowOverlay
-        ? context.themeData.primaryColor.addOpacity(0.2) // Visible debug color
-        : Colors.black.addOpacity(0.01); // Near-invisible but effective blocker
+    final defaultColor = Colors.black.addOpacity(0.001);
+    final blockerColor = this.blockerColor == Colors.transparent
+        ? defaultColor
+        : this.blockerColor ?? defaultColor;
 
     return Positioned.fill(
       child: ExcludeSemantics(

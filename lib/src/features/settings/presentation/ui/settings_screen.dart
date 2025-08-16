@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:context_collector/context_collector.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -85,7 +84,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     return ListView(
       padding: DsDimensions.paddingMedium,
       children: [
-        DsCard(
+        Container(
+          padding: DsDimensions.paddingMedium,
+          decoration: BoxDecoration(
+            color: context.surface,
+            borderRadius: context.ds.radiusMedium,
+            border: Border.all(color: context.outline.addOpacity(0.2)),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -189,7 +194,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                           ],
                         ),
                       );
-                      if (confirm == true) {
+                      if (confirm ?? false) {
                         await notifier.resetToDefaults();
                         if (mounted) {
                           context.showOk('Blacklist reset to defaults');
@@ -309,7 +314,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     return ListView(
       padding: DsDimensions.paddingMedium,
       children: [
-        DsCard(
+        Container(
+          padding: DsDimensions.paddingMedium,
+          decoration: BoxDecoration(
+            color: context.surface,
+            borderRadius: context.ds.radiusMedium,
+            border: Border.all(color: context.outline.addOpacity(0.2)),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -327,7 +338,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 style: context.bodyMuted,
               ),
               context.ds.spaceHeight(DesignSystem.space24),
-              DsButton(
+              FilledButton(
                 onPressed: () async {
                   try {
                     // Show loading indicator without awaiting it
@@ -336,8 +347,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                         context: context,
                         barrierDismissible: false,
                         builder: (dialogContext) => const Center(
-                          child: DsCard(
-                            child: CircularProgressIndicator(),
+                          child: Card(
+                            child: Padding(
+                              padding: EdgeInsets.all(24),
+                              child: CircularProgressIndicator(),
+                            ),
                           ),
                         ),
                       ),
@@ -358,12 +372,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     }
                   }
                 },
-                icon: const Icon(Icons.refresh_rounded),
-                isFilled: true,
-                child: const Text('Check for Updates'),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.refresh_rounded),
+                    SizedBox(width: 8),
+                    Text('Check for Updates'),
+                  ],
+                ),
               ),
               context.ds.spaceHeight(DesignSystem.space16),
-              const DsDivider(),
+              const Divider(),
               context.ds.spaceHeight(DesignSystem.space16),
               Text(
                 'Update Settings',
@@ -417,7 +436,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           ),
         ),
         context.ds.spaceHeight(DesignSystem.space16),
-        DsCard(
+        Container(
+          padding: DsDimensions.paddingMedium,
+          decoration: BoxDecoration(
+            color: context.surface,
+            borderRadius: context.ds.radiusMedium,
+            border: Border.all(color: context.outline.addOpacity(0.2)),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -453,9 +478,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   }
 
   Widget _buildInfoRow(BuildContext context, String label, String value) {
-    return DsInfoRow(
-      label: '$label:',
-      value: value,
+    return Row(
+      children: [
+        Text(
+          '$label:',
+          style: context.labelBold,
+        ),
+        const SizedBox(width: DesignSystem.space8),
+        Expanded(
+          child: Text(
+            value,
+            style: context.bodyMuted,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
   }
 }

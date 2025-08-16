@@ -1,6 +1,7 @@
 import 'package:context_collector/context_collector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_helper_utils/flutter_helper_utils.dart';
+import 'package:flutter_monaco/flutter_monaco.dart';
 
 /// Language selector dropdown for the info bar
 class LanguageSelector extends StatelessWidget {
@@ -19,10 +20,10 @@ class LanguageSelector extends StatelessWidget {
       tooltip: 'Select Language',
       onSelected: onLanguageChanged,
       offset: const Offset(0, -300),
-      itemBuilder: (_) => EditorConstants.languages.entries.map((entry) {
-        final isSelected = currentLanguage == entry.key;
+      itemBuilder: (_) => MonacoLanguage.values.map((lang) {
+        final isSelected = currentLanguage == lang.id;
         return PopupMenuItem<String>(
-          value: entry.key,
+          value: lang.id,
           child: Row(
             children: [
               Icon(
@@ -31,7 +32,7 @@ class LanguageSelector extends StatelessWidget {
                 color: isSelected ? context.primary : Colors.transparent,
               ),
               const SizedBox(width: 8),
-              Text(entry.value),
+              Text(lang.label),
             ],
           ),
         );
@@ -51,8 +52,7 @@ class LanguageSelector extends StatelessWidget {
             Icon(Icons.translate, size: 16, color: context.primary),
             const SizedBox(width: 6),
             Text(
-              EditorConstants.languages[currentLanguage] ??
-                  currentLanguage.toUpperCase(),
+              MonacoLanguage.fromId(currentLanguage).label,
               style: context.labelSmall?.copyWith(
                 fontWeight: FontWeight.w500,
               ),

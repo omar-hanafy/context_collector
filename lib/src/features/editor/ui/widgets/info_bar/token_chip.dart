@@ -1,20 +1,18 @@
 import 'package:ai_token_calculator/ai_token_calculator.dart';
-import 'package:context_collector/context_collector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../../context_collector.dart';
+
 /// A chip that displays the estimated token count and allows changing the AI model
 class TokenCountChip extends ConsumerWidget {
-  const TokenCountChip({
-    required this.content,
-    super.key,
-  });
-
-  final String content;
+  const TokenCountChip({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Get live content from the provider
+    final content = ref.watch(selectionProvider.select((s) => s.combinedContent));
     final calculator = ref.watch(tokenCalculatorProvider);
     final selectedModel = ref.watch(selectedAIModelProvider);
     final estimate = calculator.estimateTokens(
@@ -139,6 +137,8 @@ class TokenCountChip extends ConsumerWidget {
     WidgetRef ref,
     AITokenCalculator calculator,
   ) {
+    // Get content once for all calculations in the menu
+    final content = ref.read(selectionProvider).combinedContent;
     final RenderBox button = context.findRenderObject()! as RenderBox;
     final overlay =
         Overlay.of(context).context.findRenderObject()! as RenderBox;
@@ -169,7 +169,7 @@ class TokenCountChip extends ConsumerWidget {
       items: popularModels.map((model) {
         return PopupMenuItem<AIModel>(
           value: model,
-          child: _buildModelMenuItem(context, ref, calculator, model),
+          child: _buildModelMenuItem(context, ref, calculator, model, content),
         );
       }).toList(),
     ).then((selectedModel) {
@@ -184,6 +184,7 @@ class TokenCountChip extends ConsumerWidget {
     WidgetRef ref,
     AITokenCalculator calculator,
     AIModel model,
+    String content,
   ) {
     final currentSelectedModel = ref.watch(selectedAIModelProvider);
     final isSelected = model == currentSelectedModel;

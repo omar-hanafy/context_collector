@@ -6,6 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/consts.dart';
+import '../../../shared/widgets/app_bar_title.dart';
 import '../../settings/presentation/ui/settings_screen.dart';
 import '../../virtual_tree/ui/virtual_tree_view.dart';
 import '../state/file_list_state.dart';
@@ -71,30 +72,7 @@ class HomeScreenContent extends ConsumerWidget {
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    theme.colorScheme.primary,
-                    theme.colorScheme.primary.addOpacity(0.8),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(
-                Icons.collections_bookmark_rounded,
-                color: Colors.white,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Text('Context Collector'),
-          ],
-        ),
+        title: const AppBarTitle(),
         centerTitle: true,
         actions: [
           // GitHub button
@@ -158,171 +136,23 @@ class HomeScreenContent extends ConsumerWidget {
       body: Stack(
         children: [
           Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 800),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(32),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(32),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 800),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Main icon with drag indicator
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            theme.colorScheme.primary.addOpacity(
-                              isDragging ? 0.2 : 0.1,
-                            ),
-                            theme.colorScheme.primary.addOpacity(
-                              isDragging ? 0.1 : 0.05,
-                            ),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(30),
-                        border: isDragging
-                            ? Border.all(
-                                color: theme.colorScheme.primary.addOpacity(
-                                  0.3,
-                                ),
-                                width: 2,
-                              )
-                            : null,
-                      ),
-                      child: Icon(
-                        Icons.folder_open_rounded,
-                        size: isDragging ? 64 : 56,
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-
-                    // Title
-                    Text(
-                      'Drop Your Files or Directories Here',
-                      style: theme.textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.onSurface,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Subtitle
-                    Text(
-                      'Drag and drop, browse, paste paths, or start with an empty tree.',
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        color: theme.colorScheme.onSurface.addOpacity(0.7),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
+                    // Header with icon and titles
+                    _buildHeader(context, isDragging),
                     const SizedBox(height: 40),
 
                     // Action buttons row
-                    Wrap(
-                      spacing: 16,
-                      runSpacing: 16,
-                      alignment: WrapAlignment.center,
-                      children: [
-                        // Browse Files button
-                        FilledButton.icon(
-                          onPressed: () => selectionNotifier.pickFiles(context),
-                          icon: const Icon(Icons.file_open_rounded),
-                          label: const Text('Browse Files'),
-                          style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 16,
-                            ),
-                            textStyle: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        // Browse Folder button
-                        OutlinedButton.icon(
-                          onPressed: () =>
-                              selectionNotifier.pickDirectory(context),
-                          icon: const Icon(Icons.folder_open_rounded),
-                          label: const Text('Browse Folder'),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 16,
-                            ),
-                            textStyle: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        // Paste Paths button
-                        OutlinedButton.icon(
-                          onPressed: () => PastePathsDialog.show(context),
-                          icon: const Icon(Icons.content_paste_go),
-                          label: const Text('Paste Paths'),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 16,
-                            ),
-                            textStyle: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    _buildActionButtons(context, selectionNotifier),
                     const SizedBox(height: 16),
 
-                    // Or divider
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Expanded(child: Divider(endIndent: 16)),
-                        Text(
-                          'OR',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurface.addOpacity(0.5),
-                          ),
-                        ),
-                        const Expanded(child: Divider(indent: 16)),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    // New "Start Empty" button
-                    TextButton.icon(
-                      onPressed: () =>
-                          VirtualTreeView.showCreateVirtualFileFlow(context, ref),
-                      icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
-                      label: const Text('Start with a New File'),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 12,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Supported Formats button
-                    TextButton.icon(
-                      onPressed: () => _showSupportedFormats(context),
-                      icon: const Icon(Icons.help_outline_rounded, size: 18),
-                      label: const Text('Supported Formats'),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                      ),
-                    ),
+                    // Or divider & other actions
+                    _buildSecondaryActions(context, ref),
                     const SizedBox(height: 64),
 
                     // Features grid
@@ -377,6 +207,136 @@ class HomeScreenContent extends ConsumerWidget {
             ),
         ],
       ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context, bool isDragging) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: 120,
+          height: 120,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                theme.colorScheme.primary.addOpacity(isDragging ? 0.2 : 0.1),
+                theme.colorScheme.primary.addOpacity(isDragging ? 0.1 : 0.05),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(30),
+            border: isDragging
+                ? Border.all(
+                    color: theme.colorScheme.primary.addOpacity(0.3),
+                    width: 2,
+                  )
+                : null,
+          ),
+          child: Icon(
+            Icons.folder_open_rounded,
+            size: isDragging ? 64 : 56,
+            color: theme.colorScheme.primary,
+          ),
+        ),
+        const SizedBox(height: 32),
+        Text(
+          'Drop Your Files or Directories Here',
+          style: theme.textTheme.headlineMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: theme.colorScheme.onSurface,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Drag and drop, browse, paste paths, or start with an empty tree.',
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: theme.colorScheme.onSurface.addOpacity(0.7),
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionButtons(BuildContext context, FileListNotifier selectionNotifier) {
+    final buttonStyle = FilledButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+    );
+
+    return Wrap(
+      spacing: 16,
+      runSpacing: 16,
+      alignment: WrapAlignment.center,
+      children: [
+        FilledButton.icon(
+          onPressed: () => selectionNotifier.pickFiles(context),
+          icon: const Icon(Icons.file_open_rounded),
+          label: const Text('Browse Files'),
+          style: buttonStyle,
+        ),
+        OutlinedButton.icon(
+          onPressed: () => selectionNotifier.pickDirectory(context),
+          icon: const Icon(Icons.folder_open_rounded),
+          label: const Text('Browse Folder'),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+        ),
+        OutlinedButton.icon(
+          onPressed: () => PastePathsDialog.show(context),
+          icon: const Icon(Icons.content_paste_go),
+          label: const Text('Paste Paths'),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSecondaryActions(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Expanded(child: Divider(endIndent: 16)),
+            Text(
+              'OR',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.addOpacity(0.5),
+              ),
+            ),
+            const Expanded(child: Divider(indent: 16)),
+          ],
+        ),
+        const SizedBox(height: 16),
+        TextButton.icon(
+          onPressed: () => VirtualTreeView.showCreateVirtualFileFlow(context, ref),
+          icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
+          label: const Text('Start with a New File'),
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextButton.icon(
+          onPressed: () => _showSupportedFormats(context),
+          icon: const Icon(Icons.help_outline_rounded, size: 18),
+          label: const Text('Supported Formats'),
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          ),
+        ),
+      ],
     );
   }
 
@@ -632,3 +592,4 @@ class HomeScreenContent extends ConsumerWidget {
     );
   }
 }
+

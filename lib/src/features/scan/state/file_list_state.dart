@@ -1,20 +1,16 @@
 import 'dart:io';
-import 'dart:math';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path/path.dart' as p;
 
 import '../../settings/presentation/state/preferences_notifier.dart';
 import '../../virtual_tree/api/virtual_tree_api.dart';
 import '../models/scan_result.dart';
 import '../models/scanned_file.dart';
-import '../services/drop_handler.dart';
-import '../services/file_scanner.dart';
 import '../services/markdown_builder.dart';
 import '../services/path_parser_service.dart';
+import '../services/unified_file_service.dart';
 
 /// Selection state - enhanced with file map and scan history
 @immutable
@@ -96,12 +92,9 @@ final pathParserServiceProvider = Provider<PathParserService>(
 /// Provider - same API
 final selectionProvider =
     StateNotifierProvider<FileListNotifier, SelectionState>((ref) {
-      final fileScanner = FileScanner();
       final markdownBuilder = MarkdownBuilder();
       return FileListNotifier(
         ref: ref,
-        fileScanner: fileScanner,
-        dropHandler: DropHandler(fileScanner: fileScanner),
         markdownBuilder: markdownBuilder,
       );
     });
@@ -110,14 +103,10 @@ final selectionProvider =
 class FileListNotifier extends StateNotifier<SelectionState> {
   FileListNotifier({
     required this.ref,
-    required this.fileScanner,
-    required this.dropHandler,
     required this.markdownBuilder,
   }) : super(const SelectionState());
 
   final Ref ref;
-  final FileScanner fileScanner;
-  final DropHandler dropHandler;
   final MarkdownBuilder markdownBuilder;
 
   VirtualTreeAPI? virtualTree;
@@ -149,8 +138,8 @@ class FileListNotifier extends StateNotifier<SelectionState> {
       final blacklist = filterSettings.blacklistedExtensions;
       final sourcePaths = <String>{};
 
-      await dropHandler.processDroppedItemsIncremental(
-        items,
+      await UnifiedFileService.processDroppedItems(
+        items: items,
         blacklist: blacklist,
         source: source,
         onFileFound: (file) {
@@ -200,7 +189,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
 
   /// Loads content for a single file and updates the state.
   Future<void> _loadFileContent(ScannedFile file) async {
-    final loadedFile = await fileScanner.loadFileContent(file);
+    final loadedFile = await UnifiedFileService.loadFileContent(file);
     if (mounted && state.fileMap.containsKey(loadedFile.id)) {
       final newFileMap = Map<String, ScannedFile>.from(state.fileMap);
       newFileMap[loadedFile.id] = loadedFile;
@@ -223,7 +212,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     for (final file in filesToRefresh) {
       try {
         // Reload content from disk
-        final reloadedFile = await fileScanner.loadFileContent(file);
+        final reloadedFile = await UnifiedFileService.loadFileContent(file);
         // Overwrite the file in the map, discarding any edits
         newFileMap[reloadedFile.id] = reloadedFile.copyWith(
           editedContent: null,
@@ -269,55 +258,28 @@ class FileListNotifier extends StateNotifier<SelectionState> {
       final pathParser = ref.read(pathParserServiceProvider);
       final parseResult = await pathParser.parse(pastedText);
 
-      final filesToProcess = <XFile>[];
-      final errorPaths = <String>[];
-      final existingPaths = <String>[];
-
-      await Future.wait(
-        parseResult.validPaths.map((path) async {
-          if (state.fileMap.values.any((f) => f.fullPath == path)) {
-            existingPaths.add(path);
-            return;
-          }
-          try {
-            final type = FileSystemEntity.typeSync(path);
-            if (type != FileSystemEntityType.notFound) {
-              filesToProcess.add(XFile(path));
-            } else {
-              errorPaths.add(path);
-            }
-          } catch (_) {
-            errorPaths.add(path);
-          }
-        }),
+      final existingPaths = state.fileMap.values
+          .map((f) => f.fullPath)
+          .toSet();
+      final validationResult = await UnifiedFileService.validatePaths(
+        parseResult.validPaths,
+        existingPaths,
       );
 
       // Process the validated items
-      if (filesToProcess.isNotEmpty) {
-        await _processNewItems(filesToProcess, source: ScanSource.paste);
+      if (validationResult.hasValidFiles) {
+        await _processNewItems(validationResult.validFiles, source: ScanSource.paste);
       }
 
       // Build summary notification
-      if (context.mounted) {
-        final summary = <String>[];
-        if (filesToProcess.isNotEmpty) {
-          summary.add('${filesToProcess.length} new items added');
-        }
-        if (existingPaths.isNotEmpty) {
-          summary.add('${existingPaths.length} already exist');
-        }
-        if (errorPaths.isNotEmpty) {
-          summary.add('${errorPaths.length} not found');
-        }
-
-        if (summary.isNotEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(summary.join(' • ')),
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        }
+      if (context.mounted && !validationResult.isEmpty) {
+        final summary = UnifiedFileService.buildPasteSummary(validationResult);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(summary),
+            duration: const Duration(seconds: 3),
+          ),
+        );
       }
     } catch (e) {
       state = state.copyWith(error: 'Failed to process pasted paths: $e');
@@ -355,103 +317,43 @@ class FileListNotifier extends StateNotifier<SelectionState> {
 
   /// Saves the combined content of all selected files to a new text file.
   Future<void> saveToFile() async {
-    if (state.combinedContent.isEmpty) {
-      state = state.copyWith(error: 'No content to save');
-      return;
-    }
-
     try {
-      final fileName =
-          'context_collection_${DateTime.now().millisecondsSinceEpoch}.md';
-      final filePath = await getSaveLocation(suggestedName: fileName);
-      if (filePath != null) {
-        await File(filePath.path).writeAsString(state.combinedContent);
-      }
+      await UnifiedFileService.saveToFile(state.combinedContent);
     } catch (e) {
-      state = state.copyWith(error: 'Error saving file: $e');
+      state = state.copyWith(error: e.toString());
     }
   }
 
   /// Copies the combined markdown context to the system clipboard.
   Future<void> copyContextToClipboard() async {
-    if (state.combinedContent.isEmpty) {
-      state = state.copyWith(error: 'No content to copy');
-      return;
+    try {
+      await UnifiedFileService.copyToClipboard(state.combinedContent);
+      // NOTE: The calling UI should show a confirmation SnackBar.
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
     }
-    await Clipboard.setData(ClipboardData(text: state.combinedContent));
-    // NOTE: The calling UI should show a confirmation SnackBar.
   }
 
   /// Copies the full paths of selected files to the clipboard.
   Future<void> copyFullPathsToClipboard() async {
-    final selectedRealFiles =
-        state.selectedFiles.where((f) => !f.isVirtual).toList();
-    if (selectedRealFiles.isEmpty) {
-      state = state.copyWith(error: 'No real files selected to copy paths');
-      return;
+    try {
+      await UnifiedFileService.copyFullPaths(state.selectedFiles);
+      // NOTE: The calling UI should show a confirmation SnackBar.
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
     }
-
-    final paths = selectedRealFiles.map((f) => f.fullPath).toList();
-    paths.sort();
-
-    final content = paths.join('\n');
-    await Clipboard.setData(ClipboardData(text: content));
-    // NOTE: The calling UI should show a confirmation SnackBar.
   }
 
   /// Copies the AI-formatted relative paths of selected files to the clipboard.
   Future<void> copyAiPathsToClipboard() async {
-    final selectedRealFiles =
-        state.selectedFiles.where((f) => !f.isVirtual).toList();
-    if (selectedRealFiles.isEmpty) {
-      state = state.copyWith(error: 'No real files selected to copy AI paths');
-      return;
+    try {
+      await UnifiedFileService.copyAiPaths(state.selectedFiles);
+      // NOTE: The calling UI should show a confirmation SnackBar.
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
     }
-
-    final aiPaths = <String>[];
-
-    // Find the common base path from all selected files
-    final commonBasePath = _findCommonBasePath(
-      selectedRealFiles.map((f) => f.fullPath).toList(),
-    );
-
-    // Generate relative paths for real files
-    for (final file in selectedRealFiles) {
-      final relative = p.relative(file.fullPath, from: commonBasePath);
-      aiPaths.add('@${relative.replaceAll(r'\', '/')}');
-    }
-
-    aiPaths.sort();
-    final content = aiPaths.join('\n');
-    await Clipboard.setData(ClipboardData(text: content));
-    // NOTE: The calling UI should show a confirmation SnackBar.
   }
 
-  /// Finds the longest common directory path from a list of file paths.
-  String _findCommonBasePath(List<String> paths) {
-    if (paths.isEmpty) return '';
-    if (paths.length == 1) return p.dirname(paths.first);
-
-    // Split all paths into components
-    final componentsList = paths.map((path) => p.split(path)).toList();
-
-    // Find the shortest path to limit our search
-    final minLength = componentsList.map((c) => c.length).reduce(min);
-
-    // Find common components
-    final commonComponents = <String>[];
-    for (int i = 0; i < minLength - 1; i++) {
-      // -1 to exclude the filename
-      final component = componentsList[0][i];
-      if (componentsList.every((components) => components[i] == component)) {
-        commonComponents.add(component);
-      } else {
-        break;
-      }
-    }
-
-    return p.joinAll(commonComponents);
-  }
 
   /// Clears the current error message from the state.
   void clearError() {
@@ -519,7 +421,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
   /// This creates the data object and triggers a tree rebuild.
   void createVirtualFile(String fileName, String content) {
     // Virtual path is just the file name, as it will live at the top level
-    final virtualFile = fileScanner.createVirtualFile(
+    final virtualFile = UnifiedFileService.createVirtualFile(
       name: fileName,
       content: content,
       virtualPath: fileName,

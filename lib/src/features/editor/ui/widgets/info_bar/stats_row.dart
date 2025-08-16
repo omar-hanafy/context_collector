@@ -1,16 +1,16 @@
-import 'package:context_collector/context_collector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_monaco/flutter_monaco.dart';
+
+import 'token_chip.dart';
 
 /// Row displaying editor statistics
 class StatsRow extends StatelessWidget {
   const StatsRow({
     required this.stats,
-    required this.content,
     super.key,
   });
 
   final LiveStats stats;
-  final String content;
 
   @override
   Widget build(BuildContext context) {
@@ -18,29 +18,29 @@ class StatsRow extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         StatItem(
-          label: stats.lineCount.label,
+          label: 'Ln',
           value: stats.lineCount.value,
         ),
         StatItem(
-          label: stats.charCount.label,
+          label: 'Ch',
           value: stats.charCount.value,
         ),
-        if (stats.hasSelection) ...[
+        if (stats.selectedCharacters.value > 0) ...[
           StatItem(
-            label: stats.selectedLines.label,
+            label: 'Sel Ln',
             value: stats.selectedLines.value,
           ),
           StatItem(
-            label: stats.selectedCharacters.label,
+            label: 'Sel Ch',
             value: stats.selectedCharacters.value,
           ),
         ],
         if (stats.caretCount.value > 1)
           StatItem(
-            label: stats.caretCount.label,
+            label: 'Cursors',
             value: stats.caretCount.value,
           ),
-        if (stats.charCount.value > 0) TokenCountChip(content: content),
+        if (stats.charCount.value > 0) const TokenCountChip(),
       ],
     );
   }
@@ -63,7 +63,9 @@ class StatItem extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6),
       child: Text(
         '$label: $value',
-        style: context.labelSmall?.copyWith(color: context.onSurfaceVariant),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
       ),
     );
   }

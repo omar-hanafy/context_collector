@@ -10,89 +10,12 @@ class FileDisplayHelper {
 
   /// Get icon for file based on extension
   static IconData getIconForExtension(String extension) {
-    const codeExtensions = {
-      '.dart',
-      '.py',
-      '.js',
-      '.ts',
-      '.java',
-      '.cpp',
-      '.c',
-      '.rs',
-      '.go',
-      '.rb',
-      '.php',
-      '.swift',
-      '.kt',
-      '.scala',
-      '.r',
-      '.m',
-      '.h',
-    };
-    const webExtensions = {
-      '.html',
-      '.css',
-      '.scss',
-      '.sass',
-      '.less',
-      '.jsx',
-      '.tsx',
-      '.vue',
-      '.svelte',
-      '.astro',
-    };
-    const configExtensions = {
-      '.json',
-      '.yaml',
-      '.yml',
-      '.xml',
-      '.toml',
-      '.ini',
-      '.conf',
-      '.config',
-      '.env',
-      '.properties',
-    };
-    const docExtensions = {
-      '.md',
-      '.txt',
-      '.rst',
-      '.adoc',
-      '.tex',
-      '.doc',
-      '.docx',
-      '.pdf',
-    };
-    const scriptExtensions = {
-      '.sh',
-      '.bash',
-      '.zsh',
-      '.fish',
-      '.ps1',
-      '.bat',
-      '.cmd',
-    };
-    const dataExtensions = {
-      '.csv',
-      '.tsv',
-      '.xls',
-      '.xlsx',
-      '.sql',
-      '.db',
-      '.sqlite',
-    };
-
     final ext = extension.toLowerCase();
-
     if (ext.isEmpty) return Icons.insert_drive_file_outlined;
-    if (codeExtensions.contains(ext)) return Icons.code;
-    if (webExtensions.contains(ext)) return Icons.web;
-    if (configExtensions.contains(ext)) return Icons.settings_outlined;
-    if (docExtensions.contains(ext)) return Icons.description_outlined;
-    if (scriptExtensions.contains(ext)) return Icons.terminal;
-    if (dataExtensions.contains(ext)) return Icons.table_chart_outlined;
-
-    return Icons.insert_drive_file_outlined;
+    
+    // Use the single source of truth: extensionCatalog
+    final category = getCategoryForExtension(ext);
+    return category.icon;
   }
 
   /// Get color for file icon based on extension
