@@ -211,7 +211,7 @@ class MonacoController {
         (_webViewController as WindowsWebViewController).windowsController,
       );
     } else {
-      // macOS, iOS, Linux use webview_flutter
+      // macOS, iOS use webview_flutter
       webView = wf.WebViewWidget(
         controller:
             (_webViewController as FlutterWebViewController).flutterController,
@@ -222,10 +222,7 @@ class MonacoController {
     return Focus(
       focusNode: _focusNode,
       child: GestureDetector(
-        onTap: () {
-          // Ensure focus when tapped
-          _focusNode.requestFocus();
-        },
+        onTap: _focusNode.requestFocus,
         child: webView,
       ),
     );
@@ -381,7 +378,6 @@ class MonacoController {
           _onContentChanged.add(json.tryGetBool('isFlush',
                   altKeys: ['flush', 'fullChange'], defaultValue: false) ??
               false);
-          break;
         case 'selectionChanged':
           // Use factory constructor for cleaner conversion
           final selectionMap = json.tryGetMap<String, dynamic>('selection',
@@ -389,13 +385,10 @@ class MonacoController {
           final selection =
               selectionMap != null ? Range.fromJson(selectionMap) : null;
           _onSelectionChanged.add(selection);
-          break;
         case 'focus':
           _onFocus.add(null);
-          break;
         case 'blur':
           _onBlur.add(null);
-          break;
       }
     });
   }
@@ -480,7 +473,7 @@ class MonacoController {
 
   /// Get the current selection with enhanced parsing
   Future<Range?> getSelection() async {
-    return await _executeJavaScriptWithJson<Range>(
+    return _executeJavaScriptWithJson<Range>(
       'JSON.stringify(flutterMonaco.getSelection())',
       parser: Range.fromJson,
     );
@@ -501,7 +494,7 @@ class MonacoController {
     await _ensureReady();
     // Validate line number
     final lineCount = await getLineCount();
-    final validLine = line.clamp(1, lineCount).toInt(); // FIX: Ensure int type
+    final int validLine = line.clamp(1, lineCount);
 
     await _webViewController.runJavaScript(
       'flutterMonaco.revealLine($validLine, $center)',
@@ -616,12 +609,10 @@ class MonacoController {
       defaultValue: const [],
     );
 
-    _decorationIds = (ids ?? const [])
+    return _decorationIds = (ids ?? const [])
         .map((e) => e.toString())
         .where((s) => s.isNotEmpty)
         .toList();
-
-    return _decorationIds;
   }
 
   /// Add inline decorations
@@ -812,11 +803,7 @@ class MonacoController {
     if (list == null || list.isEmpty) return [];
 
     // Convert each item to URI and filter out nulls
-    return list
-        .map((item) => tryToUri(item))
-        .where((uri) => uri != null)
-        .cast<Uri>()
-        .toList();
+    return list.map(tryToUri).where((uri) => uri != null).cast<Uri>().toList();
   }
 
   // --- ADDITIONAL HELPER METHODS ---
@@ -844,7 +831,7 @@ class MonacoController {
 
   /// Get cursor position with enhanced conversion
   Future<Position?> getCursorPosition() async {
-    return await _executeJavaScriptWithJson<Position>(
+    return _executeJavaScriptWithJson<Position>(
       'JSON.stringify(flutterMonaco.getCursorPosition())',
       parser: Position.fromJson,
     );
@@ -866,7 +853,7 @@ class MonacoController {
 
   /// Get word at position
   Future<String?> getWordAtPosition(Position position) async {
-    return await _executeJavaScript<String>(
+    return _executeJavaScript<String>(
       'flutterMonaco.getWordAtPosition(${position.line}, ${position.column})',
       jsonAware: false, // Don't decode - this is plain text content
     );
@@ -897,13 +884,13 @@ class MonacoController {
       lineCount: lineCount,
       hasUnsavedChanges: hasChanges,
       language: stats.language,
-      theme: null, // Would need a separate API call to get theme
+      theme: null,
+      // Would need a separate API call to get theme
       stats: stats,
     );
   }
 
   // --- HELPERS ---
-
   /// Dispose the controller and clean up resources
   void dispose() {
     _onContentChanged.close();

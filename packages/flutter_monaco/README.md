@@ -32,27 +32,93 @@ dependencies:
 import 'package:flutter/material.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
 
-// Create a controller
-final controller = await MonacoController.create(
-  options: const EditorOptions(
-    language: 'dart',
-    theme: 'vs-dark',
-    fontSize: 14,
-    wordWrap: true,
-  ),
+void main() {
+  runApp(
+    MaterialApp(
+      title: 'Flutter Monaco',
+      theme: ThemeData.light(),
+      darkTheme: ThemeData.dark(),
+      home: Scaffold(
+        appBar: AppBar(
+          title: const Text('Monaco Editor'),
+        ),
+        body: const MonacoEditor(
+          showStatusBar: true,
+        ),
+      ),
+    ),
+  );
+}
+```
+
+## Type-Safe Enums
+
+Flutter Monaco provides type-safe enums for all configuration options, preventing runtime errors from invalid string values:
+
+```dart
+// Languages - 70+ programming languages supported
+const EditorOptions(
+  language: MonacoLanguage.typescript,  // Instead of 'typescript'
+  theme: MonacoTheme.vsDark,           // Instead of 'vs-dark'
+  cursorBlinking: CursorBlinking.smooth,
+  cursorStyle: CursorStyle.block,
+  renderWhitespace: RenderWhitespace.boundary,
+  autoClosingBehavior: AutoClosingBehavior.languageDefined,
 );
 
-// Set content (queued automatically if editor not ready)
-await controller.setValue('void main() {\n  print("Hello Monaco!");\n}');
+// Dynamic language selection (when loading from user preferences, etc.)
+final language = MonacoLanguage.fromId('python');  // Convert string to enum
+await controller.setLanguage(language);
 
-// Display the editor widget
-Scaffold(
-  body: controller.webViewWidget,
-)
-
-// Don't forget to dispose when done
-controller.dispose();
+// Theme selection with dynamic conversion
+final theme = MonacoTheme.fromId('vs-dark');  // Convert string to enum
+await controller.setTheme(theme);
 ```
+
+### Available Enums
+
+**MonacoTheme**
+- `MonacoTheme.vs` - Light theme
+- `MonacoTheme.vsDark` - Dark theme  
+- `MonacoTheme.hcBlack` - High contrast dark
+- `MonacoTheme.hcLight` - High contrast light
+
+**MonacoLanguage** (70+ languages including)
+- `MonacoLanguage.javascript`, `MonacoLanguage.typescript`, `MonacoLanguage.python`
+- `MonacoLanguage.dart`, `MonacoLanguage.java`, `MonacoLanguage.csharp`
+- `MonacoLanguage.go`, `MonacoLanguage.rust`, `MonacoLanguage.swift`
+- `MonacoLanguage.html`, `MonacoLanguage.css`, `MonacoLanguage.scss`
+- `MonacoLanguage.json`, `MonacoLanguage.yaml`, `MonacoLanguage.xml`
+- `MonacoLanguage.markdown`, `MonacoLanguage.sql`, `MonacoLanguage.dockerfile`
+- And many more...
+
+**CursorBlinking**
+- `CursorBlinking.blink` - Default blinking
+- `CursorBlinking.smooth` - Smooth fade animation
+- `CursorBlinking.phase` - Phase animation
+- `CursorBlinking.expand` - Expand animation
+- `CursorBlinking.solid` - No blinking
+
+**CursorStyle**
+- `CursorStyle.line` - Vertical line (default)
+- `CursorStyle.block` - Block cursor
+- `CursorStyle.underline` - Underline cursor
+- `CursorStyle.lineThin` - Thin vertical line
+- `CursorStyle.blockOutline` - Outlined block
+- `CursorStyle.underlineThin` - Thin underline
+
+**RenderWhitespace**
+- `RenderWhitespace.none` - Don't render whitespace
+- `RenderWhitespace.boundary` - Render whitespace at word boundaries
+- `RenderWhitespace.selection` - Render whitespace in selection
+- `RenderWhitespace.trailing` - Render trailing whitespace
+- `RenderWhitespace.all` - Render all whitespace
+
+**AutoClosingBehavior**
+- `AutoClosingBehavior.always` - Always auto-close brackets
+- `AutoClosingBehavior.languageDefined` - Use language defaults
+- `AutoClosingBehavior.beforeWhitespace` - Auto-close before whitespace
+- `AutoClosingBehavior.never` - Never auto-close
 
 ## Multiple Editors Example
 
@@ -76,11 +142,11 @@ class _MultiEditorViewState extends State<MultiEditorView> {
   }
 
   Future<void> _initializeEditors() async {
-    // Create three independent editors with different configurations
+    // Create three independent editors with type-safe configurations
     _dartController = await MonacoController.create(
       options: const EditorOptions(
-        language: 'dart',
-        theme: 'vs-dark',
+        language: MonacoLanguage.dart,
+        theme: MonacoTheme.vsDark,
         fontSize: 14,
         minimap: true,
       ),
@@ -88,8 +154,8 @@ class _MultiEditorViewState extends State<MultiEditorView> {
     
     _jsController = await MonacoController.create(
       options: const EditorOptions(
-        language: 'javascript',
-        theme: 'vs',  // Light theme
+        language: MonacoLanguage.javascript,
+        theme: MonacoTheme.vs,  // Light theme
         fontSize: 14,
         minimap: true,
       ),
@@ -97,8 +163,8 @@ class _MultiEditorViewState extends State<MultiEditorView> {
     
     _markdownController = await MonacoController.create(
       options: const EditorOptions(
-        language: 'markdown',
-        theme: 'vs-dark',
+        language: MonacoLanguage.markdown,
+        theme: MonacoTheme.vsDark,
         fontSize: 15,
         wordWrap: true,
         minimap: false,
@@ -163,9 +229,9 @@ Main controller for interacting with the editor:
 await controller.setValue('const x = 42;');
 String content = await controller.getValue();
 
-// Language and theme
-await controller.setLanguage('javascript');
-await controller.setTheme('vs-dark');
+// Language and theme (type-safe enums)
+await controller.setLanguage(MonacoLanguage.javascript);
+await controller.setTheme(MonacoTheme.vsDark);
 
 // Editor actions
 await controller.format();           // Format document
@@ -242,35 +308,35 @@ await controller.addLineDecorations(
 // Work with multiple models
 final uri = await controller.createModel(
   'console.log("New file");',
-  language: 'javascript',
+  language: MonacoLanguage.javascript,
 );
 await controller.setModel(uri);
 ```
 
 ### EditorOptions
 
-Configure the editor appearance and behavior:
+Configure the editor appearance and behavior with type-safe enums:
 
 ```dart
 const EditorOptions(
-  language: 'javascript',
-  theme: 'vs-dark',              // 'vs', 'vs-dark', 'hc-black'
+  language: MonacoLanguage.javascript,
+  theme: MonacoTheme.vsDark,      // vs, vsDark, hcBlack, hcLight
   fontSize: 14,
   fontFamily: 'Consolas, monospace',
   lineHeight: 1.4,
-  wordWrap: true,                // or 'off', 'on', 'wordWrapColumn', 'bounded'
+  wordWrap: true,                  // or false
   minimap: false,
-  lineNumbers: true,              // or 'off', 'on', 'relative', 'interval'
+  lineNumbers: true,               // or false
   rulers: [80, 120],
   tabSize: 2,
   insertSpaces: true,
   readOnly: false,
-  automaticLayout: true,          // Auto-resize with container
+  automaticLayout: true,           // Auto-resize with container
   scrollBeyondLastLine: true,
   smoothScrolling: false,
-  cursorBlinking: 'blink',        // 'blink', 'smooth', 'phase', 'expand', 'solid'
-  cursorStyle: 'line',            // 'line', 'block', 'underline'
-  renderWhitespace: 'selection',  // 'none', 'boundary', 'selection', 'trailing', 'all'
+  cursorBlinking: CursorBlinking.blink,    // blink, smooth, phase, expand, solid
+  cursorStyle: CursorStyle.line,           // line, block, underline, lineThin, blockOutline, underlineThin
+  renderWhitespace: RenderWhitespace.selection,  // none, boundary, selection, trailing, all
   bracketPairColorization: true,
   formatOnPaste: false,
   formatOnType: false,
@@ -279,6 +345,7 @@ const EditorOptions(
   hover: true,
   contextMenu: true,
   mouseWheelZoom: false,
+  autoClosingBehavior: AutoClosingBehavior.languageDefined,  // always, languageDefined, beforeWhitespace, never
 );
 ```
 

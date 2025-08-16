@@ -30,4 +30,4 @@ export 'src/models/monaco_types.dart'
         Range,
         RelatedInformation;
 // Widget exports
-export 'src/widgets/monaco_editor_view.dart' show MonacoEditorView;
+export 'src/widgets/monaco_editor_view.dart' show MonacoEditor;
