@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../editor/data/providers.dart';
+import '../../editor/editor.dart';
 import '../state/tree_state.dart';
 import 'file_edit_dialog.dart';
 import 'tree_node_widget.dart';
@@ -178,18 +178,8 @@ class VirtualTreeView extends ConsumerWidget {
         if (content != null) {
           ref.read(selectionProvider.notifier).createVirtualFile(name, content);
         }
-        
-        // *** THE FIX ***
-        // 1. Force Flutter's native text input plugin to release the keyboard.
-        //    This is the key to solving the "dead keyboard" issue on macOS.
-        await SystemChannels.textInput.invokeMethod<void>('TextInput.clearClient');
-        
-        // 2. Wait a brief moment for the engine to process the channel message.
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-        
-        // 3. Now that the path is clear, tell Monaco to take focus.
         if (context.mounted) {
-          ref.read(monacoEditorServiceProvider).bridge.requestFocus();
+          await EditorFocusHelper.restoreFocus(ref);
         }
       },
     );

@@ -1,15 +1,17 @@
-import 'package:context_collector/context_collector.dart';
-import 'package:context_collector/src/shared/widgets/shared_drop_zone.dart';
 import 'package:enefty_icons/enefty_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_helper_utils/flutter_helper_utils.dart';
+import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../context_collector.dart';
+import '../../../../shared/widgets/app_bar_title.dart';
+import '../../../../shared/widgets/shared_drop_zone.dart';
 import '../../../scan/ui/paste_paths_dialog.dart';
 
-/// Refactored editor screen with production-ready ResizableSplitter(startPanel: startPanel, endPanel: endPanel)
+/// Refactored editor screen using flutter_monaco package
 class EditorScreen extends ConsumerStatefulWidget {
   const EditorScreen({super.key});
 
@@ -25,13 +27,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   bool _isSidebarExpanded = false;
 
   // Settings state
-  EditorSettings _editorSettings = const EditorSettings();
+  EditorOptions _editorOptions = const EditorOptions();
   bool _hasAppliedInitialSettings = false;
 
   // Sidebar dimensions
   static const double _expandedSidebarWidth = DsDimensions.sidebarWidth;
 
-  // Splitter controller - now using the new SplitterController
+  // Splitter controller
   SplitterController? _splitterController;
   bool _isSplitterInitialized = false;
   static const String _splitRatioKey = 'editor_split_ratio';
@@ -81,24 +83,24 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   }
 
   Future<void> _loadEditorSettings() async {
-    final settings = await EditorSettingsServiceHelper.load();
+    final options = await EditorSettingsService.load();
     if (mounted) {
       setState(() {
-        _editorSettings = settings;
+        _editorOptions = options;
       });
     }
   }
 
   Future<void> _applySettingsToEditor() async {
-    final editorService = ref.read(monacoEditorServiceProvider);
-    await editorService.updateSettings(_editorSettings);
+    final editorService = ref.read(monacoEditorStatusProvider.notifier);
+    await editorService.updateOptions(_editorOptions);
   }
 
-  Future<void> _saveAndApplySettings(EditorSettings newSettings) async {
+  Future<void> _saveAndApplyOptions(EditorOptions newOptions) async {
     setState(() {
-      _editorSettings = newSettings;
+      _editorOptions = newOptions;
     });
-    await EditorSettingsServiceHelper.save(newSettings);
+    await EditorSettingsService.save(newOptions);
     await _applySettingsToEditor();
   }
 
@@ -114,74 +116,94 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   }
 
   Future<void> _increaseFontSize() async {
-    if (_editorSettings.fontSize < EditorConstants.maxFontSize) {
-      final newSettings = _editorSettings.copyWith(
-        fontSize: _editorSettings.fontSize + 1,
+    final currentSize = _editorOptions.fontSize ?? 14;
+    if (currentSize < MonacoConstants.maxFontSize) {
+      final newOptions = _editorOptions.copyWith(
+        fontSize: currentSize + 1,
       );
-      await _saveAndApplySettings(newSettings);
+      await _saveAndApplyOptions(newOptions);
     }
   }
 
   Future<void> _decreaseFontSize() async {
-    if (_editorSettings.fontSize > EditorConstants.minFontSize) {
-      final newSettings = _editorSettings.copyWith(
-        fontSize: _editorSettings.fontSize - 1,
+    final currentSize = _editorOptions.fontSize ?? 14;
+    if (currentSize > MonacoConstants.minFontSize) {
+      final newOptions = _editorOptions.copyWith(
+        fontSize: currentSize - 1,
       );
-      await _saveAndApplySettings(newSettings);
+      await _saveAndApplyOptions(newOptions);
     }
   }
 
   Future<void> _toggleWordWrap() async {
-    final newWrap = _editorSettings.wordWrap == WordWrap.off
-        ? WordWrap.on
-        : WordWrap.off;
-    final newSettings = _editorSettings.copyWith(wordWrap: newWrap);
-    await _saveAndApplySettings(newSettings);
+    final newOptions = _editorOptions.copyWith(
+      wordWrap: !_editorOptions.wordWrap,
+    );
+    await _saveAndApplyOptions(newOptions);
   }
 
   Future<void> _showEnhancedEditorSettings(BuildContext context) async {
-    final newSettings = await EditorSettingsDialog.show(
+    final newOptions = await EditorSettingsDialog.show(
       context,
-      _editorSettings,
-      customThemes: [],
-      customKeybindingPresets: [],
+      _editorOptions,
     );
-    if (newSettings != null && mounted) {
-      await _saveAndApplySettings(newSettings);
+    if (newOptions != null && mounted) {
+      await _saveAndApplyOptions(newOptions);
     }
 
-    // *** THE FIX ***
-    // 1. Force Flutter's native text input plugin to release the keyboard.
-    //    This is the key to solving the "dead keyboard" issue on macOS.
-    await SystemChannels.textInput.invokeMethod<void>('TextInput.clearClient');
-    
-    // 2. Wait a brief moment for the engine to process the channel message.
-    await Future<void>.delayed(const Duration(milliseconds: 50));
-    
-    // 3. Now that the path is clear, tell Monaco to take focus.
     if (mounted) {
-      ref.read(monacoEditorServiceProvider).bridge.requestFocus();
+      await EditorFocusHelper.restoreFocus(ref);
     }
   }
 
-  /// NEW: A single, reliable method to copy the editor's current content
+  /// Copy full paths of selected files to clipboard
+  Future<void> _copyFullPathsToClipboard() async {
+    try {
+      await ref.read(selectionProvider.notifier).copyFullPathsToClipboard();
+      if (mounted) {
+        context.showOk('Full paths copied to clipboard!');
+      }
+    } catch (e) {
+      if (mounted) {
+        context.showErr('Error copying paths: $e');
+      }
+    }
+  }
+
+  /// Copy AI-formatted paths of selected files to clipboard
+  Future<void> _copyAiPathsToClipboard() async {
+    try {
+      await ref.read(selectionProvider.notifier).copyAiPathsToClipboard();
+      if (mounted) {
+        context.showOk('AI paths copied to clipboard!');
+      }
+    } catch (e) {
+      if (mounted) {
+        context.showErr('Error copying AI paths: $e');
+      }
+    }
+  }
+
+  /// Copy the editor's current content
   Future<void> _copyEditorContentToClipboard() async {
     String content = '';
 
     try {
-      // 1. Try to get the live content from the Monaco editor
-      final bridge = ref.read(monacoEditorServiceProvider).bridge;
-      content = await bridge.getCurrentContent();
+      // Try to get the live content from the Monaco editor
+      final controller = ref.read(monacoControllerProvider);
+      if (controller != null) {
+        content = await controller.getValue();
+      }
     } catch (e) {
       debugPrint('[EditorScreen] Failed to get live content: $e');
     }
 
-    // 2. If we couldn't get content from the editor, fall back to the state
+    // If we couldn't get content from the editor, fall back to the state
     if (content.isEmpty) {
       content = ref.read(selectionProvider).combinedContent;
     }
 
-    // 3. Copy to clipboard and show feedback
+    // Copy to clipboard and show feedback
     if (content.isNotEmpty) {
       try {
         await Clipboard.setData(ClipboardData(text: content));
@@ -240,16 +262,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                     selectionNotifier.pickDirectory(context);
                   } else if (value == 'paste_paths') {
                     await PastePathsDialog.show(context);
-                    // *** THE FIX ***
-                    // 1. Force Flutter's native text input plugin to release the keyboard.
-                    await SystemChannels.textInput.invokeMethod<void>('TextInput.clearClient');
-                    
-                    // 2. Wait a brief moment for the engine to process.
-                    await Future<void>.delayed(const Duration(milliseconds: 50));
-                    
-                    // 3. Now tell Monaco to take focus.
                     if (context.mounted) {
-                      ref.read(monacoEditorServiceProvider).bridge.requestFocus();
+                      await EditorFocusHelper.restoreFocus(ref);
                     }
                   }
                 },
@@ -311,30 +325,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         leadingWidth: 280,
 
         // Centered title
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    context.primary,
-                    context.primary.addOpacity(0.8),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(
-                Icons.collections_bookmark_rounded,
-                color: Colors.white,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Text('Context Collector'),
-          ],
-        ),
+        title: const AppBarTitle(),
         centerTitle: true,
 
         actions: [
@@ -384,7 +375,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                       minPanelSize: 300,
                       onRatioChanged: _saveSplitRatio,
                       dividerThickness: 12,
-                      enableKeyboard: true,
+                      enableKeyboard: false,
                       semanticsLabel:
                           'Editor panels splitter. Drag to resize or use arrow keys.',
                       startPanel: Column(
@@ -396,73 +387,19 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                       ),
                       endPanel: Stack(
                         children: [
-                          // Monaco Editor
-                          const MonacoEditorContainer(
-                            key: Key('editor-screen-monaco'),
-                          ),
-
-                          // Animated Sidebar (INSIDE Monaco editor area)
-                          AnimatedBuilder(
+                          const MonacoEditorIntegrated(),
+                          _EditorSidebar(
                             animation: _sidebarAnimation,
-                            builder: (context, child) {
-                              final width =
-                                  _expandedSidebarWidth *
-                                  _sidebarAnimation.value;
-
-                              return Positioned(
-                                left: 0,
-                                top: 0,
-                                bottom: 0,
-                                child: SizedBox(
-                                  width: width,
-                                  child: width > 0
-                                      ? ClipRect(
-                                          child: Container(
-                                            decoration: BoxDecoration(
-                                              color: context
-                                                  .surfaceContainerHighest,
-                                              border: BorderDirectional(
-                                                end: BorderSide(
-                                                  color: context.outline
-                                                      .addOpacity(
-                                                        0.2,
-                                                      ),
-                                                ),
-                                              ),
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: context.shadow
-                                                      .addOpacity(
-                                                        0.05,
-                                                      ),
-                                                  offset: const Offset(2, 0),
-                                                  blurRadius: 4,
-                                                ),
-                                              ],
-                                            ),
-                                            child: QuickSidebar(
-                                              settings: _editorSettings,
-                                              selectionState: selectionState,
-                                              onSettingsChanged:
-                                                  _saveAndApplySettings,
-                                              onWordWrapToggle: _toggleWordWrap,
-                                              onIncreaseFontSize:
-                                                  _increaseFontSize,
-                                              onDecreaseFontSize:
-                                                  _decreaseFontSize,
-                                              onShowAllSettings: () =>
-                                                  _showEnhancedEditorSettings(
-                                                    context,
-                                                  ),
-                                              onCopyContent:
-                                                  _copyEditorContentToClipboard,
-                                            ),
-                                          ),
-                                        )
-                                      : null,
-                                ),
-                              );
-                            },
+                            expandedWidth: _expandedSidebarWidth,
+                            editorOptions: _editorOptions,
+                            selectionState: selectionState,
+                            onSaveAndApplyOptions: _saveAndApplyOptions,
+                            onToggleWordWrap: _toggleWordWrap,
+                            onIncreaseFontSize: _increaseFontSize,
+                            onDecreaseFontSize: _decreaseFontSize,
+                            onShowEnhancedEditorSettings: () =>
+                                _showEnhancedEditorSettings(context),
+                            onCopyEditorContent: _copyEditorContentToClipboard,
                           ),
 
                           // Floating Toggle Button (positioned in editor area)
@@ -578,12 +515,90 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             // Bottom info bar
             if (editorStatus.isReady)
               MonacoEditorInfoBar(
-                bridge: ref.read(monacoEditorServiceProvider).bridge,
                 onCopy: _copyEditorContentToClipboard,
+                onCopyFullPaths: _copyFullPathsToClipboard,
+                onCopyAiPaths: _copyAiPathsToClipboard,
               ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Extracted sidebar widget to simplify the main build method.
+class _EditorSidebar extends StatelessWidget {
+  const _EditorSidebar({
+    required this.animation,
+    required this.expandedWidth,
+    required this.editorOptions,
+    required this.selectionState,
+    required this.onSaveAndApplyOptions,
+    required this.onToggleWordWrap,
+    required this.onIncreaseFontSize,
+    required this.onDecreaseFontSize,
+    required this.onShowEnhancedEditorSettings,
+    required this.onCopyEditorContent,
+  });
+
+  final Animation<double> animation;
+  final double expandedWidth;
+  final EditorOptions editorOptions;
+  final SelectionState selectionState;
+  final ValueChanged<EditorOptions> onSaveAndApplyOptions;
+  final VoidCallback onToggleWordWrap;
+  final VoidCallback onIncreaseFontSize;
+  final VoidCallback onDecreaseFontSize;
+  final VoidCallback onShowEnhancedEditorSettings;
+  final VoidCallback onCopyEditorContent;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, child) {
+        final width = expandedWidth * animation.value;
+
+        return Positioned(
+          left: 0,
+          top: 0,
+          bottom: 0,
+          child: SizedBox(
+            width: width,
+            child: width > 0
+                ? ClipRect(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: context.surfaceContainerHighest,
+                        border: BorderDirectional(
+                          end: BorderSide(
+                            color: context.outline.addOpacity(0.2),
+                          ),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: context.shadow.addOpacity(0.05),
+                            offset: const Offset(2, 0),
+                            blurRadius: 4,
+                          ),
+                        ],
+                      ),
+                      child: QuickSidebar(
+                        options: editorOptions,
+                        selectionState: selectionState,
+                        onOptionsChanged: onSaveAndApplyOptions,
+                        onWordWrapToggle: onToggleWordWrap,
+                        onIncreaseFontSize: onIncreaseFontSize,
+                        onDecreaseFontSize: onDecreaseFontSize,
+                        onShowAllSettings: onShowEnhancedEditorSettings,
+                        onCopyContent: onCopyEditorContent,
+                      ),
+                    ),
+                  )
+                : null,
+          ),
+        );
+      },
     );
   }
 }

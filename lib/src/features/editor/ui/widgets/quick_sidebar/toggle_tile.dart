@@ -20,16 +20,20 @@ class ToggleTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: DesignSystem.space8),
-      child: DsTile(
+      child: ListTile(
+        dense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
         leading: Icon(
           icon,
           size: DesignSystem.iconSizeSmall + 2,
           color: value ? context.primary : context.onSurfaceVariant,
         ),
         title: Text(title),
-        trailing: DsSwitch(
+        trailing: Switch(
           value: value,
           onChanged: onChanged,
+          activeColor: context.primary,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
         onTap: () => onChanged(!value),
       ),

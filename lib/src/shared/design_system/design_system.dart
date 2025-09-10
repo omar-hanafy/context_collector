@@ -11,7 +11,7 @@ part 'ds_dimensions.dart';
 part 'ds_extensions.dart';
 part 'ds_helpers.dart';
 part 'ds_text_styles.dart';
-part 'ds_widgets.dart';
+part 'ds_widgets_simplified.dart';
 
 /// Design System configuration
 class DesignSystem {

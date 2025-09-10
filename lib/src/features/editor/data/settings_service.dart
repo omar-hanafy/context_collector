@@ -1,39 +1,40 @@
-import 'package:dart_helper_utils/dart_helper_utils.dart';
+import 'dart:convert';
+
+import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../core/model/editor_settings.dart';
+/// Simple service for persisting EditorOptions
+class EditorSettingsService {
+  static const String _storageKey = 'editor_options';
 
-/// Service responsible for persisting and loading editor settings
-class EditorSettingsServiceHelper {
-  static const String _storageKey = 'editor_settings';
-
-  /// Save settings to SharedPreferences as a single JSON string
-  static Future<void> save(EditorSettings settings) async {
+  /// Save EditorOptions to SharedPreferences
+  static Future<void> save(EditorOptions options) async {
     final prefs = await SharedPreferences.getInstance();
-    final json = settings.toJson();
-    await prefs.setString(_storageKey, json.encode());
+    // Use the built-in toMonacoOptions method for robustness
+    await prefs.setString(_storageKey, jsonEncode(options.toMonacoOptions()));
   }
 
-  /// Load settings from SharedPreferences
-  static Future<EditorSettings> load() async {
+  /// Load EditorOptions from SharedPreferences
+  static Future<EditorOptions> load() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonString = prefs.getString(_storageKey);
 
     if (jsonString == null) {
-      return const EditorSettings();
+      // Return default options from MonacoConstants
+      return MonacoConstants.defaultOptions;
     }
 
     try {
-      final json = jsonString.decode();
-      final jsonMap = ConvertObject.toMap<String, dynamic>(json);
-      return EditorSettings.fromJson(jsonMap);
+      final json = jsonDecode(jsonString) as Map<String, dynamic>;
+      // Use EditorOptions.fromJson factory
+      return EditorOptions.fromJson(json);
     } catch (e) {
-      // If parsing fails, return default settings
-      return const EditorSettings();
+      // Return defaults on error
+      return MonacoConstants.defaultOptions;
     }
   }
 
-  /// Clear all saved settings
+  /// Clear saved settings
   static Future<bool> clear() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.remove(_storageKey);

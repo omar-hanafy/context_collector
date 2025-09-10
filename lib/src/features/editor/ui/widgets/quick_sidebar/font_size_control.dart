@@ -1,6 +1,7 @@
 import 'package:context_collector/context_collector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_helper_utils/flutter_helper_utils.dart';
+import 'package:flutter_monaco/flutter_monaco.dart';
 
 /// Font size control widget with increase/decrease buttons
 class FontSizeControl extends StatelessWidget {
@@ -20,7 +21,7 @@ class FontSizeControl extends StatelessWidget {
     return Row(
       children: [
         IconButton(
-          onPressed: fontSize > EditorConstants.minFontSize ? onDecrease : null,
+          onPressed: fontSize > MonacoConstants.minFontSize ? onDecrease : null,
           icon: Icon(
             Icons.remove,
             color: context.onSurfaceVariant,
@@ -52,7 +53,7 @@ class FontSizeControl extends StatelessWidget {
           ),
         ),
         IconButton(
-          onPressed: fontSize < EditorConstants.maxFontSize ? onIncrease : null,
+          onPressed: fontSize < MonacoConstants.maxFontSize ? onIncrease : null,
           icon: Icon(
             Icons.add,
             color: context.onSurfaceVariant,

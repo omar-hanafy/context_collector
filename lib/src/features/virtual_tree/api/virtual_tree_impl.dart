@@ -50,6 +50,13 @@ class VirtualTreeImpl implements VirtualTreeAPI {
     _notifier.onSelectionChangedCallback = callback;
   }
 
+  @override
+  String buildAiPaths(Set<String> selectedFileIds) {
+    // This method is now handled directly in FileListNotifier
+    // to use real file paths instead of virtual paths
+    return '';
+  }
+
   /// Get existing file IDs in the tree
   Set<String> getExistingFileIds() {
     final treeData = _notifier.getCurrentTreeData();

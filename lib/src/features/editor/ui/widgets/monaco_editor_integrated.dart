@@ -14,52 +14,41 @@ class MonacoEditorIntegrated extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Watch the single source of truth for the editor's status.
-    final editorStatus = ref.watch(monacoProvider);
+    final editorStatus = ref.watch(monacoEditorStatusProvider);
+    final service = ref.read(monacoEditorStatusProvider.notifier);
 
     // The entire UI is built declaratively based on the service's state.
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 300),
-      child: _buildContentForStatus(context, ref, editorStatus),
+    return Stack(
+      children: [
+        Offstage(
+          offstage: editorStatus.lifecycle != EditorLifecycle.ready,
+          child: SizedBox.expand(
+            child: service.webviewWidget,
+          ),
+        ),
+        Offstage(
+          offstage: editorStatus.lifecycle != EditorLifecycle.error,
+          child: _ErrorView(
+            error: editorStatus.error,
+            onRetry: service.initialize,
+          ),
+        ),
+        Offstage(
+          offstage:
+              editorStatus.lifecycle == EditorLifecycle.ready ||
+              editorStatus.lifecycle == EditorLifecycle.error,
+          child: _LoadingView(
+            message: editorStatus.message,
+          ),
+        ),
+      ],
     );
-  }
-
-  /// Selects the correct view to display based on the EditorStatus.
-  Widget _buildContentForStatus(
-    BuildContext context,
-    WidgetRef ref,
-    EditorStatus status,
-  ) {
-    final service = ref.read(monacoProvider.notifier);
-    // Each state has a unique key to ensure AnimatedSwitcher transitions correctly.
-    return switch (status.lifecycle) {
-      EditorLifecycle.ready =>
-        // HAPPY PATH: The editor is ready. Get the pre-configured webview widget
-        // directly from the service and display it.
-        SizedBox.expand(
-          key: const ValueKey('monaco_ready'),
-          child: service.webviewWidget,
-        ),
-      EditorLifecycle.error =>
-        // ERROR STATE: Something went wrong. Show an informative error view.
-        _ErrorView(
-          key: const ValueKey('monaco_error'),
-          error: status.error,
-          onRetry: service.initialize,
-        ),
-      _ =>
-        // LOADING STATES: For all other states (initial, loading assets, etc.),
-        // show a consistent loading view with the current status message.
-        _LoadingView(
-          key: const ValueKey('monaco_loading'),
-          message: status.message,
-        ),
-    };
   }
 }
 
 /// A private helper widget for displaying the loading state.
 class _LoadingView extends StatelessWidget {
-  const _LoadingView({required this.message, super.key});
+  const _LoadingView({required this.message});
 
   final String message;
 
@@ -95,7 +84,7 @@ class _LoadingView extends StatelessWidget {
 
 /// A private helper widget for displaying the error state.
 class _ErrorView extends StatelessWidget {
-  const _ErrorView({this.error, required this.onRetry, super.key});
+  const _ErrorView({this.error, required this.onRetry});
 
   final String? error;
   final VoidCallback onRetry;
