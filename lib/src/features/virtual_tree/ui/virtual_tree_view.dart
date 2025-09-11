@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../editor/editor.dart';
 import '../state/tree_state.dart';
-import 'file_edit_dialog.dart';
+// Editing dialog removed; new files open directly in Monaco.
 import 'tree_node_widget.dart';
 
 /// Main virtual tree view widget
@@ -169,18 +169,9 @@ class VirtualTreeView extends ConsumerWidget {
       hint: 'Enter file name (e.g., notes.md)',
       existingNames: existingNames,
       onConfirm: (name) async {
-        final content = await showFileEditDialog(
-          context,
-          fileName: name,
-          initialContent: '',
-        );
-        // If the user saved the content, create the file via the notifier.
-        if (content != null) {
-          ref.read(selectionProvider.notifier).createVirtualFile(name, content);
-        }
-        if (context.mounted) {
-          await EditorFocusHelper.restoreFocus(ref);
-        }
+        // Create empty file and open for editing in Monaco
+        ref.read(selectionProvider.notifier).createVirtualFile(name, '');
+        await EditorFocusHelper.restoreFocus(ref);
       },
     );
   }

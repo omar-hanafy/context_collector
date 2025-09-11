@@ -3,6 +3,7 @@ import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/file_list_state.dart';
+import 'package:context_collector/context_collector.dart';
 
 /// Simple dialog for pasting file and directory paths
 class PastePathsDialog extends ConsumerWidget {
@@ -21,7 +22,7 @@ class PastePathsDialog extends ConsumerWidget {
     final theme = Theme.of(context);
     final controller = TextEditingController();
 
-    void submit() {
+    Future<void> submit() async {
       final text = controller.text.trim();
       if (text.isEmpty) return;
 
@@ -29,7 +30,12 @@ class PastePathsDialog extends ConsumerWidget {
       Navigator.of(context).pop();
 
       // Process the pasted paths
-      ref.read(selectionProvider.notifier).processPastedPaths(text, context);
+      await ref
+          .read(selectionProvider.notifier)
+          .processPastedPaths(text, context);
+
+      // Restore Monaco focus after the dialog and any overlays are gone
+      await EditorFocusHelper.restoreFocus(ref);
     }
 
     return Dialog(

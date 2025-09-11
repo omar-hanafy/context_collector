@@ -23,7 +23,9 @@ class _SharedDropZoneState extends ConsumerState<DropZone> {
   Widget build(BuildContext context) {
     final selectionNotifier = ref.read(selectionProvider.notifier);
 
-    return DropTarget(
+    return Focus(
+      canRequestFocus: false,
+      child: DropTarget(
       onDragEntered: (details) => setState(() => _isDragging = true),
       onDragExited: (details) => setState(() => _isDragging = false),
       onDragDone: (details) async {
@@ -45,6 +47,7 @@ class _SharedDropZoneState extends ConsumerState<DropZone> {
         ),
         child: widget.child,
       ),
+    ),
     );
   }
 }

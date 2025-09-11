@@ -5,7 +5,7 @@ import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../scan/ui/file_display_helper.dart';
-import 'file_edit_dialog.dart';
+// Editing happens directly in Monaco now; no edit dialog.
 
 /// Folder selection state
 enum FolderSelectionState { none, partial, all }
@@ -35,12 +35,16 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
     final notifier = ref.read(treeStateProvider.notifier);
     final treeState = ref.watch(treeStateProvider);
     final scannerFiles = ref.watch(selectionProvider).fileMap;
+    final activeFileId = ref.watch(selectionProvider).activeFileId;
 
     final isExpanded = notifier.isExpanded(widget.node.id);
+    // Checkbox-selected (included in combined output)
     final isSelected = treeState.selectedNodeIds.contains(widget.node.id);
     final file = widget.node.fileId != null
         ? scannerFiles[widget.node.fileId]
         : null;
+    final isActive = widget.node.fileId != null &&
+        widget.node.fileId == activeFileId;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -49,12 +53,12 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
           onEnter: (_) => setState(() => _isHovered = true),
           onExit: (_) => setState(() => _isHovered = false),
           child: GestureDetector(
-            onTap: () => _handleNodeTap(context, ref),
+            onTap: () => _handleRowTap(ref),
             onSecondaryTapDown: (details) => _showContextMenu(context, details),
             child: Container(
               height: 32,
               decoration: BoxDecoration(
-                color: _getBackgroundColor(context, isSelected),
+                color: _getBackgroundColor(context, isSelected, isActive),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Row(
@@ -89,7 +93,7 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
                           ? Checkbox(
                               value: isSelected,
                               onChanged: (value) =>
-                                  _handleSelectionChange(ref, value ?? false),
+                                  _handleCheckboxChange(ref, value ?? false),
                               materialTapTargetSize:
                                   MaterialTapTargetSize.shrinkWrap,
                               visualDensity: VisualDensity.compact,
@@ -126,16 +130,7 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
                     const SizedBox(width: 8),
                   ],
 
-                  // Hover actions
-                  if (_isHovered) ...[
-                    if (widget.node.type == NodeType.file && file != null) ...[
-                      _buildHoverAction(
-                        icon: Icons.edit_outlined,
-                        tooltip: 'Edit',
-                        onPressed: _editFile,
-                      ),
-                    ],
-                  ],
+                  // No hover Edit action anymore — editing happens in Monaco
 
                   const SizedBox(width: 8),
                 ],
@@ -160,9 +155,12 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
     );
   }
 
-  Color _getBackgroundColor(BuildContext context, bool isSelected) {
+  Color _getBackgroundColor(BuildContext context, bool isSelected, bool isActive) {
     final colorScheme = Theme.of(context).colorScheme;
 
+    if (isActive) {
+      return colorScheme.primaryContainer.withOpacity(0.22);
+    }
     if (isSelected) {
       return colorScheme.primary.addOpacity(0.15);
     } else if (_isHovered) {
@@ -236,33 +234,17 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
     return const SizedBox.shrink();
   }
 
-  Widget _buildHoverAction({
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback onPressed,
-  }) {
-    return SizedBox(
-      width: 24,
-      height: 24,
-      child: IconButton(
-        icon: Icon(icon, size: 16),
-        onPressed: onPressed,
-        tooltip: tooltip,
-        padding: EdgeInsets.zero,
-        splashRadius: 12,
-      ),
-    );
-  }
+  // Hover actions removed; editing is now in Monaco directly
 
-  void _handleNodeTap(BuildContext context, WidgetRef ref) {
+  void _handleRowTap(WidgetRef ref) {
     final notifier = ref.read(treeStateProvider.notifier);
-
     if (widget.node.type == NodeType.folder) {
-      // For folders, toggle expansion
       notifier.toggleFolderExpansion(widget.node.id);
-    } else {
-      // For files, toggle selection
-      notifier.toggleNode(widget.node.id);
+      return;
+    }
+    final fileId = widget.node.fileId;
+    if (fileId != null) {
+      ref.read(selectionProvider.notifier).setActiveFile(fileId);
     }
   }
 
@@ -280,7 +262,7 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
         // If partially selected or none selected, select all
         // If all selected, deselect all
         final shouldSelect = folderState != FolderSelectionState.all;
-        _handleSelectionChange(ref, shouldSelect);
+        _handleCheckboxChange(ref, shouldSelect);
       },
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       visualDensity: VisualDensity.compact,
@@ -327,7 +309,7 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
     }
   }
 
-  void _handleSelectionChange(WidgetRef ref, bool selected) {
+  void _handleCheckboxChange(WidgetRef ref, bool selected) {
     final notifier = ref.read(treeStateProvider.notifier);
 
     if (widget.node.type == NodeType.file) {
@@ -356,10 +338,11 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
         Offset.zero & overlay.size,
       ),
       items: _buildContextMenuItems(context),
-    ).then((value) {
+    ).then((value) async {
       if (value != null) {
         _handleContextMenuAction(value);
       }
+      await EditorFocusHelper.restoreFocus(ref);
     });
   }
 
@@ -388,7 +371,6 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
 
     if (widget.node.type == NodeType.file) {
       items.addAll([
-        menuItem('edit', Icons.edit, 'Edit'),
         menuItem('copy_path', Icons.content_copy, 'Copy Path'),
       ]);
     }
@@ -410,64 +392,11 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
     switch (action) {
       case 'select_all':
         notifier.selectFolder(widget.node.id);
-      case 'edit':
-        _editFile();
       case 'copy_path':
         _copyPath();
       case 'remove':
         // Use the FileListNotifier's removeNodes method for proper cleanup
         selectionNotifier.removeNodes({widget.node.id});
-    }
-  }
-
-
-  Future<void> _editFile() async {
-    // Get the ScannedFile from the selection provider
-    final file = ref.read(selectionProvider).fileMap[widget.node.fileId];
-    if (file == null) return;
-
-    // Check for large file
-    const int largeFileThreshold = 2 * 1024 * 1024; // 2MB
-
-    if (file.size > largeFileThreshold) {
-      final proceed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Warning: Large File'),
-          content: Text(
-            'This file is ${FileDisplayHelper.formatFileSize(file.size)} and may cause performance issues. '
-            'Do you want to proceed?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Proceed'),
-            ),
-          ],
-        ),
-      );
-
-      if (proceed != true) {
-        return; // User cancelled
-      }
-    }
-
-    // Show the file edit dialog
-    final newContent = await showFileEditDialog(
-      context,
-      fileName: FileDisplayHelper.getDisplayName(file),
-      initialContent: file.effectiveContent,
-    );
-
-    // If newContent is not null and different, update the file
-    if (newContent != null && newContent != file.effectiveContent) {
-      ref
-          .read(treeStateProvider.notifier)
-          .editNodeContent(widget.node.id, newContent);
     }
   }
 

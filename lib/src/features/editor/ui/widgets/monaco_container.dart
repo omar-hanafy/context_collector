@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../context_collector.dart';
+import '../../../scan/ui/file_display_helper.dart';
 
 /// Global container with layered architecture.
 /// This widget is the main controller that orchestrates the visibility of the UI
@@ -32,23 +33,46 @@ class _GlobalMonacoContainerState extends ConsumerState<GlobalMonacoContainer> {
 
   @override
   Widget build(BuildContext context) {
-    // Listen for changes in the selection state to update the editor.
-    // This listener lives here, in a widget that is ALWAYS in the tree,
-    // so it will never miss an update. This is the core fix.
-    ref.listen<SelectionState>(selectionProvider, (previous, next) {
-      if (previous?.combinedContent != next.combinedContent) {
-        // Cancel any pending updates
-        _debounceTimer?.cancel();
+    // Listen for active file/content changes to update the Monaco editor.
+    ref.listen<SelectionState>(selectionProvider, (previous, next) async {
+      final editorService = ref.read(monacoEditorStatusProvider.notifier);
+      final controller = ref.read(monacoControllerProvider);
 
-        // Debounce the update by 100ms to avoid rapid updates
-        _debounceTimer = Timer(const Duration(milliseconds: 100), () {
-          if (mounted) {
-            final editorService = ref.read(monacoEditorStatusProvider.notifier);
-            debugPrint(
-              '[GlobalListener] Updating editor content after debounce...',
-            );
-            editorService.updateContent(next.combinedContent);
-          }
+      final prevId = previous?.activeFileId;
+      final nextId = next.activeFileId;
+
+      // Persist current Monaco text into the previously active file before switching
+      if (prevId != null && prevId != nextId && controller != null) {
+        try {
+          final currentText = await controller.getValue();
+          ref.read(selectionProvider.notifier).saveEditorTextFor(prevId, currentText);
+        } catch (_) {
+          // Ignore non-fatal errors while reading the editor content
+        }
+      }
+
+      // Determine target text and language for Monaco based on active file
+      String targetText = '';
+      String? language;
+      if (nextId != null) {
+        final file = next.fileMap[nextId];
+        if (file != null) {
+          targetText = file.effectiveContent;
+          language = FileDisplayHelper.getLanguageFromFile(file);
+        }
+      }
+
+      final activeChanged = prevId != nextId;
+      final contentChanged = nextId != null &&
+          (previous == null ||
+              (previous.activeFileId == nextId &&
+                  (previous.fileMap[nextId]?.effectiveContent ?? '') != targetText));
+
+      if (activeChanged || contentChanged) {
+        _debounceTimer?.cancel();
+        _debounceTimer = Timer(const Duration(milliseconds: 80), () async {
+          if (!mounted) return;
+          await editorService.updateContent(targetText, language: language);
         });
       }
     });

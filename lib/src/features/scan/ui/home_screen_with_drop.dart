@@ -27,7 +27,9 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
   Widget build(BuildContext context) {
     final selectionNotifier = ref.read(selectionProvider.notifier);
 
-    return DropTarget(
+    return Focus(
+      canRequestFocus: false,
+      child: DropTarget(
       onDragEntered: (_) => setState(() => _isDragging = true),
       onDragExited: (_) => setState(() => _isDragging = false),
       onDragDone: (details) async {
@@ -53,6 +55,7 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
         ),
         child: HomeScreenContent(isDragging: _isDragging),
       ),
+    ),
     );
   }
 }
@@ -592,4 +595,3 @@ class HomeScreenContent extends ConsumerWidget {
     );
   }
 }
-

@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/providers.dart';
+import '../data/monaco_service.dart';
 
 /// A helper class to manage focus restoration for the Monaco editor.
 class EditorFocusHelper {
@@ -14,13 +16,19 @@ class EditorFocusHelper {
   /// This is a workaround for a known issue on macOS where platform views
   /// (like the Monaco editor) don't regain focus automatically.
   static Future<void> restoreFocus(WidgetRef ref) async {
-    // 1. Force Flutter's native text input plugin to release the keyboard.
-    await SystemChannels.textInput.invokeMethod<void>('TextInput.clearClient');
+    // 1) Release any lingering Flutter text input client.
+    try { FocusManager.instance.primaryFocus?.unfocus(); } catch (_) {}
+    try {
+      await SystemChannels.textInput.invokeMethod<void>('TextInput.clearClient');
+    } catch (_) {}
 
-    // 2. Wait a brief moment for the engine to process the channel message.
-    await Future<void>.delayed(const Duration(milliseconds: 50));
+    // 2) Wait for frames so platform views reattach after a route pop.
+    await WidgetsBinding.instance.endOfFrame;
+    await WidgetsBinding.instance.endOfFrame;
 
-    // 3. Now that the path is clear, tell Monaco to take focus.
+    // 3) Ensure native WebView becomes first responder, then focus Monaco.
+    final service = ref.read(monacoEditorStatusProvider.notifier) as MonacoService;
+    await service.ensureNativeFocus();
     final controller = ref.read(monacoControllerProvider);
     await controller?.focus();
   }

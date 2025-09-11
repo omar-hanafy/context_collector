@@ -14,6 +14,7 @@ class MonacoService extends StateNotifier<EditorStatus> {
   MonacoController? _controller;
   String? _queuedContent;
   String? _queuedLanguage;
+  final FocusNode _webViewFocusNode = FocusNode(debugLabel: 'MonacoWebView');
 
   MonacoController? get controller => _controller;
 
@@ -21,7 +22,12 @@ class MonacoService extends StateNotifier<EditorStatus> {
     if (_controller == null || !state.isReady) {
       return const Center(child: CircularProgressIndicator());
     }
-    return _controller!.webViewWidget;
+    // Ensure the native platform view can become first responder
+    return Focus(
+      focusNode: _webViewFocusNode,
+      canRequestFocus: true,
+      child: _controller!.webViewWidget,
+    );
   }
 
   Future<void> initialize() async {
@@ -93,7 +99,18 @@ class MonacoService extends StateNotifier<EditorStatus> {
   @override
   void dispose() {
     _controller?.dispose();
+    _webViewFocusNode.dispose();
     super.dispose();
+  }
+
+  /// Ensures the native WebView grabs platform focus (first responder),
+  /// then the JS Monaco instance can accept keyboard input.
+  Future<void> ensureNativeFocus() async {
+    if (_webViewFocusNode.canRequestFocus) {
+      _webViewFocusNode.requestFocus();
+      // Give the engine a beat to propagate focus to the platform view
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
   }
 }
 

@@ -1,4 +1,4 @@
-import 'dart:io';
+// import 'dart:io'; // Unused
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -24,6 +24,7 @@ class SelectionState {
     this.error,
     this.combinedContent = '',
     this.virtualTreeJson,
+    this.activeFileId,
   });
 
   final Map<String, ScannedFile>
@@ -35,6 +36,7 @@ class SelectionState {
   final String? error;
   final String combinedContent;
   final String? virtualTreeJson;
+  final String? activeFileId;
 
   // Backward compatible getters
   Set<String> get selectedFilePaths =>
@@ -70,6 +72,7 @@ class SelectionState {
     bool clearError = false,
     String? combinedContent,
     String? virtualTreeJson,
+    String? activeFileId,
   }) {
     return SelectionState(
       fileMap: fileMap ?? this.fileMap,
@@ -80,8 +83,13 @@ class SelectionState {
       error: clearError ? null : error ?? this.error,
       combinedContent: combinedContent ?? this.combinedContent,
       virtualTreeJson: virtualTreeJson ?? this.virtualTreeJson,
+      activeFileId: activeFileId ?? this.activeFileId,
     );
   }
+
+  // Convenience
+  ScannedFile? get activeFile =>
+      activeFileId == null ? null : fileMap[activeFileId];
 }
 
 /// Provider for path parser service
@@ -181,6 +189,8 @@ class FileListNotifier extends StateNotifier<SelectionState> {
       fileMap: newFileMap,
       selectedFileIds: updatedSelection,
       sessionStarted: true, // Adding any file starts the session
+      // If no active file yet, open this file immediately
+      activeFileId: state.activeFileId ?? file.id,
     );
 
     // INSTANT UI UPDATE - No debouncing!
@@ -202,6 +212,25 @@ class FileListNotifier extends StateNotifier<SelectionState> {
   //============================================================================
   // PUBLIC API
   //============================================================================
+
+  /// Set active file for viewing/editing in Monaco.
+  void setActiveFile(String fileId) {
+    if (!state.fileMap.containsKey(fileId)) return;
+    if (state.activeFileId == fileId) return;
+    state = state.copyWith(activeFileId: fileId);
+  }
+
+  /// Persist the editor's current text into the given file
+  /// (call before switching away or before copy/save).
+  void saveEditorTextFor(String fileId, String text) {
+    final file = state.fileMap[fileId];
+    if (file == null) return;
+    if (text == file.effectiveContent) return; // No change
+    final newFileMap = Map<String, ScannedFile>.from(state.fileMap);
+    newFileMap[fileId] = file.copyWith(editedContent: text);
+    state = state.copyWith(fileMap: newFileMap);
+    _rebuildCombinedContent();
+  }
 
   /// New: Refreshes the content of all non-virtual files from disk.
   Future<void> refreshAllContents() async {
@@ -429,6 +458,8 @@ class FileListNotifier extends StateNotifier<SelectionState> {
 
     // Add to state and rebuild everything. This is simpler and more robust.
     _addFileToState(virtualFile);
+    // Make it the active file for editing in Monaco
+    state = state.copyWith(activeFileId: virtualFile.id);
   }
 
 
@@ -492,12 +523,29 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     final shouldResetSession =
         newFileMap.isEmpty && state.sessionStarted && !state.hasFiles;
 
+    // Adjust active file if it was removed
+    String? newActiveFileId = state.activeFileId;
+    if (newActiveFileId != null && !newFileMap.containsKey(newActiveFileId)) {
+      // Prefer any still-selected file, else any remaining file, else null
+      final stillSelected = state.selectedFileIds
+          .where(newFileMap.containsKey)
+          .toList();
+      if (stillSelected.isNotEmpty) {
+        newActiveFileId = stillSelected.first;
+      } else if (newFileMap.isNotEmpty) {
+        newActiveFileId = newFileMap.keys.first;
+      } else {
+        newActiveFileId = null;
+      }
+    }
+
     state = state.copyWith(
       fileMap: newFileMap,
       selectedFileIds: newSelectedFileIds,
       scanHistory: newScanHistory,
       // If all files are removed, end the session to return to home screen
       sessionStarted: shouldResetSession ? false : state.sessionStarted,
+      activeFileId: newActiveFileId,
     );
 
     // This rebuilds the tree from the now-clean master state

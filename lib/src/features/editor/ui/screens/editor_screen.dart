@@ -10,6 +10,7 @@ import '../../../../context_collector.dart';
 import '../../../../shared/widgets/app_bar_title.dart';
 import '../../../../shared/widgets/shared_drop_zone.dart';
 import '../../../scan/ui/paste_paths_dialog.dart';
+import '../route_focus_restorer.dart';
 
 /// Refactored editor screen using flutter_monaco package
 class EditorScreen extends ConsumerStatefulWidget {
@@ -150,10 +151,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     if (newOptions != null && mounted) {
       await _saveAndApplyOptions(newOptions);
     }
-
-    if (mounted) {
-      await EditorFocusHelper.restoreFocus(ref);
-    }
   }
 
   /// Copy full paths of selected files to clipboard
@@ -186,38 +183,34 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
   /// Copy the editor's current content
   Future<void> _copyEditorContentToClipboard() async {
-    String content = '';
-
-    try {
-      // Try to get the live content from the Monaco editor
-      final controller = ref.read(monacoControllerProvider);
-      if (controller != null) {
-        content = await controller.getValue();
-      }
-    } catch (e) {
-      debugPrint('[EditorScreen] Failed to get live content: $e');
-    }
-
-    // If we couldn't get content from the editor, fall back to the state
-    if (content.isEmpty) {
-      content = ref.read(selectionProvider).combinedContent;
-    }
-
-    // Copy to clipboard and show feedback
-    if (content.isNotEmpty) {
+    // Flush Monaco → state for the active file so combined content has the latest edits
+    final controller = ref.read(monacoControllerProvider);
+    final activeId = ref.read(selectionProvider).activeFileId;
+    if (controller != null && activeId != null) {
       try {
-        await Clipboard.setData(ClipboardData(text: content));
-        if (mounted) {
-          context.showOk('Editor content copied to clipboard!');
-        }
+        final text = await controller.getValue();
+        ref.read(selectionProvider.notifier).saveEditorTextFor(activeId, text);
       } catch (e) {
-        if (mounted) {
-          context.showErr('Error copying to clipboard: $e');
-        }
+        debugPrint('[EditorScreen] Failed to get live content: $e');
       }
-    } else {
+    }
+
+    final content = ref.read(selectionProvider).combinedContent;
+    if (content.isEmpty) {
       if (mounted) {
         context.showInfo('Nothing to copy.');
+      }
+      return;
+    }
+
+    try {
+      await Clipboard.setData(ClipboardData(text: content));
+      if (mounted) {
+        context.showOk('Combined context copied to clipboard!');
+      }
+    } catch (e) {
+      if (mounted) {
+        context.showErr('Error copying to clipboard: $e');
       }
     }
   }
@@ -236,7 +229,17 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       }
     });
 
-    return Scaffold(
+    // When the active file changes, nudge focus back to Monaco
+    ref.listen<SelectionState>(selectionProvider, (prev, next) {
+      if (prev?.activeFileId != next.activeFileId && next.activeFileId != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          EditorFocusHelper.restoreFocus(ref);
+        });
+      }
+    });
+
+    return MonacoRouteFocusRestorer(
+      child: Scaffold(
       backgroundColor: context.surface,
       appBar: AppBar(
         // Compact height for desktop
@@ -255,16 +258,20 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
+                onCanceled: () {
+                  // Menu dismissed without selection – ensure editor regains focus
+                  EditorFocusHelper.restoreFocus(ref);
+                },
                 onSelected: (value) async {
                   if (value == 'files') {
-                    selectionNotifier.pickFiles(context);
+                    await selectionNotifier.pickFiles(context);
+                    await EditorFocusHelper.restoreFocus(ref);
                   } else if (value == 'folder') {
-                    selectionNotifier.pickDirectory(context);
+                    await selectionNotifier.pickDirectory(context);
+                    await EditorFocusHelper.restoreFocus(ref);
                   } else if (value == 'paste_paths') {
                     await PastePathsDialog.show(context);
-                    if (context.mounted) {
-                      await EditorFocusHelper.restoreFocus(ref);
-                    }
+                    await EditorFocusHelper.restoreFocus(ref);
                   }
                 },
                 itemBuilder: (context) => [
@@ -307,12 +314,26 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
               const SizedBox(width: 8),
 
-              // Save action
+              // Save action (saves combined markdown)
               FilledButton.icon(
                 icon: const Icon(Icons.save_alt_rounded, size: 18),
                 label: const Text('Save'),
                 onPressed: selectionState.hasSelectedFiles
-                    ? selectionNotifier.saveToFile
+                    ? () async {
+                        // Flush Monaco → state before saving combined content
+                        final controller = ref.read(monacoControllerProvider);
+                        final activeId =
+                            ref.read(selectionProvider).activeFileId;
+                        if (controller != null && activeId != null) {
+                          try {
+                            final text = await controller.getValue();
+                            ref
+                                .read(selectionProvider.notifier)
+                                .saveEditorTextFor(activeId, text);
+                          } catch (_) {}
+                        }
+                        await selectionNotifier.saveToFile();
+                      }
                     : null,
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -354,7 +375,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 MaterialPageRoute<void>(
                   builder: (context) => const SettingsScreen(),
                 ),
-              );
+              ).then((_) => EditorFocusHelper.restoreFocus(ref));
             },
             tooltip: 'Settings',
           ),
@@ -522,6 +543,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           ],
         ),
       ),
+    ),
     );
   }
 }

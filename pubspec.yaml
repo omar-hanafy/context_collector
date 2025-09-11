@@ -10,8 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_monaco:
-    path: packages/flutter_monaco
+  flutter_monaco: ^0.1.0
   ai_token_calculator:
     path: ./packages/ai_token_calculator
   cupertino_icons: ^1.0.8
