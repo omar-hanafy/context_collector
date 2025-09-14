@@ -4,11 +4,12 @@ import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/providers.dart';
+import '../../../data/settings_service.dart';
 import 'language_selector.dart';
 import 'stats_row.dart';
 
 /// Refactored info bar that uses MonacoController from flutter_monaco
-class MonacoEditorInfoBar extends ConsumerWidget {
+class MonacoEditorInfoBar extends ConsumerStatefulWidget {
   const MonacoEditorInfoBar({
     required this.onCopy,
     this.onCopyFullPaths,
@@ -21,12 +22,43 @@ class MonacoEditorInfoBar extends ConsumerWidget {
   final VoidCallback? onCopyAiPaths;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MonacoEditorInfoBar> createState() => _MonacoEditorInfoBarState();
+}
+
+class _MonacoEditorInfoBarState extends ConsumerState<MonacoEditorInfoBar> {
+  bool? _wordWrap;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadWordWrap();
+  }
+
+  Future<void> _loadWordWrap() async {
+    final opts = await EditorSettingsService.load();
+    if (mounted) setState(() => _wordWrap = opts.wordWrap);
+  }
+
+  Future<void> _toggleWordWrap() async {
+    final controller = ref.read(monacoControllerProvider);
+    if (controller == null) return;
+    final service = ref.read(monacoEditorStatusProvider.notifier);
+    final current = await EditorSettingsService.load();
+    final next = current.copyWith(wordWrap: !current.wordWrap);
+    await EditorSettingsService.save(next);
+    await service.updateOptions(next);
+    if (mounted) setState(() => _wordWrap = next.wordWrap);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final controller = ref.watch(monacoControllerProvider);
 
     if (controller == null) {
       return const _LoadingIndicator();
     }
+
+    final wrapOn = _wordWrap ?? true; // default to true until loaded
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -64,7 +96,7 @@ class MonacoEditorInfoBar extends ConsumerWidget {
           const Spacer(),
 
           // Action Buttons
-          ..._buildActionButtons(context, controller),
+          ..._buildActionButtons(context, controller, wrapOn),
         ],
       ),
     );
@@ -73,7 +105,10 @@ class MonacoEditorInfoBar extends ConsumerWidget {
   List<Widget> _buildActionButtons(
     BuildContext context,
     MonacoController controller,
+    bool wrapOn,
   ) {
+    final onColor = Theme.of(context).colorScheme.primary;
+    final offColor = Theme.of(context).colorScheme.onSurfaceVariant;
     return [
       IconButton(
         icon: const Icon(EneftyIcons.arrow_circle_up_outline, size: 20),
@@ -87,14 +122,18 @@ class MonacoEditorInfoBar extends ConsumerWidget {
       ),
       const VerticalDivider(width: 1, indent: 8, endIndent: 8),
       IconButton(
-        icon: const Icon(EneftyIcons.textalign_justifyleft_outline, size: 20),
-        tooltip: 'Format Content',
-        onPressed: controller.format,
+        icon: Icon(
+          Icons.wrap_text,
+          size: 20,
+          color: wrapOn ? onColor : offColor,
+        ),
+        tooltip: wrapOn ? 'Word Wrap: On' : 'Word Wrap: Off',
+        onPressed: _toggleWordWrap,
       ),
       IconButton(
         icon: const Icon(EneftyIcons.copy_outline, size: 20),
         tooltip: 'Copy Content (Right-click for full paths)',
-        onPressed: onCopy, // Left-click is the default action
+        onPressed: widget.onCopy,
       ),
     ];
   }

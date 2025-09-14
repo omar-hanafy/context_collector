@@ -10,6 +10,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/consts.dart';
+import '../../../shared/widgets/app_bar_title.dart';
 import '../../../shared/dialogs/name_prompt.dart';
 import '../../editor/ui/widgets/prewarm_monaco.dart';
 import '../../virtual_tree/ui/virtual_tree_view.dart';
@@ -74,7 +75,14 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
       child: Scaffold(
         backgroundColor: cs.surface,
         appBar: AppBar(
-          title: const _HomeTitle(),
+          automaticallyImplyLeading: false,
+          leadingWidth: 44,
+          leading: IconButton(
+            tooltip: 'Quick info',
+            icon: const Icon(Icons.info_outline_rounded, size: 20),
+            onPressed: () => _showQuickInfo(context),
+          ),
+          title: const AppBarTitle(),
           centerTitle: true,
           actions: [
             IconButton(
@@ -294,30 +302,82 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
       }
     }
   }
-}
 
-class _HomeTitle extends StatelessWidget {
-  const _HomeTitle();
+  void _showQuickInfo(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.content_paste_search_rounded, size: 18, color: cs.primary),
-        const SizedBox(width: 8),
-        Text(
-          'Context Collector',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: cs.onSurface,
+    Widget item(IconData icon, String title, String desc) => ListTile(
+      dense: true,
+      visualDensity: VisualDensity.compact,
+      leading: Icon(icon, color: cs.primary),
+      title: Text(title, style: theme.textTheme.labelLarge),
+      subtitle: Text(desc, style: theme.textTheme.bodySmall),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+    );
+
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Context Collector — Quick Guide'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Context Collector is a safe, temporary workspace. It never edits your files on disk. '
+                'Use it to gather and prepare content for AI prompts — also handy for bug reports, docs, and sharing snippets.',
+                style: theme.textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 12),
+              Divider(color: cs.outlineVariant),
+              const SizedBox(height: 8),
+              item(
+                Icons.tips_and_updates_rounded,
+                'Prompt',
+                'Write instructions for the AI. Exported verbatim at the very top. Not included in the Context section.',
+              ),
+              item(
+                Icons.add_circle_outline_rounded,
+                'New Virtual File',
+                'Create a blank file in this workspace. Edits stay here and do not change files on disk.',
+              ),
+              item(
+                Icons.content_paste_rounded,
+                'Paste',
+                'Paste clipboard text as a new virtual file.',
+              ),
+              item(
+                Icons.content_paste_go_rounded,
+                'Paste Paths',
+                'Paste file/folder paths. We scan and load them into the workspace.',
+              ),
+              item(
+                Icons.file_open_rounded,
+                'Browse Files',
+                'Pick one or more files to include.',
+              ),
+              item(
+                Icons.folder_open_rounded,
+                'Browse Folder',
+                'Pick a directory; files are discovered recursively.',
+              ),
+            ],
           ),
         ),
-      ],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
     );
   }
 }
+
+// _HomeTitle removed; using shared AppBarTitle instead
 
 class _HeroDropZone extends StatelessWidget {
   const _HeroDropZone({required this.isDragging, required this.onTap});
