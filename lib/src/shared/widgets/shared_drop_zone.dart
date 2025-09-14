@@ -27,21 +27,21 @@ class _SharedDropZoneState extends ConsumerState<DropZone> {
     final selectionNotifier = ref.read(selectionProvider.notifier);
 
     return DropTarget(
-      catchAppWideDrops: true,
       onDragEntered: (details) => setState(() => _isDragging = true),
       onDragExited: (details) => setState(() => _isDragging = false),
       onDragDone: (DropDoneDetails details) async {
         setState(() => _isDragging = false);
 
         final fileItems = <XFile>[];
-        final textPayloads = <String>[];
+        final textPayloads = <String>{};
 
         for (final item in details.files) {
           if (item.isMemoryBacked && item.isTextLike) {
             try {
               final text = await item.readAsText();
-              if (text != null && text.trim().isNotEmpty) {
-                textPayloads.add(text);
+              final normalized = text?.trim();
+              if (normalized != null && normalized.isNotEmpty) {
+                textPayloads.add(normalized);
               }
             } catch (_) {}
             continue;
@@ -51,14 +51,16 @@ class _SharedDropZoneState extends ConsumerState<DropZone> {
 
         if (fileItems.isNotEmpty) {
           await selectionNotifier.processDroppedItems(fileItems);
-        }
-        for (final text in textPayloads) {
-          final name = await prompts.promptForNewFileName(
-            context,
-            initialName: 'pasted.txt',
-          );
-          if (name != null && name.trim().isNotEmpty) {
-            selectionNotifier.createVirtualFile(name.trim(), text);
+          // Ignore accompanying text flavors when files are present.
+        } else {
+          for (final text in textPayloads) {
+            final name = await prompts.promptForNewFileName(
+              context,
+              initialName: 'pasted.txt',
+            );
+            if (name != null && name.trim().isNotEmpty) {
+              selectionNotifier.createVirtualFile(name.trim(), text);
+            }
           }
         }
       },

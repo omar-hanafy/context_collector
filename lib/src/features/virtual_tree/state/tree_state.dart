@@ -30,8 +30,13 @@ class TreeState {
       .toSet();
 
   /// Check if tree has any nodes under the main 'tree' folder
-  bool get hasNodes =>
-      nodes[TreeBuilder.treeRootId]?.childIds.isNotEmpty ?? false;
+  bool get hasNodes {
+    final treeHas = nodes[TreeBuilder.treeRootId]?.childIds.isNotEmpty ?? false;
+    final rootChildren = nodes[TreeBuilder.rootId]?.childIds ?? const <String>[];
+    // If there is any root-level child besides the 'tree' folder (e.g., Prompt)
+    final hasRootExtras = rootChildren.any((id) => id != TreeBuilder.treeRootId);
+    return treeHas || hasRootExtras;
+  }
 
   /// Create a copy with updated values
   TreeState copyWith({

@@ -50,10 +50,13 @@ class TreeBuilder {
     // Process virtual files, placing them at the top level
     final virtualFiles = files.where((f) => f.isVirtual).toList();
     for (final file in virtualFiles) {
+      // Special-case: a virtual file named 'Prompt' should live at the root
+      final parentForVirtual =
+          (file.name == 'Prompt') ? TreeBuilder.rootId : treeRootId;
       _addFileToParent(
         nodes: nodes,
         file: file,
-        parentId: treeRootId,
+        parentId: parentForVirtual,
       );
     }
 

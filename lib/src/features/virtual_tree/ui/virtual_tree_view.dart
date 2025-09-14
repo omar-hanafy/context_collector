@@ -1,12 +1,7 @@
-import 'package:context_collector/src/features/scan/state/file_list_state.dart';
-import 'package:context_collector/src/features/virtual_tree/services/tree_builder.dart';
+import 'package:context_collector/context_collector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../state/tree_state.dart';
-// Editing dialog removed; new files open directly in Monaco.
-import 'tree_node_widget.dart';
 
 /// Main virtual tree view widget
 class VirtualTreeView extends ConsumerWidget {
@@ -15,9 +10,22 @@ class VirtualTreeView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final treeState = ref.watch(treeStateProvider);
-    final rootNode = treeState.nodes[TreeBuilder.treeRootId];
+    final nodes = treeState.nodes;
+    final treeNode = nodes[TreeBuilder.treeRootId];
 
-    if (rootNode == null || !treeState.hasNodes) {
+    // Try to find a virtual file named 'Prompt' placed at the root level
+    TreeNode? promptNode;
+    for (final node in nodes.values) {
+      if (node.type == NodeType.file &&
+          node.isVirtual &&
+          node.name == 'Prompt' &&
+          node.parentId == TreeBuilder.rootId) {
+        promptNode = node;
+        break;
+      }
+    }
+
+    if ((treeNode == null || (!treeState.hasNodes)) && promptNode == null) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -46,13 +54,26 @@ class VirtualTreeView extends ConsumerWidget {
       );
     }
 
-    // Tree content only (no header/app bar)
+    // Tree content only (no header/app bar).
+    // Render Prompt (if present) above the main 'tree' folder.
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: TreeNodeWidget(
-        node: rootNode, // Start rendering from the 'tree' node
-        depth: 0,
-        nodes: treeState.nodes,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (promptNode != null)
+            TreeNodeWidget(
+              node: promptNode,
+              depth: 0,
+              nodes: nodes,
+            ),
+          if (treeNode != null)
+            TreeNodeWidget(
+              node: treeNode, // Render the 'tree' folder
+              depth: 0,
+              nodes: nodes,
+            ),
+        ],
       ),
     );
   }

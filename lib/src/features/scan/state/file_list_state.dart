@@ -453,7 +453,19 @@ class FileListNotifier extends StateNotifier<SelectionState> {
   //============================================================================
 
   void _rebuildCombinedContent() {
-    final content = markdownBuilder.buildMarkdown(state.selectedFiles);
+    // Find the special Prompt virtual file (if any), regardless of selection.
+    ScannedFile? promptFile;
+    for (final f in state.fileMap.values) {
+      if (f.isVirtual && f.name == 'Prompt') {
+        promptFile = f;
+        break;
+      }
+    }
+
+    final content = markdownBuilder.buildMarkdown(
+      state.selectedFiles,
+      prompt: promptFile,
+    );
     if (mounted) {
       state = state.copyWith(combinedContent: content);
     }

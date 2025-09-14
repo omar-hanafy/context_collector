@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
@@ -88,44 +87,49 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   void _wireRiverpodListeners() {
     // Listen for editor ready state to apply initial settings and push initial content
     _editorStatusSub = ref.listenManual<EditorStatus>(
-        monacoEditorStatusProvider, (previous, next) async {
-      if (!_hasAppliedInitialSettings && next.isReady) {
-        _hasAppliedInitialSettings = true;
-        
-        final selection = ref.read(selectionProvider);
-        String text = '';
-        String? lang;
-        final id = selection.activeFileId;
-        if (id != null) {
-          final file = selection.fileMap[id];
-          if (file != null) {
-            text = file.effectiveContent;
-            lang = FileDisplayHelper.getLanguageFromFile(file);
+      monacoEditorStatusProvider,
+      (previous, next) async {
+        if (!_hasAppliedInitialSettings && next.isReady) {
+          _hasAppliedInitialSettings = true;
+
+          final selection = ref.read(selectionProvider);
+          String text = '';
+          String? lang;
+          final id = selection.activeFileId;
+          if (id != null) {
+            final file = selection.fileMap[id];
+            if (file != null) {
+              text = file.effectiveContent;
+              lang = FileDisplayHelper.getLanguageFromFile(file);
+            }
           }
+          await ref
+              .read(monacoEditorStatusProvider.notifier)
+              .updateContent(text, language: lang);
+          unawaited(
+            ref.read(monacoEditorStatusProvider.notifier).ensureNativeFocus(),
+          );
         }
-        await ref
-            .read(monacoEditorStatusProvider.notifier)
-            .updateContent(text, language: lang);
-        unawaited(
-          ref.read(monacoEditorStatusProvider.notifier).ensureNativeFocus(),
-        );
-      }
-    });
+      },
+    );
 
     // Keep Monaco’s content in sync with the active file and edits
-    _selectionSub = ref.listenManual<SelectionState>(
-        selectionProvider, (previous, next) async {
+    _selectionSub = ref.listenManual<SelectionState>(selectionProvider, (
+      previous,
+      next,
+    ) async {
       final editorService = ref.read(monacoEditorStatusProvider.notifier);
       final controller = ref.read(monacoControllerProvider);
 
-      if (!_renameDialogOpen && next.pendingRenameFileId != null) {
+      if (!_renameDialogOpen &&
+          next.pendingRenameFileId != null &&
+          next.pendingRenameFileId != previous?.pendingRenameFileId) {
         _renameDialogOpen = true;
         WidgetsBinding.instance.addPostFrameCallback((_) async {
           if (!mounted) return;
           final fileId = ref.read(selectionProvider).pendingRenameFileId!;
           final fileName =
-              ref.read(selectionProvider).fileMap[fileId]?.name ??
-              'pasted.txt';
+              ref.read(selectionProvider).fileMap[fileId]?.name ?? 'pasted.txt';
           final newName = await promptForNewFileName(
             context,
             initialName: fileName,
@@ -351,9 +355,17 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           mainAxisAlignment: MainAxisAlignment.start,
           children: [
             const SizedBox(width: 8),
+            // Keep refresh first for utility
             _tb(Icons.refresh_rounded, 'Reload from disk', () {
               ref.read(selectionProvider.notifier).refreshAllContents();
             }),
+            // Mirror home ordering: Prompt • New Virtual File • Paste • Paste Paths • Browse Files • Browse Folder
+            _tb(
+              Icons.tips_and_updates_rounded,
+              'Prompt',
+              _openOrCreatePrompt,
+              color: Colors.amber,
+            ),
             _tb(Icons.note_add_outlined, 'New virtual file', () async {
               final name = await promptForNewFileName(
                 context,
@@ -365,48 +377,58 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                     .createVirtualFile(name.trim(), '');
               }
             }),
+            _tb(Icons.content_paste_rounded, 'Paste', () {
+              unawaited(_pasteClipboardAsContent());
+            }),
+            _tb(Icons.content_paste_go_rounded, 'Paste Paths', () {
+              unawaited(
+                ref
+                    .read(selectionProvider.notifier)
+                    .pastePathsFromClipboard(context),
+              );
+            }),
             _tb(Icons.file_open_rounded, 'Add files…', () {
               ref.read(selectionProvider.notifier).pickFiles(context);
             }),
             _tb(Icons.folder_open_rounded, 'Add folder…', () {
               ref.read(selectionProvider.notifier).pickDirectory(context);
             }),
-            _pasteIconButton(context),
-            _tb(
-              Icons.save_alt_rounded,
-              'Save Markdown',
-              selectionState.hasSelectedFiles
-                  ? () async {
-                      final controller = ref.read(monacoControllerProvider);
-                      final activeId = ref.read(selectionProvider).activeFileId;
-                      final viewingAll = ref.read(selectionProvider).viewingAll;
-                      if (!viewingAll &&
-                          controller != null &&
-                          activeId != null) {
-                        try {
-                          final text = await controller.getValue();
-                          ref
-                              .read(selectionProvider.notifier)
-                              .saveEditorTextFor(activeId, text);
-                        } catch (_) {}
-                      }
-                      await selectionNotifier.saveToFile();
-                    }
-                  : null,
-            ),
+            // Save moved to right-side actions to avoid leading overflow
           ],
         ),
 
         // RIGHT group — compact icon-only actions
         actions: [
+          _tb(
+            Icons.save_alt_rounded,
+            'Save Markdown',
+            selectionState.hasSelectedFiles
+                ? () async {
+                    final controller = ref.read(monacoControllerProvider);
+                    final activeId = ref.read(selectionProvider).activeFileId;
+                    final viewingAll = ref.read(selectionProvider).viewingAll;
+                    if (!viewingAll && controller != null && activeId != null) {
+                      try {
+                        final text = await controller.getValue();
+                        ref
+                            .read(selectionProvider.notifier)
+                            .saveEditorTextFor(activeId, text);
+                      } catch (_) {}
+                    }
+                    await selectionNotifier.saveToFile();
+                  }
+                : null,
+          ),
           _tb(Icons.settings_outlined, 'Settings', () async {
             await _showEnhancedEditorSettings(context);
           }),
-            _tb(
-              Icons.view_agenda_rounded,
-              ref.watch(selectionProvider).viewingAll ? 'Exit View All' : 'View All',
-              _toggleViewAllInMonaco,
-            ),
+          _tb(
+            Icons.view_agenda_rounded,
+            ref.watch(selectionProvider).viewingAll
+                ? 'Exit View All'
+                : 'View All',
+            _toggleViewAllInMonaco,
+          ),
           _tb(
             Icons.clear_all_rounded,
             'Clear all',
@@ -436,9 +458,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                           color: context.surfaceContainerHighest,
                           border: Border(
                             right: BorderSide(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .outlineVariant,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.outlineVariant,
                             ),
                           ),
                         ),
@@ -495,9 +517,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 // === Helper methods for compact toolbar and smart paste ===
 extension _ToolbarHelpers on _EditorScreenState {
   // Uniform compact icon buttons
-  Widget _tb(IconData icon, String tip, VoidCallback? onPressed) {
+  Widget _tb(
+    IconData icon,
+    String tip,
+    VoidCallback? onPressed, {
+    Color? color,
+  }) {
     return IconButton(
-      icon: Icon(icon, size: 18),
+      icon: Icon(icon, size: 18, color: color),
       tooltip: tip,
       onPressed: onPressed,
       padding: const EdgeInsets.all(6),
@@ -506,24 +533,27 @@ extension _ToolbarHelpers on _EditorScreenState {
     );
   }
 
-  // Paste icon with left-click = paste paths, right-click = paste as content
-  Widget _pasteIconButton(BuildContext context) {
-    return Listener(
-      behavior: HitTestBehavior.opaque,
-      onPointerDown: (event) async {
-        if (event.kind == PointerDeviceKind.mouse &&
-            (event.buttons & kSecondaryMouseButton) != 0) {
-          await _pasteClipboardAsContent();
-        }
-      },
-      child: _tb(
-        Icons.content_paste_go_rounded,
-        'Paste (left: paths • right: content)',
-        () => ref
-            .read(selectionProvider.notifier)
-            .pastePathsFromClipboard(context),
-      ),
-    );
+  // Open existing Prompt file or create a new one and activate it
+  Future<void> _openOrCreatePrompt() async {
+    final notifier = ref.read(selectionProvider.notifier);
+    final files = ref.read(selectionProvider).fileMap;
+    String? promptId;
+    for (final f in files.values) {
+      if (f.isVirtual && f.name == 'Prompt') {
+        promptId = f.id;
+        break;
+      }
+    }
+
+    if (promptId != null) {
+      notifier
+        ..setActiveFile(promptId)
+        ..exitCombinedPreview();
+    } else {
+      notifier
+        ..createVirtualFile('Prompt', '')
+        ..exitCombinedPreview();
+    }
   }
 
   // Paste clipboard as content into a new virtual file
@@ -547,13 +577,14 @@ extension _ToolbarHelpers on _EditorScreenState {
       if (newId != null) {
         ref.read(selectionProvider.notifier).saveEditorTextFor(newId, text);
       }
-      if (mounted) context.showOk('Created "$trimmedName" from clipboard text.');
+      if (mounted) {
+        context.showOk('Created "$trimmedName" from clipboard text.');
+      }
     } catch (e) {
       if (mounted) context.showErr('Paste failed: $e');
     }
   }
 
-  
   // Legacy inline prompt removed; using shared promptForNewFileName()
 
   // View All: show combined markdown of selected files in Monaco (non-destructive)

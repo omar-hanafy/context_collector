@@ -41,10 +41,10 @@ void main() async {
       .read(selectionProvider.notifier)
       .initializeVirtualTree(container.read(virtualTreeProvider));
 
-  // Initialize desktop_drop early and listen for global Dock/Finder drops
-  // We rely on DropTarget(catchAppWideDrops: true) to handle files.
-  // Here we only handle plain text/URL drops as a safety net (e.g., on launch
-  // before widgets mount), avoiding duplicate file processing.
+  // Initialize desktop_drop early and listen for global Dock/Finder drops.
+  // This handler processes both files and memory-backed text dropped onto the
+  // app icon (global, Offset.zero). In-window drops are handled by widget
+  // DropTargets (without catchAppWideDrops).
   DesktopDrop.instance.addRawDropEventListener((event) async {
     if (event is! DropDoneEvent) return;
     // Only treat Dock/Finder (application-level) drops here to avoid duplicate
@@ -53,14 +53,15 @@ void main() async {
     if (!cameFromDockOrFinder) return;
 
     final fileItems = <XFile>[];
-    final textPayloads = <String>[];
+    final textPayloads = <String>{};
 
     for (final item in event.files) {
       if (item.isMemoryBacked && item.isTextLike) {
         try {
           final text = await item.readAsText();
-          if (text != null && text.trim().isNotEmpty) {
-            textPayloads.add(text);
+          final normalized = text?.trim();
+          if (normalized != null && normalized.isNotEmpty) {
+            textPayloads.add(normalized);
           }
         } catch (_) {}
         continue;
@@ -68,18 +69,19 @@ void main() async {
       fileItems.add(item);
     }
 
-    // If app is launching via Dock/Finder, process files before UI mounts.
-    final hasSession = container.read(selectionProvider).sessionStarted;
-    if (!hasSession && fileItems.isNotEmpty) {
+    // Handle files dropped onto the Dock/Finder globally (regardless of session state)
+    if (fileItems.isNotEmpty) {
       await container
           .read(selectionProvider.notifier)
           .processDroppedItems(fileItems);
     }
-    // For text/links: create a virtual file and prompt to rename.
-    for (final text in textPayloads) {
-      container
-          .read(selectionProvider.notifier)
-          .createVirtualFileWithAutoName(text, promptForName: true);
+    // For pure text/links (no files in this drop): create a virtual file and prompt to rename.
+    if (fileItems.isEmpty) {
+      for (final text in textPayloads) {
+        container
+            .read(selectionProvider.notifier)
+            .createVirtualFileWithAutoName(text, promptForName: true);
+      }
     }
   });
 
