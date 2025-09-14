@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../editor/data/settings_service.dart';
 import '../../services/appearance_sync.dart';

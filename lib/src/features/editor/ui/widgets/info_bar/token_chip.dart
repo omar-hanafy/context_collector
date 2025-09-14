@@ -12,7 +12,9 @@ class TokenCountChip extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Get live content from the provider
-    final content = ref.watch(selectionProvider.select((s) => s.combinedContent));
+    final content = ref.watch(
+      selectionProvider.select((s) => s.combinedContent),
+    );
     final calculator = ref.watch(tokenCalculatorProvider);
     final selectedModel = ref.watch(selectedAIModelProvider);
     // Content-type hint based on current Monaco language (if available)
@@ -20,7 +22,9 @@ class TokenCountChip extends ConsumerWidget {
     final langId = controller?.liveStats.value.language;
     final contentTypeHint = _contentTypeFromLanguage(langId);
     final perModel = ref.watch(perModelStrategyProvider);
-    final strategy = perModel ? EstimationStrategy.perModel : EstimationStrategy.average;
+    final strategy = perModel
+        ? EstimationStrategy.perModel
+        : EstimationStrategy.average;
 
     final estimate = calculator.estimateTokens(
       content,
@@ -37,7 +41,7 @@ class TokenCountChip extends ConsumerWidget {
       strategy: strategy,
       includeOverhead: true,
     );
-    final usage = ((limit.percentageUsed / 100).clamp(0.0, 1.0)) as double;
+    final usage = (limit.percentageUsed / 100).clamp(0.0, 1.0);
 
     return Theme(
       data: Theme.of(context).copyWith(
@@ -48,16 +52,9 @@ class TokenCountChip extends ConsumerWidget {
                 : context.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: context.outlineVariant.addOpacity(0.3),
+              color: Theme.of(context).colorScheme.outlineVariant,
               width: 1,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.addOpacity(0.15),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
           ),
           textStyle: context.labelMedium,
         ),
@@ -66,12 +63,21 @@ class TokenCountChip extends ConsumerWidget {
         richMessage: WidgetSpan(
           child: _buildTooltipContent(context, selectedModel, estimate, usage),
         ),
-        child: DsChip(
-          label: '~${estimate.tokens.compact()} ↯',
-          backgroundColor: context.primaryContainer.addOpacity(0.3),
-          textColor: _getTokenColor(context, usage),
-          onTap: () => _showModelMenu(context, ref, calculator),
-          dense: true,
+        child: ActionChip(
+          label: Text(
+            '~${estimate.tokens.compact()} ↯',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: _getTokenColor(context, usage),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          backgroundColor: Theme.of(
+            context,
+          ).colorScheme.primaryContainer.setOpacity(0.3),
+          onPressed: () => _showModelMenu(context, ref, calculator),
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         ),
       ),
     );
@@ -103,38 +109,38 @@ class TokenCountChip extends ConsumerWidget {
               color: context.onSurface,
             ),
           ),
-          context.ds.spaceHeight(DesignSystem.space8),
+          const SizedBox(height: 8),
           Text(
             '~${estimate.tokens} tokens',
             style: context.bodySmall?.copyWith(
               color: context.onSurface,
             ),
           ),
-          context.ds.spaceHeight(DesignSystem.space12),
+          const SizedBox(height: 12),
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
               value: usage.clamp(0.0, 1.0),
               backgroundColor: context.surfaceContainerHighest,
               valueColor: AlwaysStoppedAnimation<Color>(
-                _getUsageColor(usage),
+                _getUsageColor(context, usage),
               ),
               minHeight: 6,
             ),
           ),
-          context.ds.spaceHeight(6),
+          const SizedBox(height: 6),
           Text(
             '${(usage * 100).toStringAsFixed(1)}% of context window',
             style: context.labelSmall?.copyWith(
               color: context.onSurfaceVariant,
             ),
           ),
-          context.ds.spaceHeight(DesignSystem.space12),
+          const SizedBox(height: 12),
           Divider(
             color: context.outlineVariant,
             height: 1,
           ),
-          context.ds.spaceHeight(DesignSystem.space8),
+          const SizedBox(height: 8),
           Text(
             'Click to compare models',
             style: context.labelSmall?.copyWith(
@@ -209,7 +215,9 @@ class TokenCountChip extends ConsumerWidget {
     final langId = controller?.liveStats.value.language;
     final contentTypeHint = _contentTypeFromLanguage(langId);
     final perModel = ref.read(perModelStrategyProvider);
-    final strategy = perModel ? EstimationStrategy.perModel : EstimationStrategy.average;
+    final strategy = perModel
+        ? EstimationStrategy.perModel
+        : EstimationStrategy.average;
     final estimate = calculator.estimateTokens(
       content,
       model: model,
@@ -243,16 +251,20 @@ class TokenCountChip extends ConsumerWidget {
     );
   }
 
-  Color _getUsageColor(double usage) {
-    if (usage > 0.9) return Colors.red;
-    if (usage > 0.75) return Colors.orange;
-    return Colors.green;
+  Color _getUsageColor(BuildContext context, double usage) {
+    final cs = Theme.of(context).colorScheme;
+    final app = Theme.of(context).extension<AppColors>();
+    if (usage > 0.9) return cs.error;
+    if (usage > 0.75) return app?.warning ?? cs.tertiary;
+    return app?.success ?? cs.secondary;
   }
 
   Color _getTokenColor(BuildContext context, double usage) {
-    if (usage > 0.9) return context.error;
-    if (usage > 0.75) return Colors.orange;
-    return context.primary;
+    final cs = Theme.of(context).colorScheme;
+    final app = Theme.of(context).extension<AppColors>();
+    if (usage > 0.9) return cs.error;
+    if (usage > 0.75) return app?.warning ?? cs.tertiary;
+    return cs.primary;
   }
 }
 
@@ -262,12 +274,39 @@ ContentType? _contentTypeFromLanguage(String? langId) {
   final l = langId.toLowerCase();
 
   const codeLangs = {
-    'dart', 'python', 'javascript', 'typescript', 'java', 'cpp', 'c', 'csharp', 'go', 'rust',
-    'ruby', 'php', 'swift', 'kotlin', 'scala', 'r', 'shell', 'bash', 'zsh', 'powershell', 'sql',
-    'h', 'm'
+    'dart',
+    'python',
+    'javascript',
+    'typescript',
+    'java',
+    'cpp',
+    'c',
+    'csharp',
+    'go',
+    'rust',
+    'ruby',
+    'php',
+    'swift',
+    'kotlin',
+    'scala',
+    'r',
+    'shell',
+    'bash',
+    'zsh',
+    'powershell',
+    'sql',
+    'h',
+    'm',
   };
   const structuredLangs = {
-    'json', 'yaml', 'yml', 'xml', 'csv', 'ini', 'toml', 'properties'
+    'json',
+    'yaml',
+    'yml',
+    'xml',
+    'csv',
+    'ini',
+    'toml',
+    'properties',
   };
 
   if (codeLangs.contains(l)) return ContentType.code;

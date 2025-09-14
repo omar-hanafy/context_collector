@@ -39,15 +39,16 @@ class UnifiedFileService {
       }
 
       final fileName = p.basename(entity.path);
-      
+
       // Skip hidden files
       if (fileName.startsWith('.')) {
         continue;
       }
-      
+
       // Check blacklist
-      if (blacklist.any((pattern) =>
-          fileName.toLowerCase().endsWith(pattern.toLowerCase()))) {
+      if (blacklist.any(
+        (pattern) => fileName.toLowerCase().endsWith(pattern.toLowerCase()),
+      )) {
         continue;
       }
 
@@ -73,7 +74,8 @@ class UnifiedFileService {
   }) {
     final fullPath = virtualPath ?? '/$name';
     final normalizedPath = p.normalize(fullPath);
-    final id = 'virtual_${normalizedPath.hashCode.toUnsigned(32).toRadixString(16)}';
+    final id =
+        'virtual_${normalizedPath.hashCode.toUnsigned(32).toRadixString(16)}';
 
     return ScannedFile(
       id: id,
@@ -122,7 +124,7 @@ class UnifiedFileService {
   }) async {
     final processedPaths = <String>{};
     final sourcePaths = <String>{};
-    
+
     // Remove duplicates
     final uniquePaths = <String>{};
     final uniqueItems = <XFile>[];
@@ -183,8 +185,9 @@ class UnifiedFileService {
         }
 
         final fileName = p.basename(filePath);
-        if (blacklist.any((pattern) =>
-            fileName.toLowerCase().endsWith(pattern.toLowerCase()))) {
+        if (blacklist.any(
+          (pattern) => fileName.toLowerCase().endsWith(pattern.toLowerCase()),
+        )) {
           continue;
         }
 
@@ -215,7 +218,9 @@ class UnifiedFileService {
   static Future<String?> _extractVSCodeDirectory(String filePath) async {
     try {
       final content = await File(filePath).readAsString();
-      final match = RegExp(r'<script>start\("([^"]+)"\);</script>').firstMatch(content);
+      final match = RegExp(
+        r'<script>start\("([^"]+)"\);</script>',
+      ).firstMatch(content);
       final dirPath = match?.group(1);
       if (dirPath != null && Directory(dirPath).existsSync()) {
         return dirPath;
@@ -234,7 +239,8 @@ class UnifiedFileService {
       throw ArgumentError('No content to save');
     }
 
-    final fileName = 'context_collection_${DateTime.now().millisecondsSinceEpoch}.md';
+    final fileName =
+        'context_collection_${DateTime.now().millisecondsSinceEpoch}.md';
     final filePath = await getSaveLocation(suggestedName: fileName);
     if (filePath != null) {
       await File(filePath.path).writeAsString(content);
@@ -286,10 +292,10 @@ class UnifiedFileService {
     if (paths.isEmpty) return '';
     if (paths.length == 1) return p.dirname(paths.first);
 
-    final componentsList = paths.map((path) => p.split(path)).toList();
+    final componentsList = paths.map(p.split).toList();
     final minLength = componentsList.map((c) => c.length).reduce(min);
     final commonComponents = <String>[];
-    
+
     for (int i = 0; i < minLength - 1; i++) {
       final component = componentsList[0][i];
       if (componentsList.every((components) => components[i] == component)) {

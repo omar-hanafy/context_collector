@@ -403,25 +403,18 @@ class _DividerHandleState extends State<_DividerHandle> {
   }
 
   void _updateDecorations() {
-    final theme = Theme.of(context);
+    final cs = Theme.of(context).colorScheme;
 
-    final baseColor = widget.dividerColor ?? theme.primaryColor.addOpacity(0.6);
+    // Flat, calm splitter colors derived from the theme.
+    final baseColor = widget.dividerColor ?? cs.outlineVariant;
     final hoverColor =
-        widget.dividerHoverColor ?? theme.primaryColor.addOpacity(0.8);
-    final activeColor = widget.dividerActiveColor ?? theme.primaryColor;
+        widget.dividerHoverColor ?? cs.onSurface.setOpacity(0.08);
+    final activeColor =
+        widget.dividerActiveColor ?? cs.onSurface.setOpacity(0.12);
 
     _idleDecoration = BoxDecoration(color: baseColor);
     _hoverDecoration = BoxDecoration(color: hoverColor);
-    _activeDecoration = BoxDecoration(
-      color: activeColor,
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.addOpacity(0.1),
-          blurRadius: 2,
-          spreadRadius: 0,
-        ),
-      ],
-    );
+    _activeDecoration = BoxDecoration(color: activeColor);
   }
 
   void _startDrag(Offset globalPosition) {
@@ -530,7 +523,7 @@ class _DividerHandleState extends State<_DividerHandle> {
                     decoration: BoxDecoration(
                       color: Theme.of(
                         context,
-                      ).colorScheme.onSurface.addOpacity(0.3),
+                      ).colorScheme.onSurface.setOpacity(0.3),
                       borderRadius: BorderRadius.circular(1),
                     ),
                   ),
@@ -602,7 +595,7 @@ class _DragOverlay extends StatelessWidget {
     // This color is critical. A completely transparent color can be ignored
     // by the renderer in some cases. A near-invisible color forces it to
     // be rendered, ensuring it can block pointer events.
-    final defaultColor = Colors.black.addOpacity(0.001);
+    final defaultColor = Theme.of(context).colorScheme.scrim.setOpacity(0.001);
     final blockerColor = this.blockerColor == Colors.transparent
         ? defaultColor
         : this.blockerColor ?? defaultColor;

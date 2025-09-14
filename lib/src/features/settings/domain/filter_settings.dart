@@ -4,6 +4,17 @@ import 'package:flutter/foundation.dart';
 /// Manages a simple blacklist of file extensions to be ignored during scans.
 @immutable
 class FilterSettings {
+  const FilterSettings({
+    this.blacklistedExtensions = defaultBlacklist,
+  });
+
+  factory FilterSettings.fromJson(Map<String, dynamic> json) {
+    final extensions = json.tryGetList<String>('blacklistedExtensions');
+    return FilterSettings(
+      blacklistedExtensions: extensions?.toSet() ?? defaultBlacklist,
+    );
+  }
+
   /// A default set of extensions that are typically not useful for context collection.
   static const Set<String> defaultBlacklist = {
     // System & Editor Junk
@@ -43,17 +54,6 @@ class FilterSettings {
     'gemfile.lock',
     'podfile.lock',
   };
-
-  const FilterSettings({
-    this.blacklistedExtensions = defaultBlacklist,
-  });
-
-  factory FilterSettings.fromJson(Map<String, dynamic> json) {
-    final extensions = json.tryGetList<String>('blacklistedExtensions');
-    return FilterSettings(
-      blacklistedExtensions: extensions?.toSet() ?? defaultBlacklist,
-    );
-  }
 
   /// The set of file extensions (e.g., '.log') to ignore.
   final Set<String> blacklistedExtensions;

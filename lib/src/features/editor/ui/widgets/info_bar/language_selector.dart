@@ -1,6 +1,5 @@
 import 'package:context_collector/context_collector.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
 
 /// Language selector dropdown for the info bar
@@ -43,8 +42,8 @@ class LanguageSelector extends StatelessWidget {
           color: context.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: context.outlineVariant.addOpacity(0.5),
-            width: 0.5,
+            color: Theme.of(context).colorScheme.outlineVariant,
+            width: 1,
           ),
         ),
         child: Row(

@@ -14,4 +14,3 @@ class AppearanceSync {
     return ThemeMode.light;
   }
 }
-

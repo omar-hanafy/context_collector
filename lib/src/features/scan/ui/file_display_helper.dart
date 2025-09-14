@@ -20,18 +20,20 @@ class FileDisplayHelper {
 
   /// Get color for file icon based on extension
   static Color getIconColor(String extension, BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final cs = Theme.of(context).colorScheme;
     final ext = extension.toLowerCase();
 
-    // Special colors for certain file types
-    if (ext == '.dart') return Colors.blue.shade600;
-    if (ext == '.py') return Colors.green.shade600;
-    if (ext == '.js' || ext == '.ts') return Colors.amber.shade700;
-    if (ext == '.html' || ext == '.css') return Colors.orange.shade600;
-    if (ext == '.json' || ext == '.yaml') return Colors.purple.shade600;
-    if (ext == '.md') return Colors.blueGrey.shade600;
-
-    return colorScheme.onSurface.addOpacity(0.7);
+    // Calm, role-based palette by category (no rainbow per extension)
+    final category = getCategoryForExtension(ext);
+    return switch (category) {
+      FileCategory.programming ||
+      FileCategory.web => cs.primary.setOpacity(0.90),
+      FileCategory.data ||
+      FileCategory.database => cs.secondary.setOpacity(0.90),
+      FileCategory.script => cs.tertiary.setOpacity(0.90),
+      FileCategory.documentation => cs.onSurfaceVariant,
+      _ => cs.onSurfaceVariant,
+    };
   }
 
   /// Build status indicator for file
@@ -42,7 +44,7 @@ class FileDisplayHelper {
         child: Icon(
           Icons.edit,
           size: 14,
-          color: Colors.orange.shade700,
+          color: Theme.of(context).colorScheme.tertiary,
         ),
       );
     }
@@ -64,7 +66,7 @@ class FileDisplayHelper {
         child: Icon(
           Icons.add_circle_outline,
           size: 14,
-          color: Colors.green.shade600,
+          color: Theme.of(context).colorScheme.secondary,
         ),
       );
     }

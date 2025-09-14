@@ -33,7 +33,7 @@ class MonacoEditorInfoBar extends ConsumerWidget {
       decoration: BoxDecoration(
         border: Border(
           top: BorderSide(
-            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+            color: Theme.of(context).colorScheme.outlineVariant,
           ),
         ),
       ),
@@ -111,7 +111,7 @@ class _LoadingIndicator extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border(
           top: BorderSide(
-            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+            color: Theme.of(context).colorScheme.outlineVariant,
           ),
         ),
       ),

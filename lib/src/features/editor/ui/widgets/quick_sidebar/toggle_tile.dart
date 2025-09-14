@@ -19,13 +19,13 @@ class ToggleTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: DesignSystem.space8),
+      padding: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         dense: true,
         contentPadding: const EdgeInsets.symmetric(horizontal: 8),
         leading: Icon(
           icon,
-          size: DesignSystem.iconSizeSmall + 2,
+          size: 18,
           color: value ? context.primary : context.onSurfaceVariant,
         ),
         title: Text(title),

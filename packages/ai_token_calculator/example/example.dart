@@ -1,3 +1,5 @@
+// ignore_for_file: unused_local_variable
+
 import 'package:ai_token_calculator/ai_token_calculator.dart';
 
 void main() {

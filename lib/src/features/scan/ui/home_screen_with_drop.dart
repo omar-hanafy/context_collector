@@ -1,22 +1,19 @@
 import 'package:desktop_drop/desktop_drop.dart';
-import 'package:flutter/gestures.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/consts.dart';
 import '../../../shared/dialogs/name_prompt.dart';
-import '../../../shared/widgets/app_bar_title.dart';
-import '../../settings/presentation/ui/settings_screen.dart';
+import '../../editor/ui/widgets/prewarm_monaco.dart';
 import '../../virtual_tree/ui/virtual_tree_view.dart';
 import '../state/file_list_state.dart';
-import '../../editor/ui/widgets/prewarm_monaco.dart';
 
-/// Beautiful home screen with drop zone functionality
+/// Desktop-only home with a clean hero and a horizontal action bar.
 class HomeScreenWithDrop extends ConsumerStatefulWidget {
   const HomeScreenWithDrop({super.key});
 
@@ -29,20 +26,22 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
 
   @override
   Widget build(BuildContext context) {
-    final selectionNotifier = ref.read(selectionProvider.notifier);
+    final selection = ref.read(selectionProvider.notifier);
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
     return DropTarget(
       catchAppWideDrops: true,
       onDragEntered: (_) => setState(() => _isDragging = true),
       onDragExited: (_) => setState(() => _isDragging = false),
-      onDragDone: (DropDoneDetails details) async {
+      onDragDone: (details) async {
         setState(() => _isDragging = false);
 
         final fileItems = <XFile>[];
         final textPayloads = <String>[];
 
         for (final item in details.files) {
-          if (item is DropItem && item.isMemoryBacked && item.isTextLike) {
+          if (item.isMemoryBacked && item.isTextLike) {
             try {
               final text = await item.readAsText();
               if (text != null && text.trim().isNotEmpty) {
@@ -54,298 +53,177 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
           fileItems.add(item);
         }
 
-          if (fileItems.isNotEmpty) {
-            await selectionNotifier.processDroppedItems(fileItems);
+        if (fileItems.isNotEmpty) {
+          await selection.processDroppedItems(fileItems);
+        }
+        for (final text in textPayloads) {
+          final name = await promptForNewFileName(
+            context,
+            initialName: 'pasted.txt',
+          );
+          if (name != null && name.trim().isNotEmpty) {
+            selection.createVirtualFile(name.trim(), text);
           }
-          for (final text in textPayloads) {
-            final name = await promptForNewFileName(context, initialName: 'pasted.txt');
-            if (name != null && name.trim().isNotEmpty) {
-              selectionNotifier.createVirtualFile(name.trim(), text);
-            }
-          }
-        },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        decoration: BoxDecoration(
-          color: _isDragging
-              ? Theme.of(context).colorScheme.primary.addOpacity(0.05)
-              : null,
-          border: _isDragging
-              ? Border.all(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.primary.addOpacity(0.3),
-                  width: 2,
-                )
-              : null,
-        ),
-        child: HomeScreenContent(isDragging: _isDragging),
-      ),
-    );
-  }
-}
-
-/// Beautiful home screen that serves as the landing page
-class HomeScreenContent extends ConsumerWidget {
-  const HomeScreenContent({this.isDragging = false, super.key});
-
-  final bool isDragging;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final selectionNotifier = ref.read(selectionProvider.notifier);
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
-      appBar: AppBar(
-        title: const AppBarTitle(),
-        centerTitle: true,
-        actions: [
-          // GitHub button
-          IconButton(
-            onPressed: () async {
-              final githubUrl = Uri.parse(
-                'https://github.com/omar-hanafy/context_collector',
-              );
-              if (!await launchUrl(githubUrl)) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Could not open GitHub')),
-                  );
+        }
+      },
+      child: Scaffold(
+        backgroundColor: cs.surface,
+        appBar: AppBar(
+          title: const _HomeTitle(),
+          centerTitle: true,
+          actions: [
+            IconButton(
+              onPressed: () async {
+                final githubUrl = Uri.parse(
+                  'https://github.com/omar-hanafy/context_collector',
+                );
+                if (!await launchUrl(githubUrl)) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Could not open GitHub')),
+                    );
+                  }
                 }
-              }
-            },
-            icon: SvgPicture.asset(
-              isDark ? AppAssets.githubLight : AppAssets.githubDark,
-              width: 20,
-              height: 20,
-            ),
-            tooltip: 'View on GitHub',
-          ),
-          // Buy Me a Coffee button
-          IconButton(
-            onPressed: () async {
-              final coffeeUrl = Uri.parse(
-                'https://www.buymeacoffee.com/omar.hanafy',
-              );
-              if (!await launchUrl(coffeeUrl)) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Could not open Buy Me a Coffee'),
-                    ),
-                  );
-                }
-              }
-            },
-            icon: SvgPicture.asset(
-              isDark ? AppAssets.logoLight : AppAssets.logoDark,
-              width: 20,
-              height: 20,
-            ),
-            tooltip: 'Buy Me a Coffee',
-          ),
-          // Settings button
-          IconButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
-              );
-            },
-            icon: const Icon(Icons.settings_rounded),
-            tooltip: 'Settings',
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: Stack(
-        children: [
-          // Invisible: pre-warm Monaco at app start for instant first use
-          const Offstage(offstage: true, child: PrewarmMonaco()),
-          Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(32),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 800),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Header with icon and titles
-                    _buildHeader(context, isDragging),
-                    const SizedBox(height: 40),
-
-                    // Action buttons row
-                    _buildActionButtons(context, selectionNotifier, ref),
-                    const SizedBox(height: 16),
-
-                    // Or divider & other actions
-                    _buildSecondaryActions(context, ref),
-                    const SizedBox(height: 64),
-
-                    // Features grid
-                    _buildFeatureGrid(context),
-                  ],
-                ),
+              },
+              icon: SvgPicture.asset(
+                theme.brightness == Brightness.dark
+                    ? AppAssets.githubLight
+                    : AppAssets.githubDark,
+                width: 20,
+                height: 20,
               ),
+              tooltip: 'View on GitHub',
             ),
-          ),
+            IconButton(
+              onPressed: () async {
+                final coffeeUrl = Uri.parse(
+                  'https://www.buymeacoffee.com/omar.hanafy',
+                );
+                if (!await launchUrl(coffeeUrl)) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Could not open Buy Me a Coffee'),
+                      ),
+                    );
+                  }
+                }
+              },
+              icon: SvgPicture.asset(
+                theme.brightness == Brightness.dark
+                    ? AppAssets.logoLight
+                    : AppAssets.logoDark,
+                width: 20,
+                height: 20,
+              ),
+              tooltip: 'Buy Me a Coffee',
+            ),
+            const SizedBox(width: 8),
+          ],
+        ),
+        body: Stack(
+          children: [
+            const Offstage(offstage: true, child: PrewarmMonaco()),
+            Center(
+              child: SizedBox(
+                width: 960,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 24,
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // HERO (clickable drop zone)
+                      _HeroDropZone(
+                        isDragging: _isDragging,
+                        onTap: () => selection.pickFiles(context),
+                      ),
+                      const SizedBox(height: 20),
 
-          // Dragging overlay
-          if (isDragging)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: ColoredBox(
-                  color: theme.colorScheme.primary.addOpacity(0.05),
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(32),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surface,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: theme.colorScheme.shadow.addOpacity(0.1),
-                            blurRadius: 20,
-                            offset: const Offset(0, 10),
+                      // HORIZONTAL ACTION BAR (consistent secondary buttons)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          FilledButton.icon(
+                            onPressed: () => selection.pickFiles(context),
+                            icon: const Icon(Icons.file_open_rounded),
+                            label: const Text('Browse Files'),
+                          ),
+                          const SizedBox(width: 12),
+                          OutlinedButton.icon(
+                            onPressed: () => selection.pickDirectory(context),
+                            icon: const Icon(Icons.folder_open_rounded),
+                            label: const Text('Browse Folder'),
+                          ),
+                          const SizedBox(width: 12),
+                          OutlinedButton.icon(
+                            onPressed: () => _pasteClipboardAsContent(
+                              context,
+                              selection,
+                            ),
+                            icon: const Icon(Icons.content_paste_rounded),
+                            label: const Text('Paste'),
+                          ),
+                          const SizedBox(width: 12),
+                          OutlinedButton.icon(
+                            onPressed: () =>
+                                selection.pastePathsFromClipboard(context),
+                            icon:
+                                const Icon(Icons.content_paste_go_rounded),
+                            label: const Text('Paste Paths'),
+                          ),
+                          const SizedBox(width: 12),
+                          OutlinedButton.icon(
+                            onPressed: () =>
+                                VirtualTreeView.showCreateVirtualFileFlow(
+                                  context,
+                                  ref,
+                                ),
+                            icon: const Icon(Icons.add_circle_outline_rounded),
+                            label: const Text('New Virtual File'),
                           ),
                         ],
                       ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
+
+                      const SizedBox(height: 24),
+                      // Tiny helper row (no scrolling junk)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
-                            Icons.file_download_outlined,
-                            size: 48,
-                            color: theme.colorScheme.primary,
+                            Icons.info_outline_rounded,
+                            size: 16,
+                            color: cs.onSurfaceVariant,
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(width: 8),
                           Text(
-                            'Drop to add files',
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
+                            'Drop files or directories anywhere. Use Paste or Paste Paths above.',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: cs.onSurface.setOpacity(0.65),
                             ),
                           ),
                         ],
                       ),
-                    ),
+                    ],
                   ),
                 ),
               ),
             ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildHeader(BuildContext context, bool isDragging) {
-    final theme = Theme.of(context);
-    return Column(
-      children: [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: 120,
-          height: 120,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                theme.colorScheme.primary.addOpacity(isDragging ? 0.2 : 0.1),
-                theme.colorScheme.primary.addOpacity(isDragging ? 0.1 : 0.05),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(30),
-            border: isDragging
-                ? Border.all(
-                    color: theme.colorScheme.primary.addOpacity(0.3),
-                    width: 2,
-                  )
-                : null,
-          ),
-          child: Icon(
-            Icons.folder_open_rounded,
-            size: isDragging ? 64 : 56,
-            color: theme.colorScheme.primary,
-          ),
-        ),
-        const SizedBox(height: 32),
-        Text(
-          'Drop Your Files or Directories Here',
-          style: theme.textTheme.headlineMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: theme.colorScheme.onSurface,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'Drag and drop, browse, paste, or start with an empty tree.',
-          style: theme.textTheme.bodyLarge?.copyWith(
-            color: theme.colorScheme.onSurface.addOpacity(0.7),
-          ),
-          textAlign: TextAlign.center,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionButtons(
-    BuildContext context,
-    FileListNotifier selectionNotifier,
-    WidgetRef ref,
-  ) {
-    final buttonStyle = FilledButton.styleFrom(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-    );
-
-    return Wrap(
-      spacing: 16,
-      runSpacing: 16,
-      alignment: WrapAlignment.center,
-      children: [
-        FilledButton.icon(
-          onPressed: () => selectionNotifier.pickFiles(context),
-          icon: const Icon(Icons.file_open_rounded),
-          label: const Text('Browse Files'),
-          style: buttonStyle,
-        ),
-        OutlinedButton.icon(
-          onPressed: () => selectionNotifier.pickDirectory(context),
-          icon: const Icon(Icons.folder_open_rounded),
-          label: const Text('Browse Folder'),
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            textStyle: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        Listener(
-          behavior: HitTestBehavior.opaque,
-          onPointerDown: (e) async {
-            if (e.kind == PointerDeviceKind.mouse && (e.buttons & kSecondaryMouseButton) != 0) {
-              await _pasteClipboardAsContent(context, selectionNotifier);
-            }
-          },
-          child: OutlinedButton.icon(
-            onPressed: () => selectionNotifier.pastePathsFromClipboard(context),
-            icon: const Icon(Icons.content_paste_go),
-            label: const Text('Paste From Clipboard'),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              textStyle: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
+            // Subtle drop overlay
+            if (_isDragging)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: ColoredBox(
+                    color: cs.primary.setOpacity(0.05),
+                  ),
+                ),
               ),
-            ),
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -354,13 +232,12 @@ class HomeScreenContent extends ConsumerWidget {
     FileListNotifier selection,
   ) async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
-    final raw = data?.text ?? '';
-    final text = raw.trim();
+    final text = (data?.text ?? '').trim();
     if (text.isEmpty) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Clipboard is empty.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Clipboard is empty.')));
       }
       return;
     }
@@ -374,292 +251,82 @@ class HomeScreenContent extends ConsumerWidget {
       );
     }
   }
-  
+}
 
-  Widget _buildSecondaryActions(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    return Column(
+class _HomeTitle extends StatelessWidget {
+  const _HomeTitle();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Expanded(child: Divider(endIndent: 16)),
-            Text(
-              'OR',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.addOpacity(0.5),
-              ),
-            ),
-            const Expanded(child: Divider(indent: 16)),
-          ],
-        ),
-        const SizedBox(height: 16),
-        TextButton.icon(
-          onPressed: () =>
-              VirtualTreeView.showCreateVirtualFileFlow(context, ref),
-          icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
-          label: const Text('Start with a New File'),
-          style: TextButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          ),
-        ),
-        const SizedBox(height: 16),
-        TextButton.icon(
-          onPressed: () => _showSupportedFormats(context),
-          icon: const Icon(Icons.help_outline_rounded, size: 18),
-          label: const Text('Supported Formats'),
-          style: TextButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        Icon(Icons.content_paste_search_rounded, size: 18, color: cs.primary),
+        const SizedBox(width: 8),
+        Text(
+          'Context Collector',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: cs.onSurface,
           ),
         ),
       ],
     );
   }
+}
 
-  Widget _buildFeatureGrid(BuildContext context) {
+class _HeroDropZone extends StatelessWidget {
+  const _HeroDropZone({required this.isDragging, required this.onTap});
+
+  final bool isDragging;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
-    final features = [
-      (
-        icon: Icons.code_rounded,
-        title: 'All Text Files',
-        description: 'Supports any text-based file format',
-        color: Colors.blue,
-      ),
-      (
-        icon: Icons.link_rounded,
-        title: 'File References',
-        description: 'Includes path & metadata for AI context',
-        color: Colors.green,
-      ),
-      (
-        icon: Icons.content_copy_rounded,
-        title: 'Quick Copy',
-        description: 'One-click copy to clipboard',
-        color: Colors.orange,
-      ),
-      (
-        icon: Icons.edit_note_rounded,
-        title: 'Code Editor',
-        description: 'View and edit with Monaco editor',
-        color: Colors.purple,
-      ),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final crossAxisCount = constraints.maxWidth > 600 ? 2 : 1;
-        final itemWidth =
-            (constraints.maxWidth - 16 * (crossAxisCount - 1)) / crossAxisCount;
-
-        return Wrap(
-          spacing: 16,
-          runSpacing: 16,
-          children: features.map((feature) {
-            return SizedBox(
-              width: itemWidth,
-              child: Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(
-                    color: theme.colorScheme.outline.addOpacity(0.2),
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: feature.color.addOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          feature.icon,
-                          color: feature.color,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              feature.title,
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              feature.description,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurface.addOpacity(
-                                  0.6,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        );
-      },
-    );
-  }
-
-  Future<void> _showSupportedFormats(BuildContext context) async {
-    final theme = Theme.of(context);
-
-    await showDialog<void>(
-      context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Container(
-          constraints: const BoxConstraints(
-            maxWidth: 600,
-            maxHeight: 700,
+    return Material(
+      color: cs.surface,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          width: double.infinity,
+          constraints: const BoxConstraints(minHeight: 220),
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: isDragging ? cs.primary.setOpacity(0.05) : cs.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: cs.outlineVariant),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Header
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.addOpacity(0.05),
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(20),
-                    topRight: Radius.circular(20),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.file_present_rounded,
-                      color: theme.colorScheme.primary,
-                      size: 28,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Supported File Formats',
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.close_rounded),
-                      style: IconButton.styleFrom(
-                        backgroundColor: theme.colorScheme.surface,
-                      ),
-                    ),
-                  ],
-                ),
+              Icon(
+                Icons.folder_open_rounded,
+                size: isDragging ? 64 : 56,
+                color: cs.primary,
               ),
-              // Content
-              Flexible(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Context Collector supports all text-based files. '
-                        'Simply drop any file and it will try to read it as text. '
-                        'Binary files will be automatically skipped.\n\n'
-                        'You can blacklist specific extensions in Settings to exclude them from scanning.',
-                        style: theme.textTheme.bodyLarge,
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        'Common Examples:',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children:
-                            [
-                                  '.dart',
-                                  '.py',
-                                  '.js',
-                                  '.ts',
-                                  '.java',
-                                  '.cpp',
-                                  '.go',
-                                  '.html',
-                                  '.css',
-                                  '.json',
-                                  '.yaml',
-                                  '.xml',
-                                  '.md',
-                                  '.txt',
-                                  '.sh',
-                                  '.sql',
-                                  '.rs',
-                                  '.swift',
-                                  '.kt',
-                                ]
-                                .map(
-                                  (ext) => Chip(
-                                    label: Text(
-                                      ext,
-                                      style: const TextStyle(
-                                        fontFamily: 'monospace',
-                                      ),
-                                    ),
-                                    backgroundColor: theme.colorScheme.primary
-                                        .addOpacity(0.1),
-                                  ),
-                                )
-                                .toList(),
-                      ),
-                    ],
-                  ),
+              const SizedBox(height: 16),
+              Text(
+                'Drop your files or directories here',
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: cs.onSurface,
                 ),
+                textAlign: TextAlign.center,
               ),
-              // Footer
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
-                  borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(20),
-                    bottomRight: Radius.circular(20),
-                  ),
+              const SizedBox(height: 8),
+              Text(
+                'Or click to browse. Use Paste or Paste Paths from the action bar.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: cs.onSurface.setOpacity(0.70),
                 ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline_rounded,
-                      size: 16,
-                      color: theme.colorScheme.onSurface.addOpacity(0.6),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'All text files are supported',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.addOpacity(0.6),
-                      ),
-                    ),
-                  ],
-                ),
+                textAlign: TextAlign.center,
               ),
             ],
           ),

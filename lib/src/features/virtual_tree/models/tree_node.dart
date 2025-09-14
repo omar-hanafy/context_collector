@@ -1,3 +1,5 @@
+import 'package:equatable/equatable.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:uuid/uuid.dart';
 
 /// Node types in the virtual tree
@@ -7,7 +9,8 @@ enum NodeType { root, folder, file }
 enum FileSource { disk, created, pasted }
 
 /// Represents a node in the virtual file tree
-class TreeNode {
+@immutable
+class TreeNode extends Equatable {
   TreeNode({
     String? id,
     required this.name,
@@ -55,8 +58,8 @@ class TreeNode {
   final String? fileId; // Links to ScannedFile.id
 
   // UI state
-  bool isExpanded;
-  bool isSelected;
+  final bool isExpanded;
+  final bool isSelected;
 
   /// Create a copy with updated values
   TreeNode copyWith({
@@ -99,9 +102,5 @@ class TreeNode {
   };
 
   @override
-  bool operator ==(Object other) =>
-      identical(this, other) || other is TreeNode && other.id == id;
-
-  @override
-  int get hashCode => id.hashCode;
+  List<Object?> get props => [id];
 }

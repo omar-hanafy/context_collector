@@ -427,18 +427,35 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                       maxRatio: 0.6,
                       minPanelSize: 300,
                       onRatioChanged: _saveSplitRatio,
-                      dividerThickness: 12,
+                      dividerThickness: 6,
                       enableKeyboard: false,
                       semanticsLabel:
                           'Editor panels splitter. Drag to resize or use arrow keys.',
-                      startPanel: Column(
-                        children: [
-                          const Expanded(child: FileListScreen()),
-                          if (selectionState.isProcessing)
-                            const LinearProgressIndicator(),
-                        ],
+                      startPanel: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: context.surfaceContainerHighest,
+                          border: Border(
+                            right: BorderSide(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .outlineVariant,
+                            ),
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            const Expanded(child: FileListScreen()),
+                            if (selectionState.isProcessing)
+                              const LinearProgressIndicator(),
+                          ],
+                        ),
                       ),
-                      endPanel: const MonacoEditorIntegrated(),
+                      endPanel: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: context.surface,
+                        ),
+                        child: const MonacoEditorIntegrated(),
+                      ),
                     )
                   : Center(
                       child: Column(

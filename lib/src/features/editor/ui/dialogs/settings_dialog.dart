@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
 
 import '../../data/settings_service.dart';
@@ -139,13 +140,12 @@ class _EditorSettingsDialogState extends State<EditorSettingsDialog> {
               ),
               const SizedBox(height: 6),
               Text(
-                'This theme also sets the app\'s Light/Dark mode.',
+                "This theme also sets the app's Light/Dark mode.",
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withOpacity(0.7),
-                    ),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.setOpacity(0.7),
+                ),
               ),
               const SizedBox(height: 16),
 
@@ -220,30 +220,38 @@ class _EditorSettingsDialogState extends State<EditorSettingsDialog> {
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: () {
-            // Reset to defaults
-            setState(() {
-              _options = const EditorOptions();
-              _fontSizeController.text = '14';
-              _tabSizeController.text = '4';
-            });
-          },
-          child: const Text('Reset'),
-        ),
-        const Spacer(),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () async {
-            await EditorSettingsService.save(_options);
-            if (mounted) {
-              Navigator.of(context).pop(_options);
-            }
-          },
-          child: const Text('Apply'),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: Row(
+            children: [
+              TextButton(
+                onPressed: () {
+                  // Reset to defaults
+                  setState(() {
+                    _options = const EditorOptions();
+                    _fontSizeController.text = '14';
+                    _tabSizeController.text = '4';
+                  });
+                },
+                child: const Text('Reset'),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: () async {
+                  await EditorSettingsService.save(_options);
+                  if (mounted) {
+                    Navigator.of(context).pop(_options);
+                  }
+                },
+                child: const Text('Apply'),
+              ),
+            ],
+          ),
         ),
       ],
     );

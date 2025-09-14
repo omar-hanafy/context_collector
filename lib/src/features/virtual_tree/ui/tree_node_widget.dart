@@ -43,8 +43,8 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
     final file = widget.node.fileId != null
         ? scannerFiles[widget.node.fileId]
         : null;
-    final isActive = widget.node.fileId != null &&
-        widget.node.fileId == activeFileId;
+    final isActive =
+        widget.node.fileId != null && widget.node.fileId == activeFileId;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -131,7 +131,6 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
                   ],
 
                   // No hover Edit action anymore — editing happens in Monaco
-
                   const SizedBox(width: 8),
                 ],
               ),
@@ -155,14 +154,18 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
     );
   }
 
-  Color _getBackgroundColor(BuildContext context, bool isSelected, bool isActive) {
+  Color _getBackgroundColor(
+    BuildContext context,
+    bool isSelected,
+    bool isActive,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     if (isActive) {
       return colorScheme.primaryContainer.withValues(alpha: 0.22);
     }
     // Do not tint items that are merely included via checkbox; rely on the checkbox itself.
     if (_isHovered) {
-      return colorScheme.onSurface.addOpacity(0.05);
+      return colorScheme.onSurface.setOpacity(0.05);
     }
     return Colors.transparent;
   }
@@ -183,18 +186,20 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
       final isExpanded = ref
           .read(treeStateProvider.notifier)
           .isExpanded(node.id);
+      final cs = Theme.of(context).colorScheme;
       return Icon(
         isExpanded ? Icons.folder_open : Icons.folder,
-        color: Colors.amber.shade700,
+        color: cs.secondary,
         size: 20,
       );
     }
 
     // File icon based on status
     if (node.isVirtual) {
+      final cs = Theme.of(context).colorScheme;
       return Icon(
         Icons.note_add,
-        color: Colors.green.shade600,
+        color: cs.secondary,
         size: 18,
       );
     }
@@ -211,7 +216,7 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
     return Icon(
       Icons.insert_drive_file,
       size: 18,
-      color: colorScheme.onSurface.addOpacity(0.7),
+      color: colorScheme.onSurface.setOpacity(0.7),
     );
   }
 
@@ -236,9 +241,9 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
     }
     final fileId = widget.node.fileId;
     if (fileId != null) {
-      final scanner = ref.read(selectionProvider.notifier);
-      scanner.setActiveFile(fileId);
-      scanner.exitCombinedPreview();
+      ref.read(selectionProvider.notifier)
+        ..setActiveFile(fileId)
+        ..exitCombinedPreview();
     }
   }
 
@@ -385,14 +390,11 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
     switch (action) {
       case 'select_all':
         notifier.selectFolder(widget.node.id);
-        break;
       case 'copy_path':
         _copyPath();
-        break;
       case 'remove':
         // Use the FileListNotifier's removeNodes method for proper cleanup
         selectionNotifier.removeNodes({widget.node.id});
-        break;
     }
   }
 
@@ -404,5 +406,4 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
       SnackBar(content: Text('Copied: $path')),
     );
   }
-
 }

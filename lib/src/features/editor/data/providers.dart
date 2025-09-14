@@ -5,18 +5,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'monaco_service.dart';
 
 /// Main Monaco service provider
-final AutoDisposeStateNotifierProvider<MonacoService, EditorStatus> monacoEditorStatusProvider =
+final AutoDisposeStateNotifierProvider<MonacoService, EditorStatus>
+monacoEditorStatusProvider =
     StateNotifierProvider.autoDispose<MonacoService, EditorStatus>((ref) {
-  // Keep Monaco alive across routes so it can be pre-warmed on app start.
-  // This prevents autoDispose from tearing it down when not directly watched.
-  // Riverpod will still dispose it with the ProviderScope.
-  // ignore: unused_local_variable
-  final _link = ref.keepAlive();
+      // Keep Monaco alive across routes so it can be pre-warmed on app start.
+      // This prevents autoDispose from tearing it down when not directly watched.
+      // Riverpod will still dispose it with the ProviderScope.
+      // ignore: unused_local_variable
+      final link = ref.keepAlive();
 
-  final service = MonacoService();
-  ref.onDispose(service.dispose);
-  return service;
-});
+      final service = MonacoService();
+      ref.onDispose(service.dispose);
+      return service;
+    });
 
 /// Convenient provider for checking if editor is ready
 final monacoEditorReadyProvider = Provider<bool>((ref) {

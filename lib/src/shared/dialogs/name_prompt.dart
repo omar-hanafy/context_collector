@@ -52,4 +52,3 @@ Future<String?> promptForNewFileName(
     ),
   );
 }
-

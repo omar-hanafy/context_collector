@@ -48,7 +48,7 @@ class DropdownTile extends StatelessWidget {
             child: Container(
               decoration: BoxDecoration(
                 border: Border.all(
-                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                  color: Theme.of(context).colorScheme.outlineVariant,
                 ),
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -64,7 +64,7 @@ class DropdownTile extends StatelessWidget {
                     return DropdownMenuItem(
                       value: item,
                       child: Text(
-                        isExpanded ? item : displayName,
+                        displayName,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),

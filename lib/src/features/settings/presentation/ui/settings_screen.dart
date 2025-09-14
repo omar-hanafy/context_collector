@@ -1,7 +1,5 @@
-
 import 'package:context_collector/context_collector.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -56,35 +54,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ..sort();
 
     return ListView(
-      padding: DsDimensions.paddingMedium,
+      padding: const EdgeInsets.all(16),
       children: [
         // Appearance hint — app theme is controlled by the Editor Settings dialog
         Container(
-          padding: DsDimensions.paddingMedium,
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: context.surface,
-            borderRadius: context.ds.radiusMedium,
-            border: Border.all(color: context.outline.addOpacity(0.2)),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                Icons.palette_rounded,
-                color: context.primary,
-                size: DesignSystem.iconSizeMedium,
-              ),
+              Icon(Icons.palette_rounded, color: context.primary, size: 20),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Appearance', style: context.titleSmall),
-                    context.ds.spaceHeight(DesignSystem.space8),
+                    const SizedBox(height: 8),
                     Text(
                       'Theme is controlled by the Editor → Settings → Theme selector. '
                       'Pick a Monaco theme there and the app switches to Light/Dark automatically.',
-                      style: context.bodyMuted,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
@@ -93,15 +91,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
 
-        context.ds.spaceHeight(DesignSystem.space16),
+        const SizedBox(height: 16),
 
         // Extensions Section
         Container(
-          padding: DsDimensions.paddingMedium,
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: context.surface,
-            borderRadius: context.ds.radiusMedium,
-            border: Border.all(color: context.outline.addOpacity(0.2)),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -110,7 +110,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 children: [
                   Text(
                     'Blacklisted Extensions',
-                    style: context.titleBold,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const Spacer(),
                   TextButton(
@@ -150,14 +152,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ],
               ),
-              context.ds.spaceHeight(DesignSystem.space8),
+              const SizedBox(height: 8),
               Text(
                 'Files matching these patterns will be ignored during scanning. '
                 'Supports extensions (.log), multi-part extensions (.g.dart), '
                 'and specific filenames (pubspec.lock).',
-                style: context.bodyMuted,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
-              context.ds.spaceHeight(DesignSystem.space16),
+              const SizedBox(height: 16),
 
               // Add new extension form
               Form(
@@ -203,9 +207,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               ),
 
-              context.ds.spaceHeight(DesignSystem.space16),
+              const SizedBox(height: 16),
               const Divider(height: 1),
-              context.ds.spaceHeight(DesignSystem.space16),
+              const SizedBox(height: 16),
 
               // Blacklisted extensions list
               Row(
@@ -213,12 +217,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 children: [
                   Text(
                     'Currently Blacklisted (${blacklist.length})',
-                    style: context.titleMedium,
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
                   if (blacklist.isEmpty)
                     Text(
                       'No extensions blacklisted',
-                      style: context.bodyMuted,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
                 ],
               ),
@@ -249,5 +255,4 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ],
     );
   }
-
 }

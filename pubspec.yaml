@@ -22,7 +22,7 @@ dependencies:
     path: ../../Development/MyProjects/flutter-plugins/packages/desktop_drop
   file_selector: ^1.0.3
   window_manager: ^0.5.1
-  flutter_helper_utils: ^8.0.2
+  flutter_helper_utils: ^8.3.0
   dart_helper_utils: ^5.2.0
   intl: ^0.20.2
   path: ^1.9.1

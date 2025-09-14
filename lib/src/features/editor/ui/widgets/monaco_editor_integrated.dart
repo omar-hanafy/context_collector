@@ -55,7 +55,7 @@ class _LoadingView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: context.isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -65,14 +65,14 @@ class _LoadingView extends StatelessWidget {
             Text(
               'Starting Monaco Editor...',
               style: context.bodyMedium?.copyWith(
-                color: context.onSurface.addOpacity(0.8),
+                color: context.onSurface.setOpacity(0.8),
               ),
             ),
             const SizedBox(height: 8),
             Text(
               message,
               style: context.bodySmall?.copyWith(
-                color: context.onSurface.addOpacity(0.6),
+                color: context.onSurface.setOpacity(0.6),
               ),
             ),
           ],

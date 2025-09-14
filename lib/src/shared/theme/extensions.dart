@@ -36,17 +36,22 @@ extension ThemeColorsExtension on BuildContext {
 
   Color get onErrorContainer => themeData.onErrorContainer;
 
+  // Background layers
   Color get background => themeData.surface;
-
   Color get onBackground => themeData.onSurface;
 
-  Color get surface => themeData.surfaceContainerHighest;
-
-  Color get surfaceContainerHighest => themeData.surfaceContainerHighest;
-
+  // Base surface (use for Scaffold/App bars that should match page)
+  Color get surface => themeData.surface;
   Color get onSurface => themeData.onSurface;
-
   Color get onSurfaceVariant => themeData.onSurfaceVariant;
+
+  // Container surfaces (use for cards/blocks)
+  Color get surfaceContainerLowest =>
+      themeData.colorScheme.surfaceContainerLowest;
+  Color get surfaceContainerLow => themeData.colorScheme.surfaceContainerLow;
+  Color get surfaceContainer => themeData.colorScheme.surfaceContainer;
+  Color get surfaceContainerHigh => themeData.colorScheme.surfaceContainerHigh;
+  Color get surfaceContainerHighest => themeData.surfaceContainerHighest;
 
   Color get outline => themeData.outline;
 

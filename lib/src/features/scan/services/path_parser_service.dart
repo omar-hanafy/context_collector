@@ -69,7 +69,7 @@ class PathParserService {
     );
 
     // Step 3: Normalize path separators to forward slashes
-    processedInput = processedInput.replaceAll('\\\\', '/');
+    processedInput = processedInput.replaceAll(r'\\', '/');
 
     // Step 4: Split concatenated Windows drive paths (e.g., C:/UsersD:/Docs)
     processedInput = processedInput.replaceAllMapped(
@@ -102,7 +102,7 @@ class PathParserService {
         parsedPaths.add(uncPath);
       } else {
         // Normalize single backslashes in tokens to forward slashes (Windows paths)
-        parsedPaths.add(token.replaceAll('\\', '/'));
+        parsedPaths.add(token.replaceAll(r'\', '/'));
       }
     }
 

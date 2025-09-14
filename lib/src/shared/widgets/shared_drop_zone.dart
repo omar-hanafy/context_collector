@@ -4,8 +4,9 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_helper_utils/flutter_helper_utils.dart';
-import '../dialogs/name_prompt.dart' as prompts;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../dialogs/name_prompt.dart' as prompts;
 
 /// A reusable widget that provides a drop zone for files and directories,
 /// with visual feedback during a drag operation.
@@ -52,7 +53,10 @@ class _SharedDropZoneState extends ConsumerState<DropZone> {
           await selectionNotifier.processDroppedItems(fileItems);
         }
         for (final text in textPayloads) {
-          final name = await prompts.promptForNewFileName(context, initialName: 'pasted.txt');
+          final name = await prompts.promptForNewFileName(
+            context,
+            initialName: 'pasted.txt',
+          );
           if (name != null && name.trim().isNotEmpty) {
             selectionNotifier.createVirtualFile(name.trim(), text);
           }
@@ -61,14 +65,16 @@ class _SharedDropZoneState extends ConsumerState<DropZone> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
-          color: _isDragging ? context.primary.addOpacity(0.05) : null,
+          color: _isDragging
+              ? Theme.of(context).colorScheme.primary.setOpacity(0.05)
+              : null,
           border: _isDragging
               ? Border.all(
-                  color: context.primary.addOpacity(0.3),
-                  width: 2,
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                  width: 1,
                 )
               : null,
-          borderRadius: _isDragging ? BorderRadius.circular(4) : null,
+          borderRadius: BorderRadius.circular(12),
         ),
         child: widget.child,
       ),

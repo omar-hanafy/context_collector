@@ -3,7 +3,7 @@ import 'package:context_collector/src/features/virtual_tree/services/tree_builde
 import 'package:flutter/material.dart';
 import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
- 
+
 import '../state/tree_state.dart';
 // Editing dialog removed; new files open directly in Monaco.
 import 'tree_node_widget.dart';
@@ -25,20 +25,20 @@ class VirtualTreeView extends ConsumerWidget {
             Icon(
               Icons.account_tree_rounded,
               size: 64,
-              color: Theme.of(context).colorScheme.primary.addOpacity(0.3),
+              color: Theme.of(context).colorScheme.primary.setOpacity(0.3),
             ),
             const SizedBox(height: 16),
             Text(
               'Tree is Empty',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.addOpacity(0.6),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               'Drop files to begin or use the toolbar to create a virtual file.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.addOpacity(0.5),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
           ],
@@ -62,8 +62,10 @@ class VirtualTreeView extends ConsumerWidget {
   static void showCreateVirtualFileFlow(BuildContext context, WidgetRef ref) {
     final allNodes = ref.read(treeStateProvider).nodes;
     final rootChildren = allNodes[TreeBuilder.treeRootId]?.childIds ?? [];
-    final existingNames =
-        rootChildren.map((id) => allNodes[id]?.name).whereType<String>().toSet();
+    final existingNames = rootChildren
+        .map((id) => allNodes[id]?.name)
+        .whereType<String>()
+        .toSet();
 
     _showNameDialog(
       context: context,
@@ -76,7 +78,6 @@ class VirtualTreeView extends ConsumerWidget {
       },
     );
   }
-
 
   static void _showNameDialog({
     required BuildContext context,

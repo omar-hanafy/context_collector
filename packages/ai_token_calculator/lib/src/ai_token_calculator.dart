@@ -8,7 +8,8 @@ import 'models.dart';
 class AITokenCalculator {
   // Precompiled regexes to avoid reallocation on hot paths
   static final List<RegExp> _codeRegexes = <RegExp>[
-    RegExp(r'^\s*(?:function|def|class|interface|struct|enum)\s+\w+', multiLine: true),
+    RegExp(r'^\s*(?:function|def|class|interface|struct|enum)\s+\w+',
+        multiLine: true),
     RegExp(r'(?:if|for|while|switch)\s*\('),
     RegExp(r'[{};]\s*$', multiLine: true),
     RegExp(r'^\s*(?:import|include|require|using)\s+\w+', multiLine: true),
@@ -22,6 +23,7 @@ class AITokenCalculator {
     RegExp(r'^\s*(You|Me):\s*'),
     RegExp(r'^\s*\[[^\]]+\]:\s*'),
   ];
+
   /// Model specifications with context windows and display names.
   static const Map<AIModel, ModelLimits> modelSpecs = {
     // Claude models
@@ -268,7 +270,8 @@ class AITokenCalculator {
     final maxTokens = modelSpecs[model]!.contextWindow;
     final isWithinLimit = estimate.tokens <= maxTokens;
     final percentageUsed = (estimate.tokens / maxTokens) * 100;
-    final tokensRemaining = (maxTokens - estimate.tokens).clamp(0, maxTokens).toInt();
+    final tokensRemaining =
+        (maxTokens - estimate.tokens).clamp(0, maxTokens).toInt();
 
     return TokenLimitCheck(
       estimatedTokens: estimate.tokens,
@@ -309,13 +312,17 @@ class AITokenCalculator {
       includeOverhead: false,
     ).tokens;
     final adjustedMaxTokens = maxTokens - ellipsisTokens;
-    if (adjustedMaxTokens <= 0) return ellipsis;
+    if (adjustedMaxTokens <= 0) {
+      return ellipsis;
+    }
 
     final targetRunes = (adjustedMaxTokens * estimate.avgCharsPerToken)
         .floor()
         .clamp(0, estimate.characterCount)
         .toInt();
-    if (targetRunes <= 0) return ellipsis;
+    if (targetRunes <= 0) {
+      return ellipsis;
+    }
 
     final runes = text.runes.toList(growable: false);
     int cut = targetRunes.clamp(0, runes.length).toInt();
@@ -341,7 +348,9 @@ class AITokenCalculator {
     int overlap = 50, // token overlap
   }) {
     final chunks = <String>[];
-    if (text.isEmpty) return chunks;
+    if (text.isEmpty) {
+      return chunks;
+    }
     if (maxTokensPerChunk <= 0) {
       // Defensive: no forward progress possible; return as a single chunk
       chunks.add(text);
@@ -410,7 +419,8 @@ class AITokenCalculator {
       if (r == 0x200D || // ZWJ
           r == 0x200C || // ZWNJ
           r == 0xFE0F || // VS-16
-          r == 0xFE0E) { // VS-15
+          r == 0xFE0E) {
+        // VS-15
         controls++;
         continue; // don't classify further
       }
@@ -449,17 +459,27 @@ class AITokenCalculator {
 
   /// Detects content type based on simple patterns.
   ContentType _detectContentType(String text) {
-    if (_looksLikeCode(text)) return ContentType.code;
-    if (_looksLikeStructuredData(text)) return ContentType.structured;
-    if (_looksLikeChat(text)) return ContentType.chat;
-    if (_looksLikeProse(text)) return ContentType.prose;
+    if (_looksLikeCode(text)) {
+      return ContentType.code;
+    }
+    if (_looksLikeStructuredData(text)) {
+      return ContentType.structured;
+    }
+    if (_looksLikeChat(text)) {
+      return ContentType.chat;
+    }
+    if (_looksLikeProse(text)) {
+      return ContentType.prose;
+    }
     return ContentType.general;
   }
 
   bool _looksLikeCode(String text) {
     var matchCount = 0;
     for (final pattern in _codeRegexes) {
-      if (pattern.hasMatch(text)) matchCount++;
+      if (pattern.hasMatch(text)) {
+        matchCount++;
+      }
     }
     return matchCount >= 2;
   }
@@ -492,7 +512,9 @@ class AITokenCalculator {
 
   bool _looksLikeProse(String text) {
     final words = text.split(RegExp(r'\s+'));
-    if (words.length < 20) return false;
+    if (words.length < 20) {
+      return false;
+    }
     final noWs = text.replaceAll(RegExp(r'\s+'), '');
     final avgWordLength = noWs.isEmpty ? 0 : noWs.length / words.length;
     final hasSentences = RegExp(r'[.!?]\s+[A-Z]').hasMatch(text);
@@ -500,7 +522,8 @@ class AITokenCalculator {
   }
 
   /// Choose divisor based on strategy.
-  double _getDivisor(AIModel model, ContentType type, EstimationStrategy strategy) {
+  double _getDivisor(
+      AIModel model, ContentType type, EstimationStrategy strategy) {
     if (strategy == EstimationStrategy.perModel) {
       return _modelDivisors[(model, type)] ??
           _modelDivisors[(model, ContentType.general)] ??
@@ -532,7 +555,8 @@ class AITokenCalculator {
   bool _isCJK(int r) {
     return (r >= 0x4E00 && r <= 0x9FFF) || // CJK Unified Ideographs
         (r >= 0x3400 && r <= 0x4DBF) || // CJK Extension A
-        (r >= 0x20000 && r <= 0x2EBEF) || // CJK Extensions B–F (combined approx)
+        (r >= 0x20000 &&
+            r <= 0x2EBEF) || // CJK Extensions B–F (combined approx)
         (r >= 0x3040 && r <= 0x309F) || // Hiragana
         (r >= 0x30A0 && r <= 0x30FF) || // Katakana
         (r >= 0xF900 && r <= 0xFAFF) || // Compatibility Ideographs

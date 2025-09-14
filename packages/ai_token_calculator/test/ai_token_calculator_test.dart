@@ -177,8 +177,8 @@ void main() {
 
   group('Unicode and Non-ASCII', () {
     test('CJK yields more tokens than equal-length ASCII', () {
-      final ascii = 'abcdefghij'; // 10 ASCII runes
-      final cjk = '你好世界你好世界你好'; // 10 CJK runes
+      const ascii = 'abcdefghij'; // 10 ASCII runes
+      const cjk = '你好世界你好世界你好'; // 10 CJK runes
 
       final asciiEstimate =
           calculator.estimateTokens(ascii, model: AIModel.gpt4);
@@ -191,11 +191,13 @@ void main() {
 
     test('Emoji-heavy text yields more tokens than ASCII', () {
       const ascii = 'hello world hello world';
-      const emoji = '👩🏽\u200d💻👩🏽\u200d💻👩🏽\u200d💻👩🏽\u200d💻👩🏽\u200d💻';
+      const emoji =
+          '👩🏽\u200d💻👩🏽\u200d💻👩🏽\u200d💻👩🏽\u200d💻👩🏽\u200d💻';
 
       final asciiEstimate =
           calculator.estimateTokens(ascii, model: AIModel.gpt4);
-      final emojiEstimate = calculator.estimateTokens(emoji, model: AIModel.gpt4);
+      final emojiEstimate =
+          calculator.estimateTokens(emoji, model: AIModel.gpt4);
 
       expect(emojiEstimate.tokens, greaterThan(asciiEstimate.tokens));
     });
