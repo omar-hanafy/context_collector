@@ -137,6 +137,16 @@ class _EditorSettingsDialogState extends State<EditorSettingsDialog> {
                   );
                 }),
               ),
+              const SizedBox(height: 6),
+              Text(
+                'This theme also sets the app\'s Light/Dark mode.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withOpacity(0.7),
+                    ),
+              ),
               const SizedBox(height: 16),
 
               // Font Settings

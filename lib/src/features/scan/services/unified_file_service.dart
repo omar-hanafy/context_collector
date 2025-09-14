@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:math';
 
-import 'package:cross_file/cross_file.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
@@ -35,17 +34,22 @@ class UnifiedFileService {
       recursive: true,
       followLinks: false,
     )) {
-      if (entity is! File) continue;
+      if (entity is! File) {
+        continue;
+      }
 
       final fileName = p.basename(entity.path);
       
       // Skip hidden files
-      if (fileName.startsWith('.')) continue;
+      if (fileName.startsWith('.')) {
+        continue;
+      }
       
       // Check blacklist
-      if (blacklist.any((pattern) => 
-        fileName.toLowerCase().endsWith(pattern.toLowerCase())
-      )) continue;
+      if (blacklist.any((pattern) =>
+          fileName.toLowerCase().endsWith(pattern.toLowerCase()))) {
+        continue;
+      }
 
       try {
         final relativePath = p.relative(entity.path, from: directoryPath);
@@ -174,12 +178,15 @@ class UnifiedFileService {
     for (final entry in filesByDirectory.entries) {
       sourcePaths.add(entry.key);
       for (final filePath in entry.value) {
-        if (!processedPaths.add(filePath)) continue;
+        if (!processedPaths.add(filePath)) {
+          continue;
+        }
 
         final fileName = p.basename(filePath);
-        if (blacklist.any((pattern) => 
-          fileName.toLowerCase().endsWith(pattern.toLowerCase())
-        )) continue;
+        if (blacklist.any((pattern) =>
+            fileName.toLowerCase().endsWith(pattern.toLowerCase()))) {
+          continue;
+        }
 
         try {
           final file = ScannedFile.fromFile(

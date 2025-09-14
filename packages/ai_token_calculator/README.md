@@ -18,7 +18,7 @@ Add this to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  ai_token_calculator: ^2.0.0
+  ai_token_calculator: ^1.0.0
 ```
 
 ## Quick Start
@@ -50,9 +50,9 @@ void main() {
 | GPT-4 | 128,000 | `AIModel.gpt4` |
 | GPT-4 Turbo | 128,000 | `AIModel.gpt4Turbo` |
 | GPT-3.5 Turbo | 16,385 | `AIModel.gpt35Turbo` |
-| Gemini Pro | 32,760 | `AIModel.geminiPro` |
-| Gemini 1.5 Pro | 2,097,152 | `AIModel.gemini15Pro` |
-| Gemini 1.5 Flash | 1,048,576 | `AIModel.gemini15Flash` |
+| Gemini Pro | 1,000,000 | `AIModel.geminiPro` |
+| Gemini 1.5 Pro | 1,000,000 | `AIModel.gemini15Pro` |
+| Gemini 1.5 Flash | 1,000,000 | `AIModel.gemini15Flash` |
 | Grok | 131,072 | `AIModel.grok` |
 | Mistral | 32,768 | `AIModel.mistral` |
 | Llama | 32,768 | `AIModel.llama` |

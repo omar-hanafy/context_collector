@@ -1,16 +1,17 @@
-import 'package:enefty_icons/enefty_icons.dart';
+import 'dart:async';
+
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../context_collector.dart';
-import '../../../../shared/widgets/app_bar_title.dart';
+import '../../../../shared/dialogs/name_prompt.dart';
 import '../../../../shared/widgets/shared_drop_zone.dart';
-import '../../../scan/ui/paste_paths_dialog.dart';
-import '../route_focus_restorer.dart';
+import '../../../scan/ui/file_display_helper.dart';
+// Route focus restorer not needed with push/pop lifecycle.
 
 /// Refactored editor screen using flutter_monaco package
 class EditorScreen extends ConsumerStatefulWidget {
@@ -22,42 +23,183 @@ class EditorScreen extends ConsumerStatefulWidget {
 
 class _EditorScreenState extends ConsumerState<EditorScreen>
     with SingleTickerProviderStateMixin {
-  // Animation controllers for sidebar
-  late AnimationController _sidebarAnimationController;
-  late Animation<double> _sidebarAnimation;
-  bool _isSidebarExpanded = false;
+  Timer? _debounceTimer;
+  bool _viewAllToggleBusy = false;
+
+  // Track if a rename dialog is active to avoid stacking.
+  bool _renameDialogOpen = false;
 
   // Settings state
   EditorOptions _editorOptions = const EditorOptions();
   bool _hasAppliedInitialSettings = false;
 
-  // Sidebar dimensions
-  static const double _expandedSidebarWidth = DsDimensions.sidebarWidth;
+  // Sidebar removed — editor uses full right panel
 
   // Splitter controller
   SplitterController? _splitterController;
   bool _isSplitterInitialized = false;
   static const String _splitRatioKey = 'editor_split_ratio';
+  ProviderSubscription<EditorStatus>? _editorStatusSub;
+  ProviderSubscription<SelectionState>? _selectionSub;
 
   @override
   void initState() {
     super.initState();
 
+    // Create Monaco for this route instance
+    ref.read(monacoEditorStatusProvider.notifier).initialize();
+
     // Initialize splitter controller with saved ratio
     _initializeSplitter();
 
-    // Initialize animations
-    _sidebarAnimationController = AnimationController(
-      duration: DesignSystem.durationMedium,
-      vsync: this,
-    );
-    _sidebarAnimation = CurvedAnimation(
-      parent: _sidebarAnimationController,
-      curve: Curves.easeInOutCubic,
-    );
-
     // Load saved editor settings
     _loadEditorSettings();
+
+    // Register Riverpod listeners once
+    _wireRiverpodListeners();
+
+    // If Monaco is already ready (prewarmed), push initial content once.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || _hasAppliedInitialSettings) return;
+      final status = ref.read(monacoEditorStatusProvider);
+      if (status.isReady) {
+        _hasAppliedInitialSettings = true;
+        final selection = ref.read(selectionProvider);
+        String text = '';
+        String? lang;
+        final id = selection.activeFileId;
+        if (id != null) {
+          final file = selection.fileMap[id];
+          if (file != null) {
+            text = file.effectiveContent;
+            lang = FileDisplayHelper.getLanguageFromFile(file);
+          }
+        }
+        await ref
+            .read(monacoEditorStatusProvider.notifier)
+            .updateContent(text, language: lang);
+        unawaited(
+          ref.read(monacoEditorStatusProvider.notifier).ensureNativeFocus(),
+        );
+      }
+    });
+  }
+
+  void _wireRiverpodListeners() {
+    // Listen for editor ready state to apply initial settings and push initial content
+    _editorStatusSub = ref.listenManual<EditorStatus>(
+        monacoEditorStatusProvider, (previous, next) async {
+      if (!_hasAppliedInitialSettings && next.isReady) {
+        _hasAppliedInitialSettings = true;
+        
+        final selection = ref.read(selectionProvider);
+        String text = '';
+        String? lang;
+        final id = selection.activeFileId;
+        if (id != null) {
+          final file = selection.fileMap[id];
+          if (file != null) {
+            text = file.effectiveContent;
+            lang = FileDisplayHelper.getLanguageFromFile(file);
+          }
+        }
+        await ref
+            .read(monacoEditorStatusProvider.notifier)
+            .updateContent(text, language: lang);
+        unawaited(
+          ref.read(monacoEditorStatusProvider.notifier).ensureNativeFocus(),
+        );
+      }
+    });
+
+    // Keep Monaco’s content in sync with the active file and edits
+    _selectionSub = ref.listenManual<SelectionState>(
+        selectionProvider, (previous, next) async {
+      final editorService = ref.read(monacoEditorStatusProvider.notifier);
+      final controller = ref.read(monacoControllerProvider);
+
+      if (!_renameDialogOpen && next.pendingRenameFileId != null) {
+        _renameDialogOpen = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted) return;
+          final fileId = ref.read(selectionProvider).pendingRenameFileId!;
+          final fileName =
+              ref.read(selectionProvider).fileMap[fileId]?.name ??
+              'pasted.txt';
+          final newName = await promptForNewFileName(
+            context,
+            initialName: fileName,
+          );
+          if (newName != null && newName.trim().isNotEmpty) {
+            ref
+                .read(selectionProvider.notifier)
+                .renameFile(fileId, newName.trim());
+          } else {
+            ref.read(selectionProvider.notifier).clearPendingRename();
+          }
+          _renameDialogOpen = false;
+        });
+      }
+
+      final prevId = previous?.activeFileId;
+      final nextId = next.activeFileId;
+
+      final wasViewingAll = previous?.viewingAll ?? false;
+      final isViewingAll = next.viewingAll;
+
+      if ((previous != null && wasViewingAll) && !isViewingAll) {
+        String targetText = '';
+        String? language;
+        if (nextId != null) {
+          final file = next.fileMap[nextId];
+          if (file != null) {
+            targetText = file.effectiveContent;
+            language = FileDisplayHelper.getLanguageFromFile(file);
+          }
+        }
+        await editorService.updateContent(targetText, language: language);
+        return;
+      }
+
+      if (!wasViewingAll &&
+          !isViewingAll &&
+          prevId != null &&
+          prevId != nextId &&
+          controller != null) {
+        try {
+          final currentText = await controller.getValue();
+          ref
+              .read(selectionProvider.notifier)
+              .saveEditorTextFor(prevId, currentText);
+        } catch (_) {}
+      }
+
+      String targetText = '';
+      String? language;
+      if (nextId != null) {
+        final file = next.fileMap[nextId];
+        if (file != null) {
+          targetText = file.effectiveContent;
+          language = FileDisplayHelper.getLanguageFromFile(file);
+        }
+      }
+
+      final activeChanged = prevId != nextId;
+      final contentChanged =
+          nextId != null &&
+          (previous == null ||
+              (previous.activeFileId == nextId &&
+                  (previous.fileMap[nextId]?.effectiveContent ?? '') !=
+                      targetText));
+
+      if (!isViewingAll && (activeChanged || contentChanged)) {
+        _debounceTimer?.cancel();
+        _debounceTimer = Timer(const Duration(milliseconds: 80), () async {
+          if (!mounted) return;
+          await editorService.updateContent(targetText, language: language);
+        });
+      }
+    });
   }
 
   Future<void> _initializeSplitter() async {
@@ -73,8 +215,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
   @override
   void dispose() {
-    _sidebarAnimationController.dispose();
     _splitterController?.dispose();
+    _debounceTimer?.cancel();
+    _editorStatusSub?.close();
+    _selectionSub?.close();
     super.dispose();
   }
 
@@ -103,45 +247,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     });
     await EditorSettingsService.save(newOptions);
     await _applySettingsToEditor();
+    // Sync app ThemeMode to Monaco theme selection
+    await ref.read(themeProvider.notifier).setThemeFromMonaco(newOptions.theme);
   }
 
-  void _toggleSidebar() {
-    setState(() {
-      _isSidebarExpanded = !_isSidebarExpanded;
-      if (_isSidebarExpanded) {
-        _sidebarAnimationController.forward();
-      } else {
-        _sidebarAnimationController.reverse();
-      }
-    });
-  }
-
-  Future<void> _increaseFontSize() async {
-    final currentSize = _editorOptions.fontSize ?? 14;
-    if (currentSize < MonacoConstants.maxFontSize) {
-      final newOptions = _editorOptions.copyWith(
-        fontSize: currentSize + 1,
-      );
-      await _saveAndApplyOptions(newOptions);
-    }
-  }
-
-  Future<void> _decreaseFontSize() async {
-    final currentSize = _editorOptions.fontSize ?? 14;
-    if (currentSize > MonacoConstants.minFontSize) {
-      final newOptions = _editorOptions.copyWith(
-        fontSize: currentSize - 1,
-      );
-      await _saveAndApplyOptions(newOptions);
-    }
-  }
-
-  Future<void> _toggleWordWrap() async {
-    final newOptions = _editorOptions.copyWith(
-      wordWrap: !_editorOptions.wordWrap,
-    );
-    await _saveAndApplyOptions(newOptions);
-  }
+  // Removed quick toggles; font size and word wrap can be adjusted via Settings dialog
 
   Future<void> _showEnhancedEditorSettings(BuildContext context) async {
     final newOptions = await EditorSettingsDialog.show(
@@ -186,7 +296,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     // Flush Monaco → state for the active file so combined content has the latest edits
     final controller = ref.read(monacoControllerProvider);
     final activeId = ref.read(selectionProvider).activeFileId;
-    if (controller != null && activeId != null) {
+    final viewingAll = ref.read(selectionProvider).viewingAll;
+    if (!viewingAll && controller != null && activeId != null) {
       try {
         final text = await controller.getValue();
         ref.read(selectionProvider.notifier).saveEditorTextFor(activeId, text);
@@ -221,166 +332,87 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     final selectionNotifier = ref.read(selectionProvider.notifier);
     final editorStatus = ref.watch(monacoEditorStatusProvider);
 
-    // Listen for editor ready state to apply initial settings
-    ref.listen<EditorStatus>(monacoEditorStatusProvider, (previous, next) {
-      if (!_hasAppliedInitialSettings && next.isReady) {
-        _hasAppliedInitialSettings = true;
-        _applySettingsToEditor();
-      }
-    });
+    // (Listeners are wired once in initState)
 
-    // When the active file changes, nudge focus back to Monaco
-    ref.listen<SelectionState>(selectionProvider, (prev, next) {
-      if (prev?.activeFileId != next.activeFileId && next.activeFileId != null) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          EditorFocusHelper.restoreFocus(ref);
-        });
-      }
-    });
-
-    return MonacoRouteFocusRestorer(
-      child: Scaffold(
+    return Scaffold(
       backgroundColor: context.surface,
       appBar: AppBar(
-        // Compact height for desktop
-        toolbarHeight: 56,
-
-        // Left side - Primary actions
-        leading: Padding(
-          padding: const EdgeInsets.only(left: 12),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Single Add button with dropdown
-              PopupMenuButton<String>(
-                tooltip: 'Add files or folder',
-                position: PopupMenuPosition.under,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                onCanceled: () {
-                  // Menu dismissed without selection – ensure editor regains focus
-                  EditorFocusHelper.restoreFocus(ref);
-                },
-                onSelected: (value) async {
-                  if (value == 'files') {
-                    await selectionNotifier.pickFiles(context);
-                    await EditorFocusHelper.restoreFocus(ref);
-                  } else if (value == 'folder') {
-                    await selectionNotifier.pickDirectory(context);
-                    await EditorFocusHelper.restoreFocus(ref);
-                  } else if (value == 'paste_paths') {
-                    await PastePathsDialog.show(context);
-                    await EditorFocusHelper.restoreFocus(ref);
-                  }
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'files',
-                    child: ListTile(
-                      dense: true,
-                      leading: Icon(Icons.insert_drive_file_outlined, size: 20),
-                      title: Text('Add Files'),
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'folder',
-                    child: ListTile(
-                      dense: true,
-                      leading: Icon(Icons.folder_outlined, size: 20),
-                      title: Text('Add Folder'),
-                    ),
-                  ),
-                  const PopupMenuDivider(),
-                  const PopupMenuItem(
-                    value: 'paste_paths',
-                    child: ListTile(
-                      dense: true,
-                      leading: Icon(Icons.content_paste_go, size: 20),
-                      title: Text('Paste Paths...'),
-                    ),
-                  ),
-                ],
-                child: FilledButton.tonalIcon(
-                  icon: const Icon(Icons.add_rounded, size: 18),
-                  label: const Text('Add'),
-                  onPressed: null, // Button is just for display
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ),
-              ),
-
-              const SizedBox(width: 8),
-
-              // Save action (saves combined markdown)
-              FilledButton.icon(
-                icon: const Icon(Icons.save_alt_rounded, size: 18),
-                label: const Text('Save'),
-                onPressed: selectionState.hasSelectedFiles
-                    ? () async {
-                        // Flush Monaco → state before saving combined content
-                        final controller = ref.read(monacoControllerProvider);
-                        final activeId =
-                            ref.read(selectionProvider).activeFileId;
-                        if (controller != null && activeId != null) {
-                          try {
-                            final text = await controller.getValue();
-                            ref
-                                .read(selectionProvider.notifier)
-                                .saveEditorTextFor(activeId, text);
-                          } catch (_) {}
-                        }
-                        await selectionNotifier.saveToFile();
+        automaticallyImplyLeading: false,
+        toolbarHeight: 40,
+        titleSpacing: 6,
+        scrolledUnderElevation: 0,
+        shadowColor: Colors.transparent,
+        // backgroundColor: context.surface,
+        centerTitle: false,
+        elevation: 0,
+        // LEFT group — compact icon-only actions
+        leadingWidth: 260,
+        leading: Row(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            const SizedBox(width: 8),
+            _tb(Icons.refresh_rounded, 'Reload from disk', () {
+              ref.read(selectionProvider.notifier).refreshAllContents();
+            }),
+            _tb(Icons.note_add_outlined, 'New virtual file', () async {
+              final name = await promptForNewFileName(
+                context,
+                initialName: 'pasted.txt',
+              );
+              if (name != null && name.trim().isNotEmpty) {
+                ref
+                    .read(selectionProvider.notifier)
+                    .createVirtualFile(name.trim(), '');
+              }
+            }),
+            _tb(Icons.file_open_rounded, 'Add files…', () {
+              ref.read(selectionProvider.notifier).pickFiles(context);
+            }),
+            _tb(Icons.folder_open_rounded, 'Add folder…', () {
+              ref.read(selectionProvider.notifier).pickDirectory(context);
+            }),
+            _pasteIconButton(context),
+            _tb(
+              Icons.save_alt_rounded,
+              'Save Markdown',
+              selectionState.hasSelectedFiles
+                  ? () async {
+                      final controller = ref.read(monacoControllerProvider);
+                      final activeId = ref.read(selectionProvider).activeFileId;
+                      final viewingAll = ref.read(selectionProvider).viewingAll;
+                      if (!viewingAll &&
+                          controller != null &&
+                          activeId != null) {
+                        try {
+                          final text = await controller.getValue();
+                          ref
+                              .read(selectionProvider.notifier)
+                              .saveEditorTextFor(activeId, text);
+                        } catch (_) {}
                       }
-                    : null,
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  visualDensity: VisualDensity.compact,
-                ),
-              ),
-            ],
-          ),
-        ),
-        leadingWidth: 280,
-
-        // Centered title
-        title: const AppBarTitle(),
-        centerTitle: true,
-
-        actions: [
-          // Right side - App-level actions
-          IconButton(
-            icon: Icon(
-              Icons.clear_all_rounded,
-              size: 20,
-              color: selectionState.hasFiles
-                  ? context.error.addOpacity(0.8)
+                      await selectionNotifier.saveToFile();
+                    }
                   : null,
             ),
-            onPressed: selectionState.hasFiles
-                ? selectionNotifier.clearFiles
-                : null,
-            tooltip: 'Clear All Files',
+          ],
+        ),
+
+        // RIGHT group — compact icon-only actions
+        actions: [
+          _tb(Icons.settings_outlined, 'Settings', () async {
+            await _showEnhancedEditorSettings(context);
+          }),
+            _tb(
+              Icons.view_agenda_rounded,
+              ref.watch(selectionProvider).viewingAll ? 'Exit View All' : 'View All',
+              _toggleViewAllInMonaco,
+            ),
+          _tb(
+            Icons.clear_all_rounded,
+            'Clear all',
+            selectionState.hasFiles ? selectionNotifier.clearFiles : null,
           ),
-
-          const SizedBox(width: 4),
-
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, size: 20),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute<void>(
-                  builder: (context) => const SettingsScreen(),
-                ),
-              ).then((_) => EditorFocusHelper.restoreFocus(ref));
-            },
-            tooltip: 'Settings',
-          ),
-
-          const SizedBox(width: 16),
+          const SizedBox(width: 8),
         ],
       ),
       body: DropZone(
@@ -406,113 +438,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                             const LinearProgressIndicator(),
                         ],
                       ),
-                      endPanel: Stack(
-                        children: [
-                          const MonacoEditorIntegrated(),
-                          _EditorSidebar(
-                            animation: _sidebarAnimation,
-                            expandedWidth: _expandedSidebarWidth,
-                            editorOptions: _editorOptions,
-                            selectionState: selectionState,
-                            onSaveAndApplyOptions: _saveAndApplyOptions,
-                            onToggleWordWrap: _toggleWordWrap,
-                            onIncreaseFontSize: _increaseFontSize,
-                            onDecreaseFontSize: _decreaseFontSize,
-                            onShowEnhancedEditorSettings: () =>
-                                _showEnhancedEditorSettings(context),
-                            onCopyEditorContent: _copyEditorContentToClipboard,
-                          ),
-
-                          // Floating Toggle Button (positioned in editor area)
-                          Positioned(
-                            left: _isSidebarExpanded
-                                ? _expandedSidebarWidth - 20
-                                : 8,
-                            top: 16,
-                            child: AnimatedBuilder(
-                              animation: _sidebarAnimation,
-                              builder: (context, child) {
-                                return Material(
-                                  color: _isSidebarExpanded
-                                      ? context.surfaceContainerHighest
-                                      : context.surface,
-                                  elevation: 4,
-                                  shape: const CircleBorder(),
-                                  child: InkWell(
-                                    onTap: _toggleSidebar,
-                                    customBorder: const CircleBorder(),
-                                    splashColor: Colors.transparent,
-                                    highlightColor: Colors.transparent,
-                                    hoverColor: context.onSurface.addOpacity(
-                                      0.04,
-                                    ),
-                                    child: Container(
-                                      width: 36,
-                                      height: 36,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: context.outline.addOpacity(
-                                            0.2,
-                                          ),
-                                        ),
-                                      ),
-                                      child: Icon(
-                                        _isSidebarExpanded
-                                            ? Icons.chevron_left
-                                            : EneftyIcons.setting_3_outline,
-                                        size: 20,
-                                        color: context.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-
-                          // Keyboard hint (shows when editor is loading)
-                          Positioned(
-                            bottom: 8,
-                            right: 8,
-                            child: AnimatedOpacity(
-                              opacity: editorStatus.isReady ? 0.0 : 1.0,
-                              duration: DesignSystem.durationMedium,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: context.surface.addOpacity(0.9),
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: context.outline.addOpacity(0.2),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.keyboard_rounded,
-                                      size: 14,
-                                      color: context.onSurfaceVariant,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      'Tab to focus splitter • ←→ to resize',
-                                      style: context.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: context.onSurfaceVariant,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                      endPanel: const MonacoEditorIntegrated(),
                     )
                   : Center(
                       child: Column(
@@ -543,84 +469,136 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           ],
         ),
       ),
-    ),
     );
   }
 }
 
-/// Extracted sidebar widget to simplify the main build method.
-class _EditorSidebar extends StatelessWidget {
-  const _EditorSidebar({
-    required this.animation,
-    required this.expandedWidth,
-    required this.editorOptions,
-    required this.selectionState,
-    required this.onSaveAndApplyOptions,
-    required this.onToggleWordWrap,
-    required this.onIncreaseFontSize,
-    required this.onDecreaseFontSize,
-    required this.onShowEnhancedEditorSettings,
-    required this.onCopyEditorContent,
-  });
+/// Sidebar removed; Editor uses full panel
 
-  final Animation<double> animation;
-  final double expandedWidth;
-  final EditorOptions editorOptions;
-  final SelectionState selectionState;
-  final ValueChanged<EditorOptions> onSaveAndApplyOptions;
-  final VoidCallback onToggleWordWrap;
-  final VoidCallback onIncreaseFontSize;
-  final VoidCallback onDecreaseFontSize;
-  final VoidCallback onShowEnhancedEditorSettings;
-  final VoidCallback onCopyEditorContent;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: animation,
-      builder: (context, child) {
-        final width = expandedWidth * animation.value;
-
-        return Positioned(
-          left: 0,
-          top: 0,
-          bottom: 0,
-          child: SizedBox(
-            width: width,
-            child: width > 0
-                ? ClipRect(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: context.surfaceContainerHighest,
-                        border: BorderDirectional(
-                          end: BorderSide(
-                            color: context.outline.addOpacity(0.2),
-                          ),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: context.shadow.addOpacity(0.05),
-                            offset: const Offset(2, 0),
-                            blurRadius: 4,
-                          ),
-                        ],
-                      ),
-                      child: QuickSidebar(
-                        options: editorOptions,
-                        selectionState: selectionState,
-                        onOptionsChanged: onSaveAndApplyOptions,
-                        onWordWrapToggle: onToggleWordWrap,
-                        onIncreaseFontSize: onIncreaseFontSize,
-                        onDecreaseFontSize: onDecreaseFontSize,
-                        onShowAllSettings: onShowEnhancedEditorSettings,
-                        onCopyContent: onCopyEditorContent,
-                      ),
-                    ),
-                  )
-                : null,
-          ),
-        );
-      },
+// === Helper methods for compact toolbar and smart paste ===
+extension _ToolbarHelpers on _EditorScreenState {
+  // Uniform compact icon buttons
+  Widget _tb(IconData icon, String tip, VoidCallback? onPressed) {
+    return IconButton(
+      icon: Icon(icon, size: 18),
+      tooltip: tip,
+      onPressed: onPressed,
+      padding: const EdgeInsets.all(6),
+      constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+      splashRadius: 18,
     );
+  }
+
+  // Paste icon with left-click = paste paths, right-click = paste as content
+  Widget _pasteIconButton(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: (event) async {
+        if (event.kind == PointerDeviceKind.mouse &&
+            (event.buttons & kSecondaryMouseButton) != 0) {
+          await _pasteClipboardAsContent();
+        }
+      },
+      child: _tb(
+        Icons.content_paste_go_rounded,
+        'Paste (left: paths • right: content)',
+        () => ref
+            .read(selectionProvider.notifier)
+            .pastePathsFromClipboard(context),
+      ),
+    );
+  }
+
+  // Paste clipboard as content into a new virtual file
+  Future<void> _pasteClipboardAsContent() async {
+    try {
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      final text = (data?.text ?? '').trim();
+      if (text.isEmpty) {
+        if (mounted) context.showInfo('Clipboard is empty.');
+        return;
+      }
+      final name = await promptForNewFileName(
+        context,
+        initialName: 'pasted.txt',
+      );
+      if (name == null || name.trim().isEmpty) return;
+      final trimmedName = name.trim();
+      ref.read(selectionProvider.notifier).createVirtualFile(trimmedName, text);
+      // Write-through so state also holds the live text for this new file.
+      final newId = ref.read(selectionProvider).activeFileId;
+      if (newId != null) {
+        ref.read(selectionProvider.notifier).saveEditorTextFor(newId, text);
+      }
+      if (mounted) context.showOk('Created "$trimmedName" from clipboard text.');
+    } catch (e) {
+      if (mounted) context.showErr('Paste failed: $e');
+    }
+  }
+
+  
+  // Legacy inline prompt removed; using shared promptForNewFileName()
+
+  // View All: show combined markdown of selected files in Monaco (non-destructive)
+  Future<void> _viewAllInMonaco() async {
+    // Enter combined view mode state
+    ref.read(selectionProvider.notifier).setViewingAll(true);
+    final status = ref.read(monacoEditorStatusProvider);
+    if (!status.isReady) {
+      if (mounted) context.showInfo('Editor is still loading…');
+      return;
+    }
+
+    // Flush Monaco → state so combined content is accurate
+    final controller = ref.read(monacoControllerProvider);
+    final activeId = ref.read(selectionProvider).activeFileId;
+    if (controller != null && activeId != null) {
+      try {
+        final live = await controller.getValue();
+        ref.read(selectionProvider.notifier).saveEditorTextFor(activeId, live);
+      } catch (_) {}
+    }
+
+    final combined = ref.read(selectionProvider).combinedContent;
+    await ref
+        .read(monacoEditorStatusProvider.notifier)
+        .updateContent(
+          combined.isEmpty ? '# (Nothing selected)' : combined,
+          language: 'markdown',
+        );
+
+    // Combined view mode is tracked in SelectionState.viewingAll
+  }
+
+  // Toggle View All mode. If currently viewing all, exit back to active file.
+  Future<void> _toggleViewAllInMonaco() async {
+    if (_viewAllToggleBusy) return;
+    _viewAllToggleBusy = true;
+    try {
+      final viewingAll = ref.read(selectionProvider).viewingAll;
+      if (!viewingAll) {
+        // Enter combined view (do all work here)
+        await _viewAllInMonaco();
+      } else {
+        // Exit combined view: clear flag and immediately push active file content.
+        ref.read(selectionProvider.notifier).setViewingAll(false);
+        final next = ref.read(selectionProvider);
+        String text = '';
+        String? language;
+        final id = next.activeFileId;
+        if (id != null) {
+          final file = next.fileMap[id];
+          if (file != null) {
+            text = file.effectiveContent;
+            language = FileDisplayHelper.getLanguageFromFile(file);
+          }
+        }
+        await ref
+            .read(monacoEditorStatusProvider.notifier)
+            .updateContent(text, language: language);
+      }
+    } finally {
+      _viewAllToggleBusy = false;
+    }
   }
 }

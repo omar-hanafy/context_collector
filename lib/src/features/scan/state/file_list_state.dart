@@ -2,7 +2,9 @@
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as path;
 
 import '../../settings/presentation/state/preferences_notifier.dart';
 import '../../virtual_tree/api/virtual_tree_api.dart';
@@ -25,6 +27,8 @@ class SelectionState {
     this.combinedContent = '',
     this.virtualTreeJson,
     this.activeFileId,
+    this.viewingAll = false,
+    this.pendingRenameFileId,
   });
 
   final Map<String, ScannedFile>
@@ -37,6 +41,12 @@ class SelectionState {
   final String combinedContent;
   final String? virtualTreeJson;
   final String? activeFileId;
+  // When true, Monaco shows ephemeral combined content and should not
+  // be flushed back into any single file.
+  final bool viewingAll;
+  // When set (e.g., from Dock/global text drop), UI should prompt to rename
+  // the indicated file id.
+  final String? pendingRenameFileId;
 
   // Backward compatible getters
   Set<String> get selectedFilePaths =>
@@ -73,6 +83,8 @@ class SelectionState {
     String? combinedContent,
     String? virtualTreeJson,
     String? activeFileId,
+    bool? viewingAll,
+    String? pendingRenameFileId,
   }) {
     return SelectionState(
       fileMap: fileMap ?? this.fileMap,
@@ -84,6 +96,8 @@ class SelectionState {
       combinedContent: combinedContent ?? this.combinedContent,
       virtualTreeJson: virtualTreeJson ?? this.virtualTreeJson,
       activeFileId: activeFileId ?? this.activeFileId,
+      viewingAll: viewingAll ?? this.viewingAll,
+      pendingRenameFileId: pendingRenameFileId ?? this.pendingRenameFileId,
     );
   }
 
@@ -223,6 +237,8 @@ class FileListNotifier extends StateNotifier<SelectionState> {
   /// Persist the editor's current text into the given file
   /// (call before switching away or before copy/save).
   void saveEditorTextFor(String fileId, String text) {
+    // Safety guard: never persist when showing combined "View All" content.
+    if (state.viewingAll) return;
     final file = state.fileMap[fileId];
     if (file == null) return;
     if (text == file.effectiveContent) return; // No change
@@ -287,9 +303,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
       final pathParser = ref.read(pathParserServiceProvider);
       final parseResult = await pathParser.parse(pastedText);
 
-      final existingPaths = state.fileMap.values
-          .map((f) => f.fullPath)
-          .toSet();
+      final existingPaths = state.fileMap.values.map((f) => f.fullPath).toSet();
       final validationResult = await UnifiedFileService.validatePaths(
         parseResult.validPaths,
         existingPaths,
@@ -297,7 +311,10 @@ class FileListNotifier extends StateNotifier<SelectionState> {
 
       // Process the validated items
       if (validationResult.hasValidFiles) {
-        await _processNewItems(validationResult.validFiles, source: ScanSource.paste);
+        await _processNewItems(
+          validationResult.validFiles,
+          source: ScanSource.paste,
+        );
       }
 
       // Build summary notification
@@ -315,6 +332,120 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     } finally {
       state = state.copyWith(isProcessing: false);
     }
+  }
+
+  /// Reads plain-text paths from the clipboard and processes them directly.
+  Future<void> pastePathsFromClipboard(BuildContext context) async {
+    try {
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      final text = data?.text?.trim() ?? '';
+      if (text.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Clipboard is empty.')),
+        );
+        return;
+      }
+      await processPastedPaths(text, context);
+    } catch (e) {
+      state = state.copyWith(error: 'Failed to read clipboard: $e');
+    }
+  }
+
+  void setViewingAll(bool v) {
+    state = state.copyWith(viewingAll: v);
+  }
+
+  void exitCombinedPreview() => setViewingAll(false);
+
+  void clearPendingRename() {
+    state = state.copyWith(pendingRenameFileId: null);
+  }
+
+  void renameFile(String fileId, String newName) {
+    final file = state.fileMap[fileId];
+    if (file == null) return;
+    final updated = file.copyWith(
+      name: newName,
+      fullPath: '/$newName',
+      relativePath: newName,
+      extension: path.extension(newName).toLowerCase(),
+    );
+    final newMap = Map<String, ScannedFile>.from(state.fileMap)
+      ..[fileId] = updated;
+    state = state.copyWith(fileMap: newMap, pendingRenameFileId: null);
+    _rebuildTreeFromState();
+  }
+
+  /// Creates a virtual file with an auto-generated unique name under the tree root.
+  void createVirtualFileWithAutoName(
+    String content, {
+    String base = 'pasted',
+    String ext = '.txt',
+    bool promptForName = false,
+  }) {
+    // Collect top-level names under '/tree' to avoid collisions.
+    final names = <String>{};
+    final tree = virtualTree?.getCurrentTree();
+    if (tree != null) {
+      // Find the '/tree' folder node
+      final treeFolder = tree.nodes.values.firstWhere(
+        (n) => n.virtualPath == '/tree' && n.type == NodeType.folder,
+        orElse: () => TreeNode(
+          id: 'tmp',
+          name: 'tree',
+          type: NodeType.folder,
+          parentId: tree.rootId,
+          virtualPath: '/tree',
+        ),
+      );
+      for (final id in treeFolder.childIds) {
+        final n = tree.nodes[id];
+        if (n != null) names.add(n.name);
+      }
+    }
+
+    String candidate = '$base$ext';
+    int i = 2;
+    while (names.contains(candidate)) {
+      candidate = '$base-$i$ext';
+      i++;
+    }
+
+    final file = UnifiedFileService.createVirtualFile(
+      name: candidate,
+      content: content,
+      virtualPath: candidate,
+    );
+    _addFileToState(file);
+    state = state.copyWith(
+      activeFileId: file.id,
+      // If requested, trigger the rename prompt flow in the editor route.
+      pendingRenameFileId: promptForName ? file.id : state.pendingRenameFileId,
+    );
+  }
+
+  /// Process plain text received via drop (Dock/Finder text drop) or other channels.
+  /// Paths-only: if it parses as paths, they are validated and added; otherwise ignored.
+  Future<void> processDroppedText(String text) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+
+    final pathParser = ref.read(pathParserServiceProvider);
+    final parsed = await pathParser.parse(trimmed);
+
+    if (parsed.validPaths.isNotEmpty) {
+      final existingPaths = state.fileMap.values.map((f) => f.fullPath).toSet();
+      final validation = await UnifiedFileService.validatePaths(
+        parsed.validPaths,
+        existingPaths,
+      );
+      if (validation.validFiles.isNotEmpty) {
+        await _processNewItems(validation.validFiles, source: ScanSource.paste);
+      }
+      return;
+    }
+
+    // Not paths → do nothing (no auto detection/content creation)
   }
 
   //============================================================================
@@ -382,7 +513,6 @@ class FileListNotifier extends StateNotifier<SelectionState> {
       state = state.copyWith(error: e.toString());
     }
   }
-
 
   /// Clears the current error message from the state.
   void clearError() {
@@ -459,9 +589,10 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     // Add to state and rebuild everything. This is simpler and more robust.
     _addFileToState(virtualFile);
     // Make it the active file for editing in Monaco
-    state = state.copyWith(activeFileId: virtualFile.id);
+    state = state.copyWith(
+      activeFileId: virtualFile.id,
+    );
   }
-
 
   /// Removes a set of nodes and all their descendants from the state.
   /// This is the ONLY way to remove items to ensure proper cleanup.
@@ -544,7 +675,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
       selectedFileIds: newSelectedFileIds,
       scanHistory: newScanHistory,
       // If all files are removed, end the session to return to home screen
-      sessionStarted: shouldResetSession ? false : state.sessionStarted,
+      sessionStarted: state.sessionStarted && !shouldResetSession,
       activeFileId: newActiveFileId,
     );
 

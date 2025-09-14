@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../virtual_tree/providers/virtual_tree_provider.dart';
 import '../../virtual_tree/ui/virtual_tree_view.dart';
 import '../state/file_list_state.dart';
 
@@ -17,12 +16,7 @@ class _FileListScreenState extends ConsumerState<FileListScreen> {
   @override
   void initState() {
     super.initState();
-    // Connect virtual tree to scanner
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref
-          .read(selectionProvider.notifier)
-          .initializeVirtualTree(ref.read(virtualTreeProvider));
-    });
+    // Tree wiring now happens in main() before any drops arrive.
   }
 
   @override

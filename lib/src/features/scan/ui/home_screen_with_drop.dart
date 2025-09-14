@@ -1,16 +1,20 @@
 import 'package:desktop_drop/desktop_drop.dart';
+import 'package:flutter/gestures.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/consts.dart';
+import '../../../shared/dialogs/name_prompt.dart';
 import '../../../shared/widgets/app_bar_title.dart';
 import '../../settings/presentation/ui/settings_screen.dart';
 import '../../virtual_tree/ui/virtual_tree_view.dart';
 import '../state/file_list_state.dart';
-import 'paste_paths_dialog.dart';
+import '../../editor/ui/widgets/prewarm_monaco.dart';
 
 /// Beautiful home screen with drop zone functionality
 class HomeScreenWithDrop extends ConsumerStatefulWidget {
@@ -27,19 +31,39 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
   Widget build(BuildContext context) {
     final selectionNotifier = ref.read(selectionProvider.notifier);
 
-    return Focus(
-      canRequestFocus: false,
-      child: DropTarget(
+    return DropTarget(
+      catchAppWideDrops: true,
       onDragEntered: (_) => setState(() => _isDragging = true),
       onDragExited: (_) => setState(() => _isDragging = false),
-      onDragDone: (details) async {
+      onDragDone: (DropDoneDetails details) async {
         setState(() => _isDragging = false);
-        if (details.files.isNotEmpty) {
-          await selectionNotifier.processDroppedItems(
-            details.files,
-          );
+
+        final fileItems = <XFile>[];
+        final textPayloads = <String>[];
+
+        for (final item in details.files) {
+          if (item is DropItem && item.isMemoryBacked && item.isTextLike) {
+            try {
+              final text = await item.readAsText();
+              if (text != null && text.trim().isNotEmpty) {
+                textPayloads.add(text);
+              }
+            } catch (_) {}
+            continue;
+          }
+          fileItems.add(item);
         }
-      },
+
+          if (fileItems.isNotEmpty) {
+            await selectionNotifier.processDroppedItems(fileItems);
+          }
+          for (final text in textPayloads) {
+            final name = await promptForNewFileName(context, initialName: 'pasted.txt');
+            if (name != null && name.trim().isNotEmpty) {
+              selectionNotifier.createVirtualFile(name.trim(), text);
+            }
+          }
+        },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
@@ -48,14 +72,15 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
               : null,
           border: _isDragging
               ? Border.all(
-                  color: Theme.of(context).colorScheme.primary.addOpacity(0.3),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.addOpacity(0.3),
                   width: 2,
                 )
               : null,
         ),
         child: HomeScreenContent(isDragging: _isDragging),
       ),
-    ),
     );
   }
 }
@@ -138,6 +163,8 @@ class HomeScreenContent extends ConsumerWidget {
       ),
       body: Stack(
         children: [
+          // Invisible: pre-warm Monaco at app start for instant first use
+          const Offstage(offstage: true, child: PrewarmMonaco()),
           Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(32),
@@ -151,7 +178,7 @@ class HomeScreenContent extends ConsumerWidget {
                     const SizedBox(height: 40),
 
                     // Action buttons row
-                    _buildActionButtons(context, selectionNotifier),
+                    _buildActionButtons(context, selectionNotifier, ref),
                     const SizedBox(height: 16),
 
                     // Or divider & other actions
@@ -255,7 +282,7 @@ class HomeScreenContent extends ConsumerWidget {
         ),
         const SizedBox(height: 12),
         Text(
-          'Drag and drop, browse, paste paths, or start with an empty tree.',
+          'Drag and drop, browse, paste, or start with an empty tree.',
           style: theme.textTheme.bodyLarge?.copyWith(
             color: theme.colorScheme.onSurface.addOpacity(0.7),
           ),
@@ -265,7 +292,11 @@ class HomeScreenContent extends ConsumerWidget {
     );
   }
 
-  Widget _buildActionButtons(BuildContext context, FileListNotifier selectionNotifier) {
+  Widget _buildActionButtons(
+    BuildContext context,
+    FileListNotifier selectionNotifier,
+    WidgetRef ref,
+  ) {
     final buttonStyle = FilledButton.styleFrom(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
@@ -288,21 +319,62 @@ class HomeScreenContent extends ConsumerWidget {
           label: const Text('Browse Folder'),
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            textStyle: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
-        OutlinedButton.icon(
-          onPressed: () => PastePathsDialog.show(context),
-          icon: const Icon(Icons.content_paste_go),
-          label: const Text('Paste Paths'),
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        Listener(
+          behavior: HitTestBehavior.opaque,
+          onPointerDown: (e) async {
+            if (e.kind == PointerDeviceKind.mouse && (e.buttons & kSecondaryMouseButton) != 0) {
+              await _pasteClipboardAsContent(context, selectionNotifier);
+            }
+          },
+          child: OutlinedButton.icon(
+            onPressed: () => selectionNotifier.pastePathsFromClipboard(context),
+            icon: const Icon(Icons.content_paste_go),
+            label: const Text('Paste From Clipboard'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              textStyle: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ),
       ],
     );
   }
+
+  Future<void> _pasteClipboardAsContent(
+    BuildContext context,
+    FileListNotifier selection,
+  ) async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final raw = data?.text ?? '';
+    final text = raw.trim();
+    if (text.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Clipboard is empty.')),
+        );
+      }
+      return;
+    }
+
+    final name = await promptForNewFileName(context, initialName: 'pasted.txt');
+    if (name == null || name.trim().isEmpty) return;
+    selection.createVirtualFile(name.trim(), text);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Created "$name" from clipboard text.')),
+      );
+    }
+  }
+  
 
   Widget _buildSecondaryActions(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
@@ -323,7 +395,8 @@ class HomeScreenContent extends ConsumerWidget {
         ),
         const SizedBox(height: 16),
         TextButton.icon(
-          onPressed: () => VirtualTreeView.showCreateVirtualFileFlow(context, ref),
+          onPressed: () =>
+              VirtualTreeView.showCreateVirtualFileFlow(context, ref),
           icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
           label: const Text('Start with a New File'),
           style: TextButton.styleFrom(

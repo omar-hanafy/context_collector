@@ -2,13 +2,13 @@
 import 'dart:io';
 
 import 'package:context_collector/context_collector.dart';
+import 'package:desktop_drop/desktop_drop.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
-// Global RouteObserver for tracking navigation events
-final RouteObserver<ModalRoute<void>> routeObserver =
-    RouteObserver<ModalRoute<void>>();
+// RouteObserver no longer used; editor is presented via push/pop
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,8 +34,56 @@ void main() async {
   // Create ProviderScope container for early access
   final container = ProviderContainer();
 
-  // 🚀 START EDITOR PRELOADING
-  _startEditorPreloading(container);
+  // Wire Selection → VirtualTree before any drops or navigation occur.
+  // This eliminates a race where a very-early drop happens before the
+  // tree is connected, leaving the initial scan invisible.
+  container
+      .read(selectionProvider.notifier)
+      .initializeVirtualTree(container.read(virtualTreeProvider));
+
+  // Initialize desktop_drop early and listen for global Dock/Finder drops
+  // We rely on DropTarget(catchAppWideDrops: true) to handle files.
+  // Here we only handle plain text/URL drops as a safety net (e.g., on launch
+  // before widgets mount), avoiding duplicate file processing.
+  DesktopDrop.instance.addRawDropEventListener((event) async {
+    if (event is! DropDoneEvent) return;
+    // Only treat Dock/Finder (application-level) drops here to avoid duplicate
+    // handling with in-window DropTargets.
+    final cameFromDockOrFinder = event.location == Offset.zero;
+    if (!cameFromDockOrFinder) return;
+
+    final fileItems = <XFile>[];
+    final textPayloads = <String>[];
+
+    for (final item in event.files) {
+      if (item.isMemoryBacked && item.isTextLike) {
+        try {
+          final text = await item.readAsText();
+          if (text != null && text.trim().isNotEmpty) {
+            textPayloads.add(text);
+          }
+        } catch (_) {}
+        continue;
+      }
+      fileItems.add(item);
+    }
+
+    // If app is launching via Dock/Finder, process files before UI mounts.
+    final hasSession = container.read(selectionProvider).sessionStarted;
+    if (!hasSession && fileItems.isNotEmpty) {
+      await container
+          .read(selectionProvider.notifier)
+          .processDroppedItems(fileItems);
+    }
+    // For text/links: create a virtual file and prompt to rename.
+    for (final text in textPayloads) {
+      container
+          .read(selectionProvider.notifier)
+          .createVirtualFileWithAutoName(text, promptForName: true);
+    }
+  });
+
+  DesktopDrop.instance.init();
 
   // 🔄 INITIALIZE AUTO UPDATER
   _initializeAutoUpdater(container);
@@ -49,26 +97,7 @@ void main() async {
   );
 }
 
-/// Start editor preloading
-void _startEditorPreloading(ProviderContainer container) {
-  debugPrint('[ContextCollector] 🚀 Starting editor preloading...');
-
-  // Initialize the Monaco service
-  container.read(monacoEditorStatusProvider.notifier).initialize();
-
-  // Listen to status for debugging
-  container.listen<EditorStatus>(
-    monacoEditorStatusProvider,
-    (previous, next) {
-      debugPrint(
-        '[ContextCollector] Editor status changed: ${previous?.lifecycle} → ${next.lifecycle}',
-      );
-      if (next.error != null) {
-        debugPrint('  Error: ${next.error}');
-      }
-    },
-  );
-}
+// Monaco preloading removed; editor is created on the editor route
 
 /// Initialize auto updater for automatic updates
 void _initializeAutoUpdater(ProviderContainer container) {
@@ -110,11 +139,7 @@ class ContextCollectorApp extends ConsumerWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
-      // Register the route observer for navigation tracking
-      navigatorObservers: [routeObserver],
-      home: const GlobalMonacoContainer(
-        child: HomeScreenWithDrop(),
-      ),
+      home: const SessionNavigator(),
       debugShowCheckedModeBanner: false,
     );
   }

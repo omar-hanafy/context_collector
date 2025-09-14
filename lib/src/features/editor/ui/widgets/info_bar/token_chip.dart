@@ -15,14 +15,29 @@ class TokenCountChip extends ConsumerWidget {
     final content = ref.watch(selectionProvider.select((s) => s.combinedContent));
     final calculator = ref.watch(tokenCalculatorProvider);
     final selectedModel = ref.watch(selectedAIModelProvider);
+    // Content-type hint based on current Monaco language (if available)
+    final controller = ref.watch(monacoControllerProvider);
+    final langId = controller?.liveStats.value.language;
+    final contentTypeHint = _contentTypeFromLanguage(langId);
+    final perModel = ref.watch(perModelStrategyProvider);
+    final strategy = perModel ? EstimationStrategy.perModel : EstimationStrategy.average;
+
     final estimate = calculator.estimateTokens(
       content,
       model: selectedModel,
+      contentType: contentTypeHint,
+      strategy: strategy,
     );
 
-    final usage =
-        estimate.tokens /
-        AITokenCalculator.modelSpecs[selectedModel]!.contextWindow;
+    // Use overhead-inclusive check for conservative usage in the bar
+    final limit = calculator.checkTokenLimit(
+      content,
+      model: selectedModel,
+      contentType: contentTypeHint,
+      strategy: strategy,
+      includeOverhead: true,
+    );
+    final usage = ((limit.percentageUsed / 100).clamp(0.0, 1.0)) as double;
 
     return Theme(
       data: Theme.of(context).copyWith(
@@ -90,7 +105,7 @@ class TokenCountChip extends ConsumerWidget {
           ),
           context.ds.spaceHeight(DesignSystem.space8),
           Text(
-            '~${(estimate as dynamic).tokens} tokens',
+            '~${estimate.tokens} tokens',
             style: context.bodySmall?.copyWith(
               color: context.onSurface,
             ),
@@ -159,6 +174,8 @@ class TokenCountChip extends ConsumerWidget {
       AIModel.gpt4,
       AIModel.gpt35Turbo,
       AIModel.geminiPro,
+      AIModel.gemini15Pro,
+      AIModel.gemini15Flash,
       AIModel.grok,
     ];
 
@@ -188,7 +205,17 @@ class TokenCountChip extends ConsumerWidget {
   ) {
     final currentSelectedModel = ref.watch(selectedAIModelProvider);
     final isSelected = model == currentSelectedModel;
-    final estimate = calculator.estimateTokens(content, model: model);
+    final controller = ref.read(monacoControllerProvider);
+    final langId = controller?.liveStats.value.language;
+    final contentTypeHint = _contentTypeFromLanguage(langId);
+    final perModel = ref.read(perModelStrategyProvider);
+    final strategy = perModel ? EstimationStrategy.perModel : EstimationStrategy.average;
+    final estimate = calculator.estimateTokens(
+      content,
+      model: model,
+      contentType: contentTypeHint,
+      strategy: strategy,
+    );
     final spec = AITokenCalculator.modelSpecs[model]!;
 
     return Row(
@@ -227,4 +254,24 @@ class TokenCountChip extends ConsumerWidget {
     if (usage > 0.75) return Colors.orange;
     return context.primary;
   }
+}
+
+// Map Monaco language id to a content type hint for better accuracy
+ContentType? _contentTypeFromLanguage(String? langId) {
+  if (langId == null) return null;
+  final l = langId.toLowerCase();
+
+  const codeLangs = {
+    'dart', 'python', 'javascript', 'typescript', 'java', 'cpp', 'c', 'csharp', 'go', 'rust',
+    'ruby', 'php', 'swift', 'kotlin', 'scala', 'r', 'shell', 'bash', 'zsh', 'powershell', 'sql',
+    'h', 'm'
+  };
+  const structuredLangs = {
+    'json', 'yaml', 'yml', 'xml', 'csv', 'ini', 'toml', 'properties'
+  };
+
+  if (codeLangs.contains(l)) return ContentType.code;
+  if (structuredLangs.contains(l)) return ContentType.structured;
+  if (l == 'markdown') return ContentType.prose;
+  return null; // let auto-detect handle it
 }

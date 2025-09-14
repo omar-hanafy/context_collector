@@ -1,38 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_monaco/flutter_monaco.dart';
 
-// Provider for the ThemeNotifier
+import '../../../editor/data/settings_service.dart';
+import '../../services/appearance_sync.dart';
+
+/// Provides the Flutter ThemeMode for the whole app.
+/// - First run: ThemeMode.system
+/// - After user chooses a Monaco theme: light/dark based on that theme
 final themeProvider = StateNotifierProvider<ThemeNotifier, ThemeMode>(
   (ref) => ThemeNotifier(),
 );
 
 class ThemeNotifier extends StateNotifier<ThemeMode> {
   ThemeNotifier() : super(ThemeMode.system) {
-    _loadThemeMode();
+    _init();
   }
 
-  static const String _themeModeKey = 'theme_mode';
-
-  Future<void> _loadThemeMode() async {
+  Future<void> _init() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final themeModeIndex = prefs.getInt(_themeModeKey);
-      if (themeModeIndex != null && themeModeIndex < ThemeMode.values.length) {
-        state = ThemeMode.values[themeModeIndex];
+      if (await EditorSettingsService.hasSavedOptions()) {
+        final options = await EditorSettingsService.load();
+        state = AppearanceSync.themeModeFromMonaco(options.theme);
+      } else {
+        state = ThemeMode.system; // default on fresh install
       }
     } catch (e) {
-      debugPrint('Error loading theme mode: $e');
+      // On any error, stay with system to avoid surprises
+      state = ThemeMode.system;
     }
   }
 
-  Future<void> setThemeMode(ThemeMode mode) async {
-    state = mode;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt(_themeModeKey, mode.index);
-    } catch (e) {
-      debugPrint('Error saving theme mode: $e');
-    }
+  /// Preferred path: call this after saving Monaco options.
+  Future<void> setThemeFromMonaco(MonacoTheme monacoTheme) async {
+    state = AppearanceSync.themeModeFromMonaco(monacoTheme);
   }
 }

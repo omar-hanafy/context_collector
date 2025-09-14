@@ -15,6 +15,34 @@ class MonacoService extends StateNotifier<EditorStatus> {
   String? _queuedContent;
   String? _queuedLanguage;
   final FocusNode _webViewFocusNode = FocusNode(debugLabel: 'MonacoWebView');
+  Completer<void>? _initCompleter;
+  // Ensures only the latest updateContent() call wins.
+  int _setEpoch = 0;
+
+  MonacoLanguage? _safeLangFromId(String? id) {
+    if (id == null) return null;
+    try {
+      return MonacoLanguage.fromId(id);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Re-verify and re-apply value across frames; abort if a newer write arrived.
+  Future<void> _stickValue(String content, int epoch, {int retries = 3}) async {
+    for (var i = 0; i < retries; i++) {
+      // Let any late init/model swap finish.
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+      if (epoch != _setEpoch || _controller == null || !state.isReady) return;
+      try {
+        final got = await _controller!.getValue();
+        if (got == content) return; // content held
+      } catch (_) {}
+      try {
+        await _controller!.setValue(content);
+      } catch (_) {}
+    }
+  }
 
   MonacoController? get controller => _controller;
 
@@ -31,10 +59,15 @@ class MonacoService extends StateNotifier<EditorStatus> {
   }
 
   Future<void> initialize() async {
+    // Make initialization idempotent and guard against concurrent callers.
+    if (_initCompleter != null) {
+      return _initCompleter!.future;
+    }
     if (state.lifecycle != EditorLifecycle.initial &&
         state.lifecycle != EditorLifecycle.error) {
       return;
     }
+    _initCompleter = Completer<void>();
 
     debugPrint('[MonacoService] Initializing with flutter_monaco package...');
 
@@ -47,12 +80,20 @@ class MonacoService extends StateNotifier<EditorStatus> {
         options: options,
       );
 
-      // Apply queued content if any
+      // Apply queued content if any (language first; then sticky commit)
       if (_queuedContent != null) {
-        await _controller!.setValue(_queuedContent!);
-        if (_queuedLanguage != null) {
-          await _controller!.setLanguage(MonacoLanguage.fromId(_queuedLanguage!));
+        final epoch = ++_setEpoch;
+        final lang = _safeLangFromId(_queuedLanguage);
+        if (lang != null) {
+          try {
+            await _controller!.setLanguage(lang);
+          } catch (_) {}
+          await Future<void>.delayed(const Duration(milliseconds: 16));
         }
+        try {
+          await _controller!.setValue(_queuedContent!);
+        } catch (_) {}
+        unawaited(_stickValue(_queuedContent!, epoch, retries: 8));
         _queuedContent = null;
         _queuedLanguage = null;
       }
@@ -63,12 +104,17 @@ class MonacoService extends StateNotifier<EditorStatus> {
       );
 
       debugPrint('[MonacoService] Initialization successful');
+      _initCompleter?.complete();
     } catch (e, st) {
       state = state.copyWith(
         lifecycle: EditorLifecycle.error,
         error: e.toString(),
       );
       debugPrint('[MonacoService] Error: $e\n$st');
+      _initCompleter?.completeError(e, st);
+    } finally {
+      // Allow re-init only after a full dispose or explicit error handling
+      // Keep the completer for awaiting callers but don't reset lifecycle here.
     }
   }
 
@@ -79,10 +125,21 @@ class MonacoService extends StateNotifier<EditorStatus> {
       return;
     }
 
-    await _controller!.setValue(content);
-    if (language != null) {
-      await _controller!.setLanguage(MonacoLanguage.fromId(language));
+    final epoch = ++_setEpoch;
+    // Language first (if valid), but never fail the write on language errors
+    final lang = _safeLangFromId(language);
+    if (lang != null) {
+      try {
+        await _controller!.setLanguage(lang);
+      } catch (_) {}
+      await Future<void>.delayed(const Duration(milliseconds: 16));
     }
+    try {
+      await _controller!.setValue(content);
+    } catch (_) {}
+
+    await ensureNativeFocus();
+    unawaited(_stickValue(content, epoch, retries: 8));
 
     if (mounted) {
       state = state.copyWith(hasContent: content.isNotEmpty);
@@ -92,8 +149,19 @@ class MonacoService extends StateNotifier<EditorStatus> {
   Future<void> updateOptions(EditorOptions options) async {
     if (_controller == null || !state.isReady) return;
 
+    String? before;
+    try {
+      before = await _controller!.getValue();
+    } catch (_) {}
+
     await _controller!.updateOptions(options);
     await _controller!.setTheme(options.theme);
+
+    if (before != null) {
+      try {
+        await _controller!.setValue(before);
+      } catch (_) {}
+    }
   }
 
   @override

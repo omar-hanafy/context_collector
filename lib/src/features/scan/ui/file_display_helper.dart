@@ -12,7 +12,7 @@ class FileDisplayHelper {
   static IconData getIconForExtension(String extension) {
     final ext = extension.toLowerCase();
     if (ext.isEmpty) return Icons.insert_drive_file_outlined;
-    
+
     // Use the single source of truth: extensionCatalog
     final category = getCategoryForExtension(ext);
     return category.icon;
@@ -72,36 +72,6 @@ class FileDisplayHelper {
     return null;
   }
 
-  /// Get status text for file
-  static String getStatusText(ScannedFile file) {
-    if (file.error != null) return 'Error';
-    if (file.isVirtual) return 'Virtual';
-    if (file.isDirty) return 'Modified';
-    if (file.content != null) return 'Loaded';
-    return 'Pending';
-  }
-
-  /// Get status color for file
-  static Color getStatusColor(BuildContext context, ScannedFile file) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    if (file.error != null) return colorScheme.error;
-    if (file.isVirtual) return Colors.green;
-    if (file.isDirty) return Colors.orange;
-    if (file.content != null) return colorScheme.primary;
-    return colorScheme.onSurface.addOpacity(0.5);
-  }
-
-  /// Format file size for display
-  static String formatFileSize(int bytes) {
-    if (bytes < 1024) return '${bytes}B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)}KB';
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)}MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)}GB';
-  }
-
   /// Get language identifier for syntax highlighting
   static String getLanguageId(String extension) {
     final languageMap = {
@@ -137,20 +107,9 @@ class FileDisplayHelper {
     return languageMap[extension.toLowerCase()] ?? 'plaintext';
   }
 
-  /// Get display name for a file (handles virtual files and VS Code temp files)
-  static String getDisplayName(ScannedFile file) {
-    return file.isVirtual ? file.name : (file.displayPath ?? file.name);
-  }
-
   /// Get language for syntax highlighting from a file
   static String getLanguageFromFile(ScannedFile file) {
     return file.extension.isEmpty ? 'plaintext' : getLanguageId(file.extension);
-  }
-
-  /// Get the best path to display for a file
-  /// Priority: displayPath > relativePath > fullPath
-  static String getPathForDisplay(ScannedFile file) {
-    return file.displayPath ?? file.relativePath ?? file.fullPath;
   }
 
   /// Comprehensive extension catalog - single source of truth
@@ -233,16 +192,5 @@ class FileDisplayHelper {
   /// Get file category for an extension
   static FileCategory getCategoryForExtension(String extension) {
     return extensionCatalog[extension.toLowerCase()] ?? FileCategory.other;
-  }
-
-  /// Get all supported extensions
-  static Set<String> get supportedExtensions => extensionCatalog.keys.toSet();
-
-  /// Get extensions for a specific category
-  static Set<String> getExtensionsForCategory(FileCategory category) {
-    return extensionCatalog.entries
-        .where((entry) => entry.value == category)
-        .map((entry) => entry.key)
-        .toSet();
   }
 }

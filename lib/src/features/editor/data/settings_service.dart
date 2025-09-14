@@ -39,4 +39,10 @@ class EditorSettingsService {
     final prefs = await SharedPreferences.getInstance();
     return prefs.remove(_storageKey);
   }
+
+  /// True if there are persisted editor options (used to detect first run)
+  static Future<bool> hasSavedOptions() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.containsKey(_storageKey);
+  }
 }

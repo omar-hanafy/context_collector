@@ -1,8 +1,10 @@
 // lib/src/features/scan/presentation/ui/shared_drop_zone.dart
 import 'package:context_collector/context_collector.dart';
 import 'package:desktop_drop/desktop_drop.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_helper_utils/flutter_helper_utils.dart';
+import '../dialogs/name_prompt.dart' as prompts;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// A reusable widget that provides a drop zone for files and directories,
@@ -23,15 +25,38 @@ class _SharedDropZoneState extends ConsumerState<DropZone> {
   Widget build(BuildContext context) {
     final selectionNotifier = ref.read(selectionProvider.notifier);
 
-    return Focus(
-      canRequestFocus: false,
-      child: DropTarget(
+    return DropTarget(
+      catchAppWideDrops: true,
       onDragEntered: (details) => setState(() => _isDragging = true),
       onDragExited: (details) => setState(() => _isDragging = false),
-      onDragDone: (details) async {
+      onDragDone: (DropDoneDetails details) async {
         setState(() => _isDragging = false);
-        if (details.files.isEmpty) return;
-        await selectionNotifier.processDroppedItems(details.files);
+
+        final fileItems = <XFile>[];
+        final textPayloads = <String>[];
+
+        for (final item in details.files) {
+          if (item.isMemoryBacked && item.isTextLike) {
+            try {
+              final text = await item.readAsText();
+              if (text != null && text.trim().isNotEmpty) {
+                textPayloads.add(text);
+              }
+            } catch (_) {}
+            continue;
+          }
+          fileItems.add(item);
+        }
+
+        if (fileItems.isNotEmpty) {
+          await selectionNotifier.processDroppedItems(fileItems);
+        }
+        for (final text in textPayloads) {
+          final name = await prompts.promptForNewFileName(context, initialName: 'pasted.txt');
+          if (name != null && name.trim().isNotEmpty) {
+            selectionNotifier.createVirtualFile(name.trim(), text);
+          }
+        }
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
@@ -47,7 +72,6 @@ class _SharedDropZoneState extends ConsumerState<DropZone> {
         ),
         child: widget.child,
       ),
-    ),
     );
   }
 }

@@ -175,6 +175,61 @@ void main() {
     });
   });
 
+  group('Unicode and Non-ASCII', () {
+    test('CJK yields more tokens than equal-length ASCII', () {
+      final ascii = 'abcdefghij'; // 10 ASCII runes
+      final cjk = '你好世界你好世界你好'; // 10 CJK runes
+
+      final asciiEstimate =
+          calculator.estimateTokens(ascii, model: AIModel.gpt4);
+      final cjkEstimate = calculator.estimateTokens(cjk, model: AIModel.gpt4);
+
+      expect(asciiEstimate.tokens, greaterThan(0));
+      expect(cjkEstimate.tokens, greaterThan(0));
+      expect(cjkEstimate.tokens, greaterThan(asciiEstimate.tokens));
+    });
+
+    test('Emoji-heavy text yields more tokens than ASCII', () {
+      const ascii = 'hello world hello world';
+      const emoji = '👩🏽\u200d💻👩🏽\u200d💻👩🏽\u200d💻👩🏽\u200d💻👩🏽\u200d💻';
+
+      final asciiEstimate =
+          calculator.estimateTokens(ascii, model: AIModel.gpt4);
+      final emojiEstimate = calculator.estimateTokens(emoji, model: AIModel.gpt4);
+
+      expect(emojiEstimate.tokens, greaterThan(asciiEstimate.tokens));
+    });
+
+    test('Unicode-safe truncation with emoji', () {
+      final text = 'Hello 🌍🚀🌟 ' * 20;
+
+      final truncated = calculator.truncateToTokenLimit(
+        text,
+        model: AIModel.gpt4,
+        maxTokens: 30,
+      );
+
+      final est = calculator.estimateTokens(truncated, model: AIModel.gpt4);
+      expect(est.tokens, lessThanOrEqualTo(30));
+      expect(truncated.endsWith('...'), isTrue);
+    });
+
+    test('CJK chunking keeps chunks within limits', () {
+      final cjk = '这是一个很长的中文文本，用于测试分块功能。' * 200;
+      final chunks = calculator.splitIntoChunks(
+        cjk,
+        model: AIModel.gpt4,
+        maxTokensPerChunk: 100,
+        overlap: 10,
+      );
+      expect(chunks.length, greaterThan(1));
+      for (final chunk in chunks) {
+        final est = calculator.estimateTokens(chunk, model: AIModel.gpt4);
+        expect(est.tokens, lessThanOrEqualTo(100));
+      }
+    });
+  });
+
   group('Batch Processing', () {
     test('processes multiple texts', () {
       final texts = {

@@ -1,11 +1,8 @@
-import 'dart:async';
-import 'dart:io';
 
 import 'package:context_collector/context_collector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -14,35 +11,18 @@ class SettingsScreen extends ConsumerStatefulWidget {
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends ConsumerState<SettingsScreen>
-    with SingleTickerProviderStateMixin {
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _extensionController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
-  late TabController _tabController;
-  PackageInfo? _packageInfo;
 
   @override
   void initState() {
     super.initState();
-    // Add Updates tab only on supported platforms
-    final tabCount = (Platform.isMacOS || Platform.isWindows) ? 3 : 2;
-    _tabController = TabController(length: tabCount, vsync: this);
-    _loadPackageInfo();
-  }
-
-  Future<void> _loadPackageInfo() async {
-    final info = await PackageInfo.fromPlatform();
-    if (mounted) {
-      setState(() {
-        _packageInfo = info;
-      });
-    }
   }
 
   @override
   void dispose() {
     _extensionController.dispose();
-    _tabController.dispose();
     super.dispose();
   }
 
@@ -50,97 +30,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   Widget build(BuildContext context) {
     final prefsState = ref.watch(preferencesProvider);
     final notifier = ref.read(preferencesProvider.notifier);
-    final currentTheme = ref.watch(themeProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: [
-            const Tab(text: 'General'),
-            const Tab(text: 'Extensions'),
-            if (Platform.isMacOS || Platform.isWindows)
-              const Tab(text: 'Updates'),
-          ],
-        ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          // General Settings Tab
-          _buildGeneralSettings(context, currentTheme),
-          // Extensions Settings Tab
-          _buildExtensionsSettings(context, prefsState, notifier),
-          // Updates Settings Tab (only on supported platforms)
-          if (Platform.isMacOS || Platform.isWindows)
-            _buildUpdatesSettings(context),
-        ],
+      body: _buildSinglePageSettings(
+        context,
+        prefsState,
+        notifier,
       ),
     );
   }
 
-  Widget _buildGeneralSettings(BuildContext context, ThemeMode currentTheme) {
-    return ListView(
-      padding: DsDimensions.paddingMedium,
-      children: [
-        Container(
-          padding: DsDimensions.paddingMedium,
-          decoration: BoxDecoration(
-            color: context.surface,
-            borderRadius: context.ds.radiusMedium,
-            border: Border.all(color: context.outline.addOpacity(0.2)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              DsSectionHeader(
-                title: 'Appearance',
-                trailing: Icon(
-                  Icons.palette_rounded,
-                  color: context.primary,
-                  size: DesignSystem.iconSizeMedium,
-                ),
-              ),
-              context.ds.spaceHeight(DesignSystem.space16),
-              Text(
-                'Theme Mode',
-                style: context.titleSmall,
-              ),
-              context.ds.spaceHeight(DesignSystem.space8),
-              SegmentedButton<ThemeMode>(
-                segments: const [
-                  ButtonSegment<ThemeMode>(
-                    value: ThemeMode.system,
-                    label: Text('System'),
-                    icon: Icon(Icons.settings_brightness_rounded),
-                  ),
-                  ButtonSegment<ThemeMode>(
-                    value: ThemeMode.light,
-                    label: Text('Light'),
-                    icon: Icon(Icons.light_mode_rounded),
-                  ),
-                  ButtonSegment<ThemeMode>(
-                    value: ThemeMode.dark,
-                    label: Text('Dark'),
-                    icon: Icon(Icons.dark_mode_rounded),
-                  ),
-                ],
-                selected: {currentTheme},
-                onSelectionChanged: (Set<ThemeMode> selection) {
-                  ref
-                      .read(themeProvider.notifier)
-                      .setThemeMode(selection.first);
-                },
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildExtensionsSettings(
+  Widget _buildSinglePageSettings(
     BuildContext context,
     FilterSettingsWithLoading prefsState,
     PreferencesNotifier notifier,
@@ -152,12 +55,54 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     final blacklist = prefsState.settings.blacklistedExtensions.toList()
       ..sort();
 
-    return Column(
+    return ListView(
+      padding: DsDimensions.paddingMedium,
       children: [
-        // Header section with add extension form
+        // Appearance hint — app theme is controlled by the Editor Settings dialog
         Container(
-          padding: const EdgeInsetsDirectional.all(16),
-          color: context.surfaceContainerHighest,
+          padding: DsDimensions.paddingMedium,
+          decoration: BoxDecoration(
+            color: context.surface,
+            borderRadius: context.ds.radiusMedium,
+            border: Border.all(color: context.outline.addOpacity(0.2)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.palette_rounded,
+                color: context.primary,
+                size: DesignSystem.iconSizeMedium,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Appearance', style: context.titleSmall),
+                    context.ds.spaceHeight(DesignSystem.space8),
+                    Text(
+                      'Theme is controlled by the Editor → Settings → Theme selector. '
+                      'Pick a Monaco theme there and the app switches to Light/Dark automatically.',
+                      style: context.bodyMuted,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        context.ds.spaceHeight(DesignSystem.space16),
+
+        // Extensions Section
+        Container(
+          padding: DsDimensions.paddingMedium,
+          decoration: BoxDecoration(
+            color: context.surface,
+            borderRadius: context.ds.radiusMedium,
+            border: Border.all(color: context.outline.addOpacity(0.2)),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -213,6 +158,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 style: context.bodyMuted,
               ),
               context.ds.spaceHeight(DesignSystem.space16),
+
               // Add new extension form
               Form(
                 key: _formKey,
@@ -227,7 +173,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                           prefixIcon: Icon(Icons.block_rounded),
                           border: OutlineInputBorder(),
                         ),
-                        // No input formatters - allow any pattern
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             return 'Please enter a valid pattern';
@@ -257,15 +202,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   ],
                 ),
               ),
-            ],
-          ),
-        ),
-        const Divider(height: 1),
-        // Blacklisted extensions list
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
+
+              context.ds.spaceHeight(DesignSystem.space16),
+              const Divider(height: 1),
+              context.ds.spaceHeight(DesignSystem.space16),
+
+              // Blacklisted extensions list
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -308,191 +250,4 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     );
   }
 
-  Widget _buildUpdatesSettings(BuildContext context) {
-    final autoUpdaterService = ref.read(autoUpdaterServiceProvider);
-
-    return ListView(
-      padding: DsDimensions.paddingMedium,
-      children: [
-        Container(
-          padding: DsDimensions.paddingMedium,
-          decoration: BoxDecoration(
-            color: context.surface,
-            borderRadius: context.ds.radiusMedium,
-            border: Border.all(color: context.outline.addOpacity(0.2)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              DsSectionHeader(
-                title: 'Automatic Updates',
-                trailing: Icon(
-                  Icons.system_update_rounded,
-                  color: context.primary,
-                  size: DesignSystem.iconSizeMedium,
-                ),
-              ),
-              context.ds.spaceHeight(DesignSystem.space16),
-              Text(
-                'Keep Context Collector up to date with the latest features and improvements.',
-                style: context.bodyMuted,
-              ),
-              context.ds.spaceHeight(DesignSystem.space24),
-              FilledButton(
-                onPressed: () async {
-                  try {
-                    // Show loading indicator without awaiting it
-                    unawaited(
-                      showDialog<void>(
-                        context: context,
-                        barrierDismissible: false,
-                        builder: (dialogContext) => const Center(
-                          child: Card(
-                            child: Padding(
-                              padding: EdgeInsets.all(24),
-                              child: CircularProgressIndicator(),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-
-                    await autoUpdaterService.checkForUpdates();
-
-                    if (mounted) {
-                      Navigator.pop(context); // Close loading dialog
-                      context.showOk(
-                        'Update check complete! If an update is available, it will download automatically.',
-                      );
-                    }
-                  } catch (e) {
-                    if (mounted) {
-                      Navigator.pop(context); // Close loading dialog
-                      context.showErr('Failed to check for updates: $e');
-                    }
-                  }
-                },
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.refresh_rounded),
-                    SizedBox(width: 8),
-                    Text('Check for Updates'),
-                  ],
-                ),
-              ),
-              context.ds.spaceHeight(DesignSystem.space16),
-              const Divider(),
-              context.ds.spaceHeight(DesignSystem.space16),
-              Text(
-                'Update Settings',
-                style: context.titleBold,
-              ),
-              context.ds.spaceHeight(DesignSystem.space12),
-              Container(
-                padding: DsDimensions.paddingSmall,
-                decoration: BoxDecoration(
-                  color: context.surfaceContainerHighest,
-                  borderRadius: context.ds.radiusMedium,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.schedule_rounded,
-                          size: 16,
-                          color: context.onSurface.addOpacity(0.6),
-                        ),
-                        context.ds.spaceWidth(DesignSystem.space8),
-                        Text(
-                          'Automatic check interval: Every 6 hours',
-                          style: context.bodyMuted,
-                        ),
-                      ],
-                    ),
-                    context.ds.spaceHeight(DesignSystem.space8),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.cloud_download_rounded,
-                          size: 16,
-                          color: context.onSurface.addOpacity(0.6),
-                        ),
-                        context.ds.spaceWidth(DesignSystem.space8),
-                        Expanded(
-                          child: Text(
-                            'Updates are downloaded automatically and will be installed on next app restart',
-                            style: context.bodyMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        context.ds.spaceHeight(DesignSystem.space16),
-        Container(
-          padding: DsDimensions.paddingMedium,
-          decoration: BoxDecoration(
-            color: context.surface,
-            borderRadius: context.ds.radiusMedium,
-            border: Border.all(color: context.outline.addOpacity(0.2)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              DsSectionHeader(
-                title: 'About',
-                trailing: Icon(
-                  Icons.info_outline_rounded,
-                  color: context.primary,
-                  size: DesignSystem.iconSizeMedium,
-                ),
-              ),
-              context.ds.spaceHeight(DesignSystem.space16),
-              _buildInfoRow(
-                context,
-                'Version',
-                _packageInfo == null
-                    ? 'Loading...'
-                    : '${_packageInfo!.version}${_packageInfo!.buildNumber.isNotEmpty ? '+${_packageInfo!.buildNumber}' : ''}',
-              ),
-              context.ds.spaceHeight(DesignSystem.space8),
-              _buildInfoRow(context, 'Platform', Platform.operatingSystem),
-              context.ds.spaceHeight(DesignSystem.space8),
-              _buildInfoRow(
-                context,
-                'Update Channel',
-                'Stable',
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInfoRow(BuildContext context, String label, String value) {
-    return Row(
-      children: [
-        Text(
-          '$label:',
-          style: context.labelBold,
-        ),
-        const SizedBox(width: DesignSystem.space8),
-        Expanded(
-          child: Text(
-            value,
-            style: context.bodyMuted,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
 }

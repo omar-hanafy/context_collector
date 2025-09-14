@@ -10,7 +10,7 @@
 /// - Token limit checking
 /// - Text truncation and chunking
 /// - Batch processing
-library;
+library ai_token_calculator;
 
 export 'src/ai_token_calculator.dart';
 export 'src/models.dart';

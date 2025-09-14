@@ -32,7 +32,6 @@ class ToggleTile extends StatelessWidget {
         trailing: Switch(
           value: value,
           onChanged: onChanged,
-          activeColor: context.primary,
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
         onTap: () => onChanged(!value),

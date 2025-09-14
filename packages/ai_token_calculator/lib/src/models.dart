@@ -39,6 +39,11 @@ enum ContentType {
   chat,
 }
 
+/// How to pick divisors for estimation:
+/// - [average] (default): use a universal, content-type-specific divisor averaged across common models
+/// - [perModel]: use the model-specific divisors table
+enum EstimationStrategy { average, perModel }
+
 /// Result from token estimation
 class TokenEstimate {
   TokenEstimate({
@@ -51,6 +56,7 @@ class TokenEstimate {
 
   final int tokens;
   final AIModel model;
+  /// Count of Unicode code points (runes), not UTF-16 code units.
   final int characterCount;
   final ContentType contentType;
   final double avgCharsPerToken;

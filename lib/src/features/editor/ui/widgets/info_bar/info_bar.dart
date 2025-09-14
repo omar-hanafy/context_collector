@@ -32,7 +32,9 @@ class MonacoEditorInfoBar extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         border: Border(
-          top: BorderSide(color: Theme.of(context).colorScheme.outline.withOpacity(0.2)),
+          top: BorderSide(
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+          ),
         ),
       ),
       child: Row(
@@ -68,7 +70,10 @@ class MonacoEditorInfoBar extends ConsumerWidget {
     );
   }
 
-  List<Widget> _buildActionButtons(BuildContext context, MonacoController controller) {
+  List<Widget> _buildActionButtons(
+    BuildContext context,
+    MonacoController controller,
+  ) {
     return [
       IconButton(
         icon: const Icon(EneftyIcons.arrow_circle_up_outline, size: 20),
@@ -86,64 +91,12 @@ class MonacoEditorInfoBar extends ConsumerWidget {
         tooltip: 'Format Content',
         onPressed: controller.format,
       ),
-      GestureDetector(
-        onSecondaryTapUp: (details) {
-          if (onCopyFullPaths != null) {
-            _showCopyMenu(context, details.globalPosition);
-          }
-        },
-        child: IconButton(
-          icon: const Icon(EneftyIcons.copy_outline, size: 20),
-          tooltip: 'Copy Content (Right-click for full paths)',
-          onPressed: onCopy, // Left-click is the default action
-        ),
+      IconButton(
+        icon: const Icon(EneftyIcons.copy_outline, size: 20),
+        tooltip: 'Copy Content (Right-click for full paths)',
+        onPressed: onCopy, // Left-click is the default action
       ),
     ];
-  }
-
-  void _showCopyMenu(BuildContext context, Offset position) {
-    final RenderBox overlay =
-        Overlay.of(context).context.findRenderObject()! as RenderBox;
-
-    showMenu(
-      context: context,
-      position: RelativeRect.fromRect(
-        position & const Size(40, 40),
-        Offset.zero & overlay.size,
-      ),
-      items: <PopupMenuEntry>[
-        const PopupMenuItem(
-          value: 'content',
-          child: ListTile(
-            leading: Icon(Icons.copy),
-            title: Text('Copy Content'),
-            dense: true,
-          ),
-        ),
-        if (onCopyFullPaths != null)
-          const PopupMenuItem(
-            value: 'full_paths',
-            child: ListTile(
-              leading: Icon(Icons.folder_outlined),
-              title: Text('Copy Full Paths'),
-              dense: true,
-            ),
-          ),
-        if (onCopyAiPaths != null)
-          const PopupMenuItem(
-            value: 'ai_paths',
-            child: ListTile(
-              leading: Icon(Icons.auto_awesome),
-              title: Text('Copy AI Paths'),
-              dense: true,
-            ),
-          ),
-      ],
-    ).then((value) {
-      if (value == 'content') onCopy();
-      if (value == 'full_paths') onCopyFullPaths?.call();
-      if (value == 'ai_paths') onCopyAiPaths?.call();
-    });
   }
 }
 
@@ -157,7 +110,9 @@ class _LoadingIndicator extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         border: Border(
-          top: BorderSide(color: Theme.of(context).colorScheme.outline.withOpacity(0.2)),
+          top: BorderSide(
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+          ),
         ),
       ),
       child: Row(
@@ -168,7 +123,9 @@ class _LoadingIndicator extends StatelessWidget {
             height: 16,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.primary),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                Theme.of(context).colorScheme.primary,
+              ),
             ),
           ),
           const SizedBox(width: 12),

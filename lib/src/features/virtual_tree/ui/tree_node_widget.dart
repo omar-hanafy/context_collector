@@ -157,27 +157,19 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
 
   Color _getBackgroundColor(BuildContext context, bool isSelected, bool isActive) {
     final colorScheme = Theme.of(context).colorScheme;
-
     if (isActive) {
-      return colorScheme.primaryContainer.withOpacity(0.22);
+      return colorScheme.primaryContainer.withValues(alpha: 0.22);
     }
-    if (isSelected) {
-      return colorScheme.primary.addOpacity(0.15);
-    } else if (_isHovered) {
+    // Do not tint items that are merely included via checkbox; rely on the checkbox itself.
+    if (_isHovered) {
       return colorScheme.onSurface.addOpacity(0.05);
     }
-
     return Colors.transparent;
   }
 
   Color _getTextColor(BuildContext context, bool isSelected) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    if (isSelected && widget.node.type == NodeType.file) {
-      return colorScheme.primary;
-    }
-
-    return colorScheme.onSurface;
+    // Keep normal text color regardless of inclusion; active state is indicated by background only.
+    return Theme.of(context).colorScheme.onSurface;
   }
 
   Widget _buildNodeIcon(
@@ -244,7 +236,9 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
     }
     final fileId = widget.node.fileId;
     if (fileId != null) {
-      ref.read(selectionProvider.notifier).setActiveFile(fileId);
+      final scanner = ref.read(selectionProvider.notifier);
+      scanner.setActiveFile(fileId);
+      scanner.exitCombinedPreview();
     }
   }
 
@@ -338,11 +332,10 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
         Offset.zero & overlay.size,
       ),
       items: _buildContextMenuItems(context),
-    ).then((value) async {
+    ).then((value) {
       if (value != null) {
         _handleContextMenuAction(value);
       }
-      await EditorFocusHelper.restoreFocus(ref);
     });
   }
 
@@ -392,11 +385,14 @@ class _TreeNodeWidgetState extends ConsumerState<TreeNodeWidget> {
     switch (action) {
       case 'select_all':
         notifier.selectFolder(widget.node.id);
+        break;
       case 'copy_path':
         _copyPath();
+        break;
       case 'remove':
         // Use the FileListNotifier's removeNodes method for proper cleanup
         selectionNotifier.removeNodes({widget.node.id});
+        break;
     }
   }
 

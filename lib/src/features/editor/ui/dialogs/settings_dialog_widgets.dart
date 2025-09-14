@@ -48,7 +48,7 @@ class DropdownTile extends StatelessWidget {
             child: Container(
               decoration: BoxDecoration(
                 border: Border.all(
-                  color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
                 ),
                 borderRadius: BorderRadius.circular(8),
               ),

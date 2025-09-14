@@ -1,11 +1,9 @@
 import 'package:context_collector/src/features/scan/state/file_list_state.dart';
 import 'package:context_collector/src/features/virtual_tree/services/tree_builder.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../../editor/editor.dart';
+ 
 import '../state/tree_state.dart';
 // Editing dialog removed; new files open directly in Monaco.
 import 'tree_node_widget.dart';
@@ -17,8 +15,6 @@ class VirtualTreeView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final treeState = ref.watch(treeStateProvider);
-    final selectionState = ref.watch(selectionProvider);
-    final selectionNotifier = ref.read(selectionProvider.notifier);
     final rootNode = treeState.nodes[TreeBuilder.treeRootId];
 
     if (rootNode == null || !treeState.hasNodes) {
@@ -40,7 +36,7 @@ class VirtualTreeView extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Drop files to begin or use actions above to create a virtual file.',
+              'Drop files to begin or use the toolbar to create a virtual file.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(context).colorScheme.onSurface.addOpacity(0.5),
               ),
@@ -50,108 +46,14 @@ class VirtualTreeView extends ConsumerWidget {
       );
     }
 
-    // Determine the state for the master checkbox
-    final totalCount = selectionState.totalFilesCount;
-    final selectedCount = selectionState.selectedFilesCount;
-    bool? isChecked; // null is the indeterminate state
-    if (selectedCount > 0 && selectedCount < totalCount) {
-      isChecked = null;
-    } else if (selectedCount == totalCount && totalCount > 0) {
-      isChecked = true;
-    } else {
-      isChecked = false;
-    }
-
-    return Column(
-      children: [
-        // Tree header/toolbar with master checkbox
-        Tooltip(
-          message: '$selectedCount / $totalCount files selected',
-          child: Container(
-            height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              border: Border(
-                bottom: BorderSide(
-                  color: Theme.of(context).dividerColor.addOpacity(0.5),
-                ),
-              ),
-            ),
-            child: Row(
-              children: [
-                // Master checkbox
-                Checkbox(
-                  value: isChecked,
-                  tristate: true,
-                  onChanged: (value) {
-                    // When clicked, if it's not already fully checked, select all.
-                    // Otherwise, deselect all.
-                    if (isChecked ?? false) {
-                      selectionNotifier.deselectAll();
-                    } else {
-                      selectionNotifier.selectAll();
-                    }
-                  },
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  'File Tree',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const Spacer(),
-                // Tree actions
-                _buildHeaderAction(
-                  context: context,
-                  ref: ref,
-                  icon: Icons.refresh_rounded,
-                  tooltip: 'Refresh File Contents',
-                  onPressed: selectionNotifier.refreshAllContents,
-                ),
-                const SizedBox(width: 4),
-                _buildHeaderAction(
-                  context: context,
-                  ref: ref,
-                  icon: Icons.note_add_outlined,
-                  tooltip: 'New Virtual File',
-                  onPressed: () => showCreateVirtualFileFlow(context, ref),
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        // Tree content
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: TreeNodeWidget(
-              node: rootNode, // Start rendering from the 'tree' node
-              depth: 0,
-              nodes: treeState.nodes,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildHeaderAction({
-    required BuildContext context,
-    required WidgetRef ref,
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback onPressed,
-  }) {
-    return IconButton(
-      icon: Icon(icon, size: 20),
-      onPressed: onPressed,
-      tooltip: tooltip,
-      padding: const EdgeInsets.all(8),
-      constraints: const BoxConstraints(),
-      splashRadius: 20,
+    // Tree content only (no header/app bar)
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: TreeNodeWidget(
+        node: rootNode, // Start rendering from the 'tree' node
+        depth: 0,
+        nodes: treeState.nodes,
+      ),
     );
   }
 
@@ -169,9 +71,8 @@ class VirtualTreeView extends ConsumerWidget {
       hint: 'Enter file name (e.g., notes.md)',
       existingNames: existingNames,
       onConfirm: (name) async {
-        // Create empty file and open for editing in Monaco
+        // Create empty file and open for editing in Monaco (Editor route will appear)
         ref.read(selectionProvider.notifier).createVirtualFile(name, '');
-        await EditorFocusHelper.restoreFocus(ref);
       },
     );
   }

@@ -10,13 +10,10 @@ export 'data/settings_service.dart';
 
 // UI - Dialogs
 export 'ui/dialogs/settings_dialog.dart';
-export 'ui/editor_focus_helper.dart';
 
 // UI - Screens
 export 'ui/screens/editor_screen.dart';
 
 // UI - Widgets
 export 'ui/widgets/info_bar/info_bar_widgets.dart';
-export 'ui/widgets/monaco_container.dart';
 export 'ui/widgets/monaco_editor_integrated.dart';
-export 'ui/widgets/quick_sidebar/quick_sidebar_widgets.dart';

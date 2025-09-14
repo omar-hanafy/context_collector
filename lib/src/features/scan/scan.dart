@@ -5,9 +5,6 @@ export 'models/file_category.dart';
 export 'models/scan_result.dart';
 // Models
 export 'models/scanned_file.dart';
-export 'services/drop_handler.dart';
-// Services
-export 'services/file_scanner.dart';
 // State
 export 'state/file_list_state.dart';
 // UI

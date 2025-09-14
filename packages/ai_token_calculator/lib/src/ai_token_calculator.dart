@@ -1,14 +1,34 @@
 import 'models.dart';
 
-/// Multi-model AI token calculator for estimating token counts
+/// Multi-model AI token calculator for estimating token counts.
+///
+/// Production goals:
+/// - Single O(n) scan, Unicode-safe (rune-based) processing
+/// - YAGNI-friendly: default to average estimation; per-model optional
 class AITokenCalculator {
-  /// Model specifications with context windows and display names
+  // Precompiled regexes to avoid reallocation on hot paths
+  static final List<RegExp> _codeRegexes = <RegExp>[
+    RegExp(r'^\s*(?:function|def|class|interface|struct|enum)\s+\w+', multiLine: true),
+    RegExp(r'(?:if|for|while|switch)\s*\('),
+    RegExp(r'[{};]\s*$', multiLine: true),
+    RegExp(r'^\s*(?:import|include|require|using)\s+\w+', multiLine: true),
+    RegExp(r'(?:const|let|var|int|string|bool)\s+\w+\s*=', multiLine: true),
+  ];
+
+  static final RegExp _yamlHeaderRegex = RegExp(r'^---\r?\n', multiLine: true);
+
+  static final List<RegExp> _chatRegexes = <RegExp>[
+    RegExp(r'^\s*(User|Assistant|Human|AI|System):\s*'),
+    RegExp(r'^\s*(You|Me):\s*'),
+    RegExp(r'^\s*\[[^\]]+\]:\s*'),
+  ];
+  /// Model specifications with context windows and display names.
   static const Map<AIModel, ModelLimits> modelSpecs = {
     // Claude models
     AIModel.claudeOpus: ModelLimits(
       model: AIModel.claudeOpus,
       contextWindow: 200000, // 200K tokens
-      displayName: 'claude Opus',
+      displayName: 'Claude Opus',
     ),
     AIModel.claudeSonnet: ModelLimits(
       model: AIModel.claudeSonnet,
@@ -34,15 +54,25 @@ class AITokenCalculator {
     ),
     AIModel.gpt35Turbo: ModelLimits(
       model: AIModel.gpt35Turbo,
-      contextWindow: 16385, // 16K tokens
+      contextWindow: 16385, // ~16K tokens
       displayName: 'GPT-3.5 Turbo',
     ),
 
     // Google models
     AIModel.geminiPro: ModelLimits(
       model: AIModel.geminiPro,
-      contextWindow: 1000000, // 1M tokens
+      contextWindow: 1000000, // ~1M tokens (approx)
       displayName: 'Gemini Pro',
+    ),
+    AIModel.gemini15Pro: ModelLimits(
+      model: AIModel.gemini15Pro,
+      contextWindow: 1000000, // ~1M tokens (approx)
+      displayName: 'Gemini 1.5 Pro',
+    ),
+    AIModel.gemini15Flash: ModelLimits(
+      model: AIModel.gemini15Flash,
+      contextWindow: 1000000, // ~1M tokens (approx)
+      displayName: 'Gemini 1.5 Flash',
     ),
 
     // Others
@@ -63,9 +93,18 @@ class AITokenCalculator {
     ),
   };
 
-  /// Research-backed divisors by model and content type
+  /// Average (model-agnostic) divisors by content type (runes per token).
+  static const Map<ContentType, double> _universalDivisors = {
+    ContentType.general: 3.71,
+    ContentType.prose: 3.90,
+    ContentType.code: 2.72,
+    ContentType.structured: 3.00,
+    ContentType.chat: 3.58,
+  };
+
+  /// Per-model divisors (runes per token).
   static const Map<(AIModel, ContentType), double> _modelDivisors = {
-    // Claude models (Anthropic) - from research
+    // Claude
     (AIModel.claudeOpus, ContentType.general): 3.3,
     (AIModel.claudeOpus, ContentType.prose): 3.5,
     (AIModel.claudeOpus, ContentType.code): 2.5,
@@ -82,7 +121,7 @@ class AITokenCalculator {
     (AIModel.claudeHaiku, ContentType.structured): 2.8,
     (AIModel.claudeHaiku, ContentType.chat): 3.2,
 
-    // GPT-4 models (OpenAI) - from research
+    // OpenAI
     (AIModel.gpt4, ContentType.general): 4.0,
     (AIModel.gpt4, ContentType.prose): 4.2,
     (AIModel.gpt4, ContentType.code): 3.0,
@@ -93,15 +132,13 @@ class AITokenCalculator {
     (AIModel.gpt4Turbo, ContentType.code): 3.0,
     (AIModel.gpt4Turbo, ContentType.structured): 3.2,
     (AIModel.gpt4Turbo, ContentType.chat): 3.8,
-
-    // GPT-3.5 - from research
     (AIModel.gpt35Turbo, ContentType.general): 4.0,
     (AIModel.gpt35Turbo, ContentType.prose): 4.2,
     (AIModel.gpt35Turbo, ContentType.code): 3.0,
     (AIModel.gpt35Turbo, ContentType.structured): 3.2,
     (AIModel.gpt35Turbo, ContentType.chat): 3.8,
 
-    // Gemini models (Google) - from research
+    // Google (Gemini)
     (AIModel.geminiPro, ContentType.general): 4.0,
     (AIModel.geminiPro, ContentType.prose): 4.2,
     (AIModel.geminiPro, ContentType.code): 2.7,
@@ -118,21 +155,21 @@ class AITokenCalculator {
     (AIModel.gemini15Flash, ContentType.structured): 3.0,
     (AIModel.gemini15Flash, ContentType.chat): 3.9,
 
-    // Grok (xAI) - from research
+    // xAI Grok
     (AIModel.grok, ContentType.general): 3.5,
     (AIModel.grok, ContentType.prose): 3.6,
     (AIModel.grok, ContentType.code): 2.6,
     (AIModel.grok, ContentType.structured): 2.9,
     (AIModel.grok, ContentType.chat): 3.4,
 
-    // Mistral (approximated, similar to Claude)
+    // Mistral
     (AIModel.mistral, ContentType.general): 3.4,
     (AIModel.mistral, ContentType.prose): 3.6,
     (AIModel.mistral, ContentType.code): 2.6,
     (AIModel.mistral, ContentType.structured): 2.9,
     (AIModel.mistral, ContentType.chat): 3.3,
 
-    // Llama (approximated, between GPT and Claude)
+    // Llama
     (AIModel.llama, ContentType.general): 3.7,
     (AIModel.llama, ContentType.prose): 3.9,
     (AIModel.llama, ContentType.code): 2.8,
@@ -140,16 +177,14 @@ class AITokenCalculator {
     (AIModel.llama, ContentType.chat): 3.5,
   };
 
-  /// Overhead tokens for each model (system/formatting tokens)
+  /// Overhead tokens for each model (system/formatting tokens).
   static const Map<AIModel, int> _modelOverhead = {
-    // Claude and GPT add ~3 tokens for role formatting
     AIModel.claudeOpus: 3,
     AIModel.claudeSonnet: 3,
     AIModel.claudeHaiku: 3,
     AIModel.gpt4: 3,
     AIModel.gpt4Turbo: 3,
     AIModel.gpt35Turbo: 3,
-    // Gemini and others add ~2-3 tokens
     AIModel.geminiPro: 2,
     AIModel.gemini15Pro: 2,
     AIModel.gemini15Flash: 2,
@@ -158,16 +193,12 @@ class AITokenCalculator {
     AIModel.llama: 2,
   };
 
-  /// Estimates token count for a given text and AI model
-  ///
-  /// This method uses model-specific heuristics to estimate token counts:
-  /// - Different models have different tokenization approaches
-  /// - Content type affects the estimation
-  /// - Non-ASCII characters are handled differently per model
+  /// Estimates token count for a given text.
   TokenEstimate estimateTokens(
     String text, {
     required AIModel model,
     ContentType? contentType,
+    EstimationStrategy strategy = EstimationStrategy.average,
     bool includeOverhead = false,
   }) {
     if (text.isEmpty) {
@@ -181,36 +212,28 @@ class AITokenCalculator {
       );
     }
 
-    // Auto-detect content type if not provided
     contentType ??= _detectContentType(text);
-
-    // Count character types
-    final charStats = _analyzeCharacters(text);
-
-    // Get model-specific divisor from research
-    final divisor = _getModelDivisor(model, contentType, charStats);
-
-    // Calculate tokens with improved accuracy
-    final baseTokens = _calculateTokens(charStats, divisor, model);
-
-    // Add overhead if requested
+    final stats = _analyzeCharacters(text);
+    final divisor = _getDivisor(model, contentType, strategy);
+    final baseTokens = _calculateTokens(stats, divisor);
     final overhead = includeOverhead ? (_modelOverhead[model] ?? 0) : 0;
     final tokens = baseTokens + overhead;
 
     return TokenEstimate(
       tokens: tokens,
       model: model,
-      characterCount: text.length,
+      characterCount: stats.runes,
       contentType: contentType,
-      avgCharsPerToken: text.length / baseTokens,
+      avgCharsPerToken: stats.runes / baseTokens,
     );
   }
 
-  /// Batch estimates tokens for multiple texts
+  /// Batch estimates tokens for multiple texts.
   Map<String, TokenEstimate> batchEstimateTokens(
     Map<String, String> texts, {
     required AIModel model,
     ContentType? contentType,
+    EstimationStrategy strategy = EstimationStrategy.average,
     bool includeOverhead = false,
   }) {
     return texts.map(
@@ -220,52 +243,57 @@ class AITokenCalculator {
           value,
           model: model,
           contentType: contentType,
+          strategy: strategy,
           includeOverhead: includeOverhead,
         ),
       ),
     );
   }
 
-  /// Checks if text is within model's token limit
+  /// Checks if text is within model's token limit.
   TokenLimitCheck checkTokenLimit(
     String text, {
     required AIModel model,
     ContentType? contentType,
+    EstimationStrategy strategy = EstimationStrategy.average,
     bool includeOverhead = true,
   }) {
     final estimate = estimateTokens(
       text,
       model: model,
       contentType: contentType,
+      strategy: strategy,
       includeOverhead: includeOverhead,
     );
     final maxTokens = modelSpecs[model]!.contextWindow;
     final isWithinLimit = estimate.tokens <= maxTokens;
     final percentageUsed = (estimate.tokens / maxTokens) * 100;
-    final tokensRemaining = maxTokens - estimate.tokens;
+    final tokensRemaining = (maxTokens - estimate.tokens).clamp(0, maxTokens).toInt();
 
     return TokenLimitCheck(
       estimatedTokens: estimate.tokens,
       isWithinLimit: isWithinLimit,
       percentageUsed: percentageUsed,
-      tokensRemaining: tokensRemaining.clamp(0, maxTokens),
+      tokensRemaining: tokensRemaining,
       maxTokens: maxTokens,
       model: model,
     );
   }
 
-  /// Truncates text to fit within a specified token limit
+  /// Truncates text to fit within a specified token limit (Unicode-safe).
   String truncateToTokenLimit(
     String text, {
     required AIModel model,
     required int maxTokens,
     ContentType? contentType,
+    EstimationStrategy strategy = EstimationStrategy.average,
     String ellipsis = '...',
   }) {
     final estimate = estimateTokens(
       text,
       model: model,
       contentType: contentType,
+      strategy: strategy,
       includeOverhead: false,
     );
 
@@ -273,45 +301,50 @@ class AITokenCalculator {
       return text;
     }
 
-    // Calculate target character count
     final ellipsisTokens = estimateTokens(
       ellipsis,
       model: model,
       contentType: contentType,
+      strategy: strategy,
       includeOverhead: false,
     ).tokens;
     final adjustedMaxTokens = maxTokens - ellipsisTokens;
-    final targetChars = (adjustedMaxTokens * estimate.avgCharsPerToken).floor();
+    if (adjustedMaxTokens <= 0) return ellipsis;
 
-    if (targetChars <= 0) {
-      return ellipsis;
-    }
+    final targetRunes = (adjustedMaxTokens * estimate.avgCharsPerToken)
+        .floor()
+        .clamp(0, estimate.characterCount)
+        .toInt();
+    if (targetRunes <= 0) return ellipsis;
 
-    // Find a good break point
-    var truncateAt = targetChars.clamp(0, text.length);
-
-    // Try to break at word boundary
-    for (var i = truncateAt; i > truncateAt - 20 && i > 0; i--) {
-      if (text[i] == ' ' || text[i] == '\n') {
-        truncateAt = i;
+    final runes = text.runes.toList(growable: false);
+    int cut = targetRunes.clamp(0, runes.length).toInt();
+    for (var i = cut; i > cut - 32 && i > 0; i--) {
+      final r = runes[i - 1];
+      if (r == 0x20 || r == 0x0A || r == 0x0009) {
+        cut = i;
         break;
       }
     }
 
-    return text.substring(0, truncateAt).trimRight() + ellipsis;
+    final truncated = String.fromCharCodes(runes.take(cut)).trimRight();
+    return truncated + ellipsis;
   }
 
-  /// Splits text into chunks that fit within token limit
+  /// Splits text into chunks that fit within token limit (Unicode-safe).
   List<String> splitIntoChunks(
     String text, {
     required AIModel model,
     required int maxTokensPerChunk,
     ContentType? contentType,
-    int overlap = 50, // Token overlap between chunks
+    EstimationStrategy strategy = EstimationStrategy.average,
+    int overlap = 50, // token overlap
   }) {
     final chunks = <String>[];
-
-    if (text.isEmpty) {
+    if (text.isEmpty) return chunks;
+    if (maxTokensPerChunk <= 0) {
+      // Defensive: no forward progress possible; return as a single chunk
+      chunks.add(text);
       return chunks;
     }
 
@@ -322,21 +355,31 @@ class AITokenCalculator {
         model: model,
         maxTokens: maxTokensPerChunk,
         contentType: contentType,
+        strategy: strategy,
         ellipsis: '',
       );
 
       chunks.add(truncated);
 
-      // Calculate where to start next chunk (with overlap)
       if (truncated.length < remaining.length) {
-        // Find overlap point
-        final overlapChars = (overlap *
-                _getModelDivisor(model, contentType ?? ContentType.general,
-                    _analyzeCharacters(truncated)))
-            .round();
-        final startNext =
-            (truncated.length - overlapChars).clamp(0, truncated.length);
-        remaining = remaining.substring(startNext);
+        final lastEstimate = estimateTokens(
+          truncated,
+          model: model,
+          contentType: contentType,
+          strategy: strategy,
+          includeOverhead: false,
+        );
+
+        final overlapRunes = (overlap * lastEstimate.avgCharsPerToken)
+            .round()
+            .clamp(0, truncated.runes.length)
+            .toInt();
+
+        final remRunes = remaining.runes.toList(growable: false);
+        final startNext = (truncated.runes.length - overlapRunes)
+            .clamp(0, truncated.runes.length)
+            .toInt();
+        remaining = String.fromCharCodes(remRunes.sublist(startNext));
       } else {
         break;
       }
@@ -345,7 +388,11 @@ class AITokenCalculator {
     return chunks;
   }
 
-  /// Analyzes character composition of text
+  // -----------------------------
+  // Internals
+  // -----------------------------
+
+  /// Analyzes character composition of text in a single pass (rune-based).
   _CharacterStats _analyzeCharacters(String text) {
     int ascii = 0;
     int cjk = 0;
@@ -353,37 +400,35 @@ class AITokenCalculator {
     int whitespace = 0;
     int punctuation = 0;
     int other = 0;
-    int bytes = 0;
+    int runes = 0;
+    int controls = 0; // zero-width joiners / variation selectors
 
-    // Count UTF-8 bytes for better non-ASCII estimation
-    bytes = text.codeUnits.fold(0, (sum, unit) {
-      if (unit <= 0x7F) {
-        return sum + 1;
-      }
-      if (unit <= 0x7FF) {
-        return sum + 2;
-      }
-      if (unit <= 0xFFFF) {
-        return sum + 3;
-      }
-      return sum + 4;
-    });
+    for (final r in text.runes) {
+      runes++;
 
-    for (final rune in text.runes) {
-      if (rune <= 0x7F) {
-        if (rune == 0x20 || rune == 0x09 || rune == 0x0A || rune == 0x0D) {
+      // Treat joiners/variation selectors as zero-cost signals
+      if (r == 0x200D || // ZWJ
+          r == 0x200C || // ZWNJ
+          r == 0xFE0F || // VS-16
+          r == 0xFE0E) { // VS-15
+        controls++;
+        continue; // don't classify further
+      }
+
+      if (r <= 0x7F) {
+        if (r == 0x20 || r == 0x09 || r == 0x0A || r == 0x0D) {
           whitespace++;
-        } else if ((rune >= 0x21 && rune <= 0x2F) ||
-            (rune >= 0x3A && rune <= 0x40) ||
-            (rune >= 0x5B && rune <= 0x60) ||
-            (rune >= 0x7B && rune <= 0x7E)) {
+        } else if ((r >= 0x21 && r <= 0x2F) ||
+            (r >= 0x3A && r <= 0x40) ||
+            (r >= 0x5B && r <= 0x60) ||
+            (r >= 0x7B && r <= 0x7E)) {
           punctuation++;
         } else {
           ascii++;
         }
-      } else if (_isCJK(rune)) {
+      } else if (_isCJK(r)) {
         cjk++;
-      } else if (_isEmoji(rune)) {
+      } else if (_isEmoji(r)) {
         emoji++;
       } else {
         other++;
@@ -397,153 +442,114 @@ class AITokenCalculator {
       whitespace: whitespace,
       punctuation: punctuation,
       other: other,
-      total: text.length,
-      bytes: bytes,
+      runes: runes,
+      controls: controls,
     );
   }
 
-  /// Detects content type based on text patterns
+  /// Detects content type based on simple patterns.
   ContentType _detectContentType(String text) {
-    // Check for code patterns
-    if (_looksLikeCode(text)) {
-      return ContentType.code;
-    }
-
-    // Check for structured data patterns
-    if (_looksLikeStructuredData(text)) {
-      return ContentType.structured;
-    }
-
-    // Check for chat patterns
-    if (_looksLikeChat(text)) {
-      return ContentType.chat;
-    }
-
-    // Check for prose patterns
-    if (_looksLikeProse(text)) {
-      return ContentType.prose;
-    }
-
+    if (_looksLikeCode(text)) return ContentType.code;
+    if (_looksLikeStructuredData(text)) return ContentType.structured;
+    if (_looksLikeChat(text)) return ContentType.chat;
+    if (_looksLikeProse(text)) return ContentType.prose;
     return ContentType.general;
   }
 
   bool _looksLikeCode(String text) {
-    final codePatterns = [
-      RegExp(r'^\s*(?:function|def|class|interface|struct|enum)\s+\w+'),
-      RegExp(r'(?:if|for|while|switch)\s*\('),
-      RegExp(r'[{};]\s*$', multiLine: true),
-      RegExp(r'^\s*(?:import|include|require|using)\s+'),
-      RegExp(r'(?:const|let|var|int|string|bool)\s+\w+\s*='),
-    ];
-
     var matchCount = 0;
-    for (final pattern in codePatterns) {
-      if (pattern.hasMatch(text)) {
-        matchCount++;
-      }
+    for (final pattern in _codeRegexes) {
+      if (pattern.hasMatch(text)) matchCount++;
     }
-
     return matchCount >= 2;
   }
 
   bool _looksLikeStructuredData(String text) {
     final trimmed = text.trim();
-    return (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
         (trimmed.startsWith('[') && trimmed.endsWith(']')) ||
         (trimmed.startsWith('<') && trimmed.endsWith('>')) ||
-        text.contains('---\n') || // YAML
-        text.split('\n').where((line) => line.contains(',')).length > 5; // CSV
+        _yamlHeaderRegex.hasMatch(text)) {
+      return true;
+    }
+    final lines = text.split('\n');
+    return lines.where((line) => line.contains(',')).length > 5; // CSV-ish
   }
 
   bool _looksLikeChat(String text) {
     final lines = text.split('\n');
-    final chatPatterns = [
-      RegExp(r'^\s*(User|Assistant|Human|AI|System):\s*'),
-      RegExp(r'^\s*(You|Me):\s*'),
-      RegExp(r'^\s*\[.+\]:\s*'), // [timestamp] or [username]
-    ];
-
     var chatLineCount = 0;
     for (final line in lines) {
-      for (final pattern in chatPatterns) {
+      for (final pattern in _chatRegexes) {
         if (pattern.hasMatch(line)) {
           chatLineCount++;
           break;
         }
       }
     }
-
     return chatLineCount >= 2;
   }
 
   bool _looksLikeProse(String text) {
-    // Simple check: average word length and sentence patterns
     final words = text.split(RegExp(r'\s+'));
-    if (words.length < 20) {
-      return false;
-    }
-
-    final avgWordLength =
-        text.replaceAll(RegExp(r'\s+'), '').length / words.length;
+    if (words.length < 20) return false;
+    final noWs = text.replaceAll(RegExp(r'\s+'), '');
+    final avgWordLength = noWs.isEmpty ? 0 : noWs.length / words.length;
     final hasSentences = RegExp(r'[.!?]\s+[A-Z]').hasMatch(text);
-
     return avgWordLength >= 4 && avgWordLength <= 8 && hasSentences;
   }
 
-  /// Gets model-specific character divisor from research
-  double _getModelDivisor(
-      AIModel model, ContentType contentType, _CharacterStats stats) {
-    // Use research-backed divisor
-    final divisor = _modelDivisors[(model, contentType)] ??
-        _modelDivisors[(model, ContentType.general)] ??
-        3.5; // Fallback
-
-    // For high non-ASCII content, adjust based on byte-level tokenization
-    // Research shows non-ASCII bytes often map 1:1 to tokens
-    final nonAsciiRatio = (stats.cjk + stats.emoji + stats.other) / stats.total;
-    if (nonAsciiRatio > 0.3) {
-      // Heavy non-ASCII content - use byte count estimation
-      return divisor * 0.7;
+  /// Choose divisor based on strategy.
+  double _getDivisor(AIModel model, ContentType type, EstimationStrategy strategy) {
+    if (strategy == EstimationStrategy.perModel) {
+      return _modelDivisors[(model, type)] ??
+          _modelDivisors[(model, ContentType.general)] ??
+          _universalDivisors[ContentType.general]!;
     }
-
-    return divisor;
+    return _universalDivisors[type] ?? _universalDivisors[ContentType.general]!;
   }
 
-  /// Calculates tokens with improved byte-level awareness
-  int _calculateTokens(_CharacterStats stats, double divisor, AIModel model) {
-    // ASCII characters divided by model-specific divisor
-    final asciiTokens = stats.ascii / divisor;
-    final whitespaceTokens = stats.whitespace / (divisor * 1.5);
-    final punctuationTokens = stats.punctuation / (divisor * 0.8);
+  /// Calculate tokens using language-aware buckets.
+  int _calculateTokens(_CharacterStats s, double divisor) {
+    final asciiTokens = s.ascii / divisor;
+    final whitespaceTokens = s.whitespace / (divisor * 1.7);
+    final punctuationTokens = s.punctuation / (divisor * 0.9);
 
-    // Non-ASCII: Research shows byte-level BPE tokenization
-    // Most non-ASCII characters become 1 token per byte
-    final nonAsciiBytes =
-        stats.bytes - (stats.ascii + stats.whitespace + stats.punctuation);
-    final nonAsciiTokens = nonAsciiBytes * 0.95; // Slight compression from BPE
+    final cjkTokens = s.cjk * 1.0;
+    final emojiTokens = s.emoji * 2.0;
+    final otherTokens = s.other * 1.2;
 
-    final totalTokens =
-        asciiTokens + whitespaceTokens + punctuationTokens + nonAsciiTokens;
+    final total = asciiTokens +
+        whitespaceTokens +
+        punctuationTokens +
+        cjkTokens +
+        emojiTokens +
+        otherTokens;
 
-    return totalTokens.ceil();
+    return total <= 1 ? 1 : total.ceil();
   }
 
-  bool _isCJK(int rune) {
-    return (rune >= 0x4E00 && rune <= 0x9FFF) || // CJK Unified Ideographs
-        (rune >= 0x3040 && rune <= 0x309F) || // Hiragana
-        (rune >= 0x30A0 && rune <= 0x30FF) || // Katakana
-        (rune >= 0xAC00 && rune <= 0xD7AF); // Hangul
+  bool _isCJK(int r) {
+    return (r >= 0x4E00 && r <= 0x9FFF) || // CJK Unified Ideographs
+        (r >= 0x3400 && r <= 0x4DBF) || // CJK Extension A
+        (r >= 0x20000 && r <= 0x2EBEF) || // CJK Extensions B–F (combined approx)
+        (r >= 0x3040 && r <= 0x309F) || // Hiragana
+        (r >= 0x30A0 && r <= 0x30FF) || // Katakana
+        (r >= 0xF900 && r <= 0xFAFF) || // Compatibility Ideographs
+        (r >= 0xAC00 && r <= 0xD7AF) || // Hangul syllables
+        (r >= 0xFF00 && r <= 0xFFEF); // Halfwidth/Fullwidth forms
   }
 
-  bool _isEmoji(int rune) {
-    return (rune >= 0x1F300 && rune <= 0x1F9FF) || // Misc symbols & pictographs
-        (rune >= 0x1F600 && rune <= 0x1F64F) || // Emoticons
-        (rune >= 0x1F680 && rune <= 0x1F6FF) || // Transport & map
-        (rune >= 0x2600 && rune <= 0x26FF); // Misc symbols
+  bool _isEmoji(int r) {
+    return (r >= 0x1F300 && r <= 0x1FAFF) ||
+        (r >= 0x1F600 && r <= 0x1F64F) ||
+        (r >= 0x1F680 && r <= 0x1F6FF) ||
+        (r >= 0x2600 && r <= 0x26FF) ||
+        (r >= 0x2700 && r <= 0x27BF);
   }
 }
 
-/// Internal class for character statistics
+/// Internal class for character statistics (rune-based)
 class _CharacterStats {
   _CharacterStats({
     required this.ascii,
@@ -552,8 +558,8 @@ class _CharacterStats {
     required this.whitespace,
     required this.punctuation,
     required this.other,
-    required this.total,
-    required this.bytes,
+    required this.runes,
+    required this.controls,
   });
 
   final int ascii;
@@ -562,6 +568,6 @@ class _CharacterStats {
   final int whitespace;
   final int punctuation;
   final int other;
-  final int total;
-  final int bytes;
+  final int runes;
+  final int controls;
 }
