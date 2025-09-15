@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'settings_service.dart';
@@ -14,7 +15,9 @@ class MonacoService extends StateNotifier<EditorStatus> {
   MonacoController? _controller;
   String? _queuedContent;
   String? _queuedLanguage;
-  final FocusNode _webViewFocusNode = FocusNode(debugLabel: 'MonacoWebView');
+  // Ensures Flutter gives keyboard focus to the platform view (WebView)
+  final FocusNode _platformViewFocus =
+      FocusNode(debugLabel: 'MonacoPlatformView');
   Completer<void>? _initCompleter;
   // Ensures only the latest updateContent() call wins.
   int _setEpoch = 0;
@@ -50,11 +53,30 @@ class MonacoService extends StateNotifier<EditorStatus> {
     if (_controller == null || !state.isReady) {
       return const Center(child: CircularProgressIndicator());
     }
-    // Ensure the native platform view can become first responder
-    return Focus(
-      focusNode: _webViewFocusNode,
-      canRequestFocus: true,
-      child: _controller!.webViewWidget,
+    // Ensure platform focus on pointer down, then DOM focus via controller.
+    return Listener(
+      // Important on macOS: don't claim the primary click; let WKWebView win it.
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (_) {
+        if (!_platformViewFocus.hasFocus) {
+          _platformViewFocus.requestFocus();
+        }
+        // Nudge Monaco input focus without blocking the event pipeline.
+        unawaited(ensureEditorFocus(attempts: 1));
+      },
+      child: Focus(
+        focusNode: _platformViewFocus,
+        canRequestFocus: true,
+        onKeyEvent: (node, event) {
+          // Ensure macOS forwards keys to the platform view (WKWebView)
+          if (event is KeyDownEvent) {
+            return KeyEventResult.skipRemainingHandlers;
+          }
+          return KeyEventResult.ignored;
+        },
+        descendantsAreFocusable: true,
+        child: _controller!.webViewWidget,
+      ),
     );
   }
 
@@ -104,6 +126,8 @@ class MonacoService extends StateNotifier<EditorStatus> {
       );
 
       debugPrint('[MonacoService] Initialization successful');
+      // Nudge both platform and DOM focus now that we're ready.
+      unawaited(ensureEditorFocus(attempts: 3));
       _initCompleter?.complete();
     } catch (e, st) {
       state = state.copyWith(
@@ -139,6 +163,8 @@ class MonacoService extends StateNotifier<EditorStatus> {
     } catch (_) {}
 
     await ensureNativeFocus();
+    // Ensure the hidden textarea owns DOM focus after updates.
+    unawaited(ensureEditorFocus(attempts: 3));
     unawaited(_stickValue(content, epoch, retries: 8));
 
     if (mounted) {
@@ -162,23 +188,57 @@ class MonacoService extends StateNotifier<EditorStatus> {
         await _controller!.setValue(before);
       } catch (_) {}
     }
+
+    // Re-layout and re-focus after option changes (theme/font/etc.).
+    await layout();
+    await ensureEditorFocus(attempts: 2);
   }
 
   @override
   void dispose() {
+    _platformViewFocus.dispose();
     _controller?.dispose();
-    _webViewFocusNode.dispose();
     super.dispose();
   }
 
   /// Ensures the native WebView grabs platform focus (first responder),
   /// then the JS Monaco instance can accept keyboard input.
   Future<void> ensureNativeFocus() async {
-    if (_webViewFocusNode.canRequestFocus) {
-      _webViewFocusNode.requestFocus();
-      // Give the engine a beat to propagate focus to the platform view
+    if (_controller == null || !state.isReady) return;
+    // Prefer giving Flutter focus to the platform view's FocusNode.
+    if (_platformViewFocus.canRequestFocus) {
+      _platformViewFocus.requestFocus();
       await Future<void>.delayed(const Duration(milliseconds: 1));
+      return;
     }
+    // Fallback to controller-level focus if needed.
+    try {
+      await _controller!.focus();
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    } catch (_) {}
+  }
+
+  /// Ensures the Monaco DOM input area gets focus reliably.
+  /// Uses the controller's robust helper with layout + retries.
+  Future<void> ensureEditorFocus({int attempts = 3}) async {
+    if (_controller == null || !state.isReady) return;
+    await ensureNativeFocus();
+    try {
+      await _controller!.ensureEditorFocus(attempts: attempts);
+    } catch (_) {
+      // Fallback for older builds: best-effort focus.
+      try {
+        await _controller!.focus();
+      } catch (_) {}
+    }
+  }
+
+  /// Explicitly triggers Monaco layout (useful after resizes or panel changes).
+  Future<void> layout() async {
+    if (_controller == null || !state.isReady) return;
+    try {
+      await _controller!.layout();
+    } catch (_) {}
   }
 }
 

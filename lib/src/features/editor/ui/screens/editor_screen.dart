@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:window_manager/window_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../context_collector.dart';
@@ -21,7 +22,7 @@ class EditorScreen extends ConsumerStatefulWidget {
 }
 
 class _EditorScreenState extends ConsumerState<EditorScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WindowListener, WidgetsBindingObserver {
   Timer? _debounceTimer;
   bool _viewAllToggleBusy = false;
 
@@ -31,6 +32,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   // Settings state
   EditorOptions _editorOptions = const EditorOptions();
   bool _hasAppliedInitialSettings = false;
+  bool _requestedInitialFocus = false;
 
   // Sidebar removed — editor uses full right panel
 
@@ -44,6 +46,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   @override
   void initState() {
     super.initState();
+    windowManager.addListener(this);
+    WidgetsBinding.instance.addObserver(this);
 
     // Create Monaco for this route instance
     ref.read(monacoEditorStatusProvider.notifier).initialize();
@@ -78,7 +82,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             .read(monacoEditorStatusProvider.notifier)
             .updateContent(text, language: lang);
         unawaited(
-          ref.read(monacoEditorStatusProvider.notifier).ensureNativeFocus(),
+          ref.read(monacoEditorStatusProvider.notifier).ensureEditorFocus(
+                attempts: 3,
+              ),
         );
       }
     });
@@ -107,7 +113,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
               .read(monacoEditorStatusProvider.notifier)
               .updateContent(text, language: lang);
           unawaited(
-            ref.read(monacoEditorStatusProvider.notifier).ensureNativeFocus(),
+            ref.read(monacoEditorStatusProvider.notifier).ensureEditorFocus(
+                  attempts: 3,
+                ),
           );
         }
       },
@@ -219,6 +227,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
   @override
   void dispose() {
+    windowManager.removeListener(this);
+    WidgetsBinding.instance.removeObserver(this);
     _splitterController?.dispose();
     _debounceTimer?.cancel();
     _editorStatusSub?.close();
@@ -226,9 +236,33 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     super.dispose();
   }
 
+  // WindowListener: regain focus when window is focused
+  @override
+  void onWindowFocus() {
+    final svc = ref.read(monacoEditorStatusProvider.notifier);
+    unawaited(svc.ensureEditorFocus(attempts: 3));
+  }
+
+  // WidgetsBindingObserver: regain focus when app resumes
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      final svc = ref.read(monacoEditorStatusProvider.notifier);
+      unawaited(svc.ensureEditorFocus(attempts: 3));
+    }
+  }
+
   Future<void> _saveSplitRatio(double ratio) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_splitRatioKey, ratio);
+  }
+
+  void _handleSplitRatioChanged(double ratio) {
+    // Persist ratio and nudge Monaco to recompute layout during resize.
+    unawaited(_saveSplitRatio(ratio));
+    unawaited(
+      ref.read(monacoEditorStatusProvider.notifier).layout(),
+    );
   }
 
   Future<void> _loadEditorSettings() async {
@@ -335,6 +369,16 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     final selectionState = ref.watch(selectionProvider);
     final selectionNotifier = ref.read(selectionProvider.notifier);
     final editorStatus = ref.watch(monacoEditorStatusProvider);
+    // On first frame after entering the editor route, ensure editor focus.
+    if (!_requestedInitialFocus && editorStatus.isReady) {
+      _requestedInitialFocus = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        unawaited(ref
+            .read(monacoEditorStatusProvider.notifier)
+            .ensureEditorFocus(attempts: 3));
+      });
+    }
 
     // (Listeners are wired once in initState)
 
@@ -349,24 +393,29 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         // backgroundColor: context.surface,
         centerTitle: false,
         elevation: 0,
-        // LEFT group — compact icon-only actions
-        leadingWidth: 260,
-        leading: Row(
+        // LEFT group — labeled actions on wide screens
+        leadingWidth: 520,
+        leading: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
           mainAxisAlignment: MainAxisAlignment.start,
           children: [
             const SizedBox(width: 8),
+            // Home: same action as Clear All, but placed at start
+            _tbL(
+              Icons.home_outlined,
+              'Home',
+              selectionState.hasFiles
+                  ? () => selectionNotifier.clearFiles()
+                  : null,
+            ),
+            const SizedBox(width: 8),
             // Keep refresh first for utility
-            _tb(Icons.refresh_rounded, 'Reload from disk', () {
+            _tbL(Icons.refresh, 'Reload', () {
               ref.read(selectionProvider.notifier).refreshAllContents();
             }),
-            // Mirror home ordering: Prompt • New Virtual File • Paste • Paste Paths • Browse Files • Browse Folder
-            _tb(
-              Icons.tips_and_updates_rounded,
-              'Prompt',
-              _openOrCreatePrompt,
-              color: Colors.amber,
-            ),
-            _tb(Icons.note_add_outlined, 'New virtual file', () async {
+            // Mirror home ordering (Prompt auto-exists; no button needed)
+            _tbL(Icons.note_add_outlined, 'New file', () async {
               final name = await promptForNewFileName(
                 context,
                 initialName: 'pasted.txt',
@@ -377,31 +426,32 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                     .createVirtualFile(name.trim(), '');
               }
             }),
-            _tb(Icons.content_paste_rounded, 'Paste', () {
+            _tbL(Icons.content_paste_outlined, 'Paste', () {
               unawaited(_pasteClipboardAsContent());
             }),
-            _tb(Icons.content_paste_go_rounded, 'Paste Paths', () {
+            _tbL(Icons.content_paste_go_rounded, 'Paste paths', () {
               unawaited(
                 ref
                     .read(selectionProvider.notifier)
                     .pastePathsFromClipboard(context),
               );
             }),
-            _tb(Icons.file_open_rounded, 'Add files…', () {
+            _tbL(Icons.file_open_outlined, 'Add files', () {
               ref.read(selectionProvider.notifier).pickFiles(context);
             }),
-            _tb(Icons.folder_open_rounded, 'Add folder…', () {
+            _tbL(Icons.folder_open_outlined, 'Add folder', () {
               ref.read(selectionProvider.notifier).pickDirectory(context);
             }),
             // Save moved to right-side actions to avoid leading overflow
           ],
+          ),
         ),
 
-        // RIGHT group — compact icon-only actions
+        // RIGHT group — labeled actions
         actions: [
-          _tb(
-            Icons.save_alt_rounded,
-            'Save Markdown',
+          _tbL(
+            Icons.save_outlined,
+            'Save',
             selectionState.hasSelectedFiles
                 ? () async {
                     final controller = ref.read(monacoControllerProvider);
@@ -419,20 +469,15 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   }
                 : null,
           ),
-          _tb(Icons.settings_outlined, 'Settings', () async {
+          _tbL(Icons.settings_outlined, 'Settings', () async {
             await _showEnhancedEditorSettings(context);
           }),
-          _tb(
-            Icons.view_agenda_rounded,
+          _tbL(
+            Icons.view_agenda_outlined,
             ref.watch(selectionProvider).viewingAll
-                ? 'Exit View All'
-                : 'View All',
+                ? 'Exit view all'
+                : 'View all',
             _toggleViewAllInMonaco,
-          ),
-          _tb(
-            Icons.clear_all_rounded,
-            'Clear all',
-            selectionState.hasFiles ? selectionNotifier.clearFiles : null,
           ),
           const SizedBox(width: 8),
         ],
@@ -448,7 +493,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                       minRatio: 0.2,
                       maxRatio: 0.6,
                       minPanelSize: 300,
-                      onRatioChanged: _saveSplitRatio,
+                      onRatioChanged: _handleSplitRatioChanged,
                       dividerThickness: 6,
                       enableKeyboard: false,
                       semanticsLabel:
@@ -523,8 +568,10 @@ extension _ToolbarHelpers on _EditorScreenState {
     VoidCallback? onPressed, {
     Color? color,
   }) {
+    final Color? effectiveColor =
+        onPressed == null ? null : (color ?? context.onSurface);
     return IconButton(
-      icon: Icon(icon, size: 18, color: color),
+      icon: Icon(icon, size: 18, color: effectiveColor),
       tooltip: tip,
       onPressed: onPressed,
       padding: const EdgeInsets.all(6),
@@ -533,28 +580,46 @@ extension _ToolbarHelpers on _EditorScreenState {
     );
   }
 
-  // Open existing Prompt file or create a new one and activate it
-  Future<void> _openOrCreatePrompt() async {
-    final notifier = ref.read(selectionProvider.notifier);
-    final files = ref.read(selectionProvider).fileMap;
-    String? promptId;
-    for (final f in files.values) {
-      if (f.isVirtual && f.name == 'Prompt') {
-        promptId = f.id;
-        break;
-      }
-    }
-
-    if (promptId != null) {
-      notifier
-        ..setActiveFile(promptId)
-        ..exitCombinedPreview();
-    } else {
-      notifier
-        ..createVirtualFile('Prompt', '')
-        ..exitCombinedPreview();
-    }
+  // Labeled toolbar action for wide screens
+  Widget _tbL(
+    IconData icon,
+    String label,
+    VoidCallback? onPressed, {
+    Color? color,
+  }) {
+    final onSurf = context.onSurface;
+    final disabledOnSurf = onSurf.withOpacity(0.38);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: TextButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 16),
+        label: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+        style: ButtonStyle(
+          foregroundColor: MaterialStateProperty.resolveWith((states) {
+            if (states.contains(MaterialState.disabled)) {
+              return disabledOnSurf;
+            }
+            return color ?? onSurf;
+          }),
+          padding: const MaterialStatePropertyAll(
+            EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          ),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          minimumSize: const MaterialStatePropertyAll(Size(0, 28)),
+          visualDensity: VisualDensity.compact,
+        ),
+      ),
+    );
   }
+
+  // Prompt button removed; Prompt is auto-present in sessions
 
   // Paste clipboard as content into a new virtual file
   Future<void> _pasteClipboardAsContent() async {
@@ -589,22 +654,23 @@ extension _ToolbarHelpers on _EditorScreenState {
 
   // View All: show combined markdown of selected files in Monaco (non-destructive)
   Future<void> _viewAllInMonaco() async {
-    // Enter combined view mode state
-    ref.read(selectionProvider.notifier).setViewingAll(true);
-    final status = ref.read(monacoEditorStatusProvider);
-    if (!status.isReady) {
-      if (mounted) context.showInfo('Editor is still loading…');
-      return;
-    }
-
-    // Flush Monaco → state so combined content is accurate
+    // Flush current editor text BEFORE entering view-all mode
     final controller = ref.read(monacoControllerProvider);
     final activeId = ref.read(selectionProvider).activeFileId;
     if (controller != null && activeId != null) {
       try {
         final live = await controller.getValue();
+        // Persist edits while not in viewingAll (guard blocks only when viewingAll==true)
         ref.read(selectionProvider.notifier).saveEditorTextFor(activeId, live);
       } catch (_) {}
+    }
+
+    // Now enter combined view mode state
+    ref.read(selectionProvider.notifier).setViewingAll(true);
+    final status = ref.read(monacoEditorStatusProvider);
+    if (!status.isReady) {
+      if (mounted) context.showInfo('Editor is still loading…');
+      return;
     }
 
     final combined = ref.read(selectionProvider).combinedContent;
@@ -614,6 +680,11 @@ extension _ToolbarHelpers on _EditorScreenState {
           combined.isEmpty ? '# (Nothing selected)' : combined,
           language: 'markdown',
         );
+    unawaited(
+      ref.read(monacoEditorStatusProvider.notifier).ensureEditorFocus(
+            attempts: 3,
+          ),
+    );
 
     // Combined view mode is tracked in SelectionState.viewingAll
   }
@@ -644,6 +715,11 @@ extension _ToolbarHelpers on _EditorScreenState {
         await ref
             .read(monacoEditorStatusProvider.notifier)
             .updateContent(text, language: language);
+        unawaited(
+          ref.read(monacoEditorStatusProvider.notifier).ensureEditorFocus(
+                attempts: 3,
+              ),
+        );
       }
     } finally {
       _viewAllToggleBusy = false;

@@ -179,6 +179,8 @@ class FileListNotifier extends StateNotifier<SelectionState> {
           state = state.copyWith(
             scanHistory: [...state.scanHistory, scanMetadata],
           );
+          // Ensure a Prompt virtual file exists in any active session
+          _ensurePromptFilePresent();
           // Final rebuild to ensure everything is in sync
           _rebuildTreeFromState();
           _rebuildCombinedContent();
@@ -417,6 +419,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
       virtualPath: candidate,
     );
     _addFileToState(file);
+    _ensurePromptFilePresent();
     state = state.copyWith(
       activeFileId: file.id,
       // If requested, trigger the rename prompt flow in the editor route.
@@ -600,10 +603,47 @@ class FileListNotifier extends StateNotifier<SelectionState> {
 
     // Add to state and rebuild everything. This is simpler and more robust.
     _addFileToState(virtualFile);
+    // Ensure Prompt exists in the session (does not steal focus if already set)
+    _ensurePromptFilePresent();
     // Make it the active file for editing in Monaco
     state = state.copyWith(
       activeFileId: virtualFile.id,
     );
+  }
+
+  /// Opens the special Prompt file, creating it if not present.
+  void openPrompt() {
+    // If Prompt exists, just activate it.
+    for (final f in state.fileMap.values) {
+      if (f.isVirtual && f.name == 'Prompt') {
+        setActiveFile(f.id);
+        return;
+      }
+    }
+    // Otherwise, create an empty Prompt and focus it.
+    createVirtualFile('Prompt', '');
+  }
+
+  /// Ensures a virtual file named 'Prompt' exists in the current session.
+  void _ensurePromptFilePresent() {
+    // If no session yet, do nothing (keeps home screen clean).
+    if (!state.hasFiles) return;
+    final hasPrompt = state.fileMap.values.any(
+      (f) => f.isVirtual && f.name == 'Prompt',
+    );
+    if (hasPrompt) return;
+
+    final prompt = UnifiedFileService.createVirtualFile(
+      name: 'Prompt',
+      content: '',
+      virtualPath: 'Prompt',
+    );
+    // Add without stealing focus if one is already set
+    final active = state.activeFileId;
+    _addFileToState(prompt);
+    if (active != null) {
+      state = state.copyWith(activeFileId: active);
+    }
   }
 
   /// Removes a set of nodes and all their descendants from the state.

@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+// removed: math import (no longer needed)
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
@@ -10,8 +10,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/consts.dart';
-import '../../../shared/widgets/app_bar_title.dart';
 import '../../../shared/dialogs/name_prompt.dart';
+import '../../../shared/widgets/app_bar_title.dart';
 import '../../editor/ui/widgets/prewarm_monaco.dart';
 import '../../virtual_tree/ui/virtual_tree_view.dart';
 import '../state/file_list_state.dart';
@@ -151,7 +151,7 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
                       // HERO (clickable drop zone)
                       _HeroDropZone(
                         isDragging: _isDragging,
-                        onTap: () => selection.pickFiles(context),
+                        onTap: () => selection.openPrompt(),
                       ),
                       const SizedBox(height: 20),
 
@@ -159,12 +159,6 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          // Prompt • New Virtual File • Paste • Paste Paths • Browse Files • Browse Folder
-                          _PromptAccentButton(
-                            onPressed: () =>
-                                _openOrCreatePrompt(context, selection),
-                          ),
-                          const SizedBox(width: 12),
                           OutlinedButton.icon(
                             onPressed: () =>
                                 VirtualTreeView.showCreateVirtualFileFlow(
@@ -270,38 +264,7 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
     }
   }
 
-  Future<void> _openOrCreatePrompt(
-    BuildContext context,
-    FileListNotifier selection,
-  ) async {
-    // Check if a Prompt virtual file already exists
-    final files = ref.read(selectionProvider).fileMap;
-    String? promptId;
-    for (final f in files.values) {
-      if (f.isVirtual && f.name == 'Prompt') {
-        promptId = f.id;
-        break;
-      }
-    }
-
-    if (promptId != null) {
-      // Open the existing Prompt file in the editor
-      selection.setActiveFile(promptId);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Opened existing "Prompt".')),
-        );
-      }
-    } else {
-      // Create an empty Prompt file and open it
-      selection.createVirtualFile('Prompt', '');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Created "Prompt".')),
-        );
-      }
-    }
-  }
+  // Prompt action removed — Prompt file is auto-created when a session starts.
 
   void _showQuickInfo(BuildContext context) {
     final theme = Theme.of(context);
@@ -410,7 +373,7 @@ class _HeroDropZone extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                Icons.folder_open_rounded,
+                Icons.tips_and_updates_rounded,
                 size: isDragging ? 64 : 56,
                 color: cs.primary,
               ),
@@ -425,7 +388,7 @@ class _HeroDropZone extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Or click to browse. Use Paste or Paste Paths from the action bar.',
+                'Click to start with a Prompt, or use Browse/Paste above.',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: cs.onSurface.setOpacity(0.70),
                 ),
@@ -439,217 +402,4 @@ class _HeroDropZone extends StatelessWidget {
   }
 }
 
-class _PromptAccentButton extends StatefulWidget {
-  const _PromptAccentButton({required this.onPressed});
-
-  final VoidCallback onPressed;
-
-  @override
-  State<_PromptAccentButton> createState() => _PromptAccentButtonState();
-}
-
-class _PromptAccentButtonState extends State<_PromptAccentButton>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _spin; // 0..1
-  bool _isHovered = false;
-  bool _isPressed = false;
-  bool _isFocused = false;
-
-  static const _buttonHeight = 40.0;
-  static const _borderWidth = 1.25;
-
-  @override
-  void initState() {
-    super.initState();
-    // Linear, long period — no easing, no visible seam at 2π wrap.
-    _spin = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 6),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _spin.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-
-    // Target scales for hover/press. Keep it subtle.
-    final double targetScale = _isPressed ? 0.985 : (_isHovered ? 1.03 : 1.0);
-
-    // Background of the button (inside the animated border).
-    final Color surface = cs.surface.setOpacity(
-      _isPressed ? 0.92 : (_isHovered ? 0.97 : 1),
-    );
-
-    return FocusableActionDetector(
-      onShowFocusHighlight: (v) => setState(() => _isFocused = v),
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _isHovered = true),
-        onExit: (_) => setState(() => _isHovered = false),
-        cursor: SystemMouseCursors.click,
-        child: AnimatedBuilder(
-          animation: _spin,
-          builder: (context, child) {
-            final double angle = _spin.value * 2 * math.pi;
-
-            return Container(
-              height: _buttonHeight,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                // Rotating sweep gradient; wrapping from 2π->0 is seamless.
-                gradient: SweepGradient(
-                  transform: GradientRotation(angle),
-                  colors: <Color>[
-                    cs.primary,
-                    cs.tertiary,
-                    cs.secondary,
-                    cs.error,
-                    cs.primary, // close the loop
-                  ],
-                  // Off-axis stops add a nicer cadence to the shimmer.
-                  stops: const [0.0, 0.28, 0.55, 0.82, 1.0],
-                  center: Alignment.center,
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(_borderWidth),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20 - _borderWidth),
-                  child: Material(
-                    color: surface,
-                    child: InkWell(
-                      onTap: widget.onPressed,
-                      onHighlightChanged: (v) => setState(() => _isPressed = v),
-                      onHover: (v) => setState(() => _isHovered = v),
-                      borderRadius: BorderRadius.circular(20 - _borderWidth),
-                      splashColor: cs.primary.setOpacity(0.10),
-                      highlightColor: Colors.transparent,
-                      child: TweenAnimationBuilder<double>(
-                        tween: Tween(begin: 1, end: targetScale),
-                        duration: const Duration(milliseconds: 160),
-                        curve: Curves.easeOutCubic,
-                        builder: (context, scale, child) {
-                          return Transform.scale(
-                            scale: scale,
-                            child: child,
-                          );
-                        },
-                        child: _ButtonBody(
-                          isHovered: _isHovered,
-                          isFocused: _isFocused,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _ButtonBody extends StatelessWidget {
-  const _ButtonBody({required this.isHovered, required this.isFocused});
-
-  final bool isHovered;
-  final bool isFocused;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-
-    return Padding(
-      // Match OutlinedButton horizontal density.
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Optional focus ring to match M3 accessibility.
-          if (isFocused)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: [
-                      BoxShadow(
-                        color: cs.primary.setOpacity(0.28),
-                        blurRadius: 10,
-                        spreadRadius: 1,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _AnimatedPromptIcon(
-                activeColor: cs.primary,
-                subduedColor: cs.onSurfaceVariant,
-                isHovered: isHovered,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Prompt',
-                style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: isHovered ? cs.primary : cs.onSurface,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AnimatedPromptIcon extends StatelessWidget {
-  const _AnimatedPromptIcon({
-    required this.isHovered,
-    required this.activeColor,
-    required this.subduedColor,
-  });
-
-  final bool isHovered;
-  final Color activeColor;
-  final Color subduedColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOutBack,
-      tween: Tween<double>(end: isHovered ? 1.0 : 0.0),
-      builder: (context, t, _) {
-        // t: 0..1 (hover amount). Subtle tilt + pulse.
-        final double turns = 0.03 * t; // ~11° at peak
-        final double scale = 1.0 + 0.08 * t;
-
-        return Transform.rotate(
-          angle: turns * 2 * math.pi,
-          child: Transform.scale(
-            scale: scale,
-            child: Icon(
-              Icons.tips_and_updates_rounded,
-              size: 18,
-              color: Color.lerp(subduedColor, activeColor, 0.75 * t + 0.25),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
+// (Prompt accent button removed — Prompt file is auto-present in sessions.)
