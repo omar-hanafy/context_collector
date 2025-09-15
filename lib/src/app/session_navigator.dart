@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../context_collector.dart';
+import 'route_observers.dart';
 
 /// Declarative 2-page navigator:
 /// - Home screen is always the base page
@@ -28,6 +29,7 @@ class SessionNavigator extends ConsumerWidget {
 
     return Navigator(
       pages: pages,
+      observers: [appRouteObserver],
       onDidRemovePage: (page) {
         // Only react to the Editor page being removed
         if (page.key == const ValueKey('editor')) {

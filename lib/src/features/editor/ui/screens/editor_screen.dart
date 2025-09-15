@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
+import '../../../../app/route_observers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../context_collector.dart';
@@ -22,7 +23,11 @@ class EditorScreen extends ConsumerStatefulWidget {
 }
 
 class _EditorScreenState extends ConsumerState<EditorScreen>
-    with SingleTickerProviderStateMixin, WindowListener, WidgetsBindingObserver {
+    with
+        SingleTickerProviderStateMixin,
+        WindowListener,
+        WidgetsBindingObserver,
+        RouteAware {
   Timer? _debounceTimer;
   bool _viewAllToggleBusy = false;
 
@@ -81,11 +86,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         await ref
             .read(monacoEditorStatusProvider.notifier)
             .updateContent(text, language: lang);
-        unawaited(
-          ref.read(monacoEditorStatusProvider.notifier).ensureEditorFocus(
-                attempts: 3,
-              ),
-        );
+        unawaited(_recoverEditorFocus());
       }
     });
   }
@@ -95,6 +96,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     _editorStatusSub = ref.listenManual<EditorStatus>(
       monacoEditorStatusProvider,
       (previous, next) async {
+        if (!mounted) return;
         if (!_hasAppliedInitialSettings && next.isReady) {
           _hasAppliedInitialSettings = true;
 
@@ -112,11 +114,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           await ref
               .read(monacoEditorStatusProvider.notifier)
               .updateContent(text, language: lang);
-          unawaited(
-            ref.read(monacoEditorStatusProvider.notifier).ensureEditorFocus(
-                  attempts: 3,
-                ),
-          );
+          unawaited(_recoverEditorFocus());
         }
       },
     );
@@ -126,6 +124,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       previous,
       next,
     ) async {
+      if (!mounted) return;
       final editorService = ref.read(monacoEditorStatusProvider.notifier);
       final controller = ref.read(monacoControllerProvider);
 
@@ -150,6 +149,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             ref.read(selectionProvider.notifier).clearPendingRename();
           }
           _renameDialogOpen = false;
+          // After rename dialog closes, recover focus.
+          if (mounted) {
+            unawaited(_recoverEditorFocus());
+          }
         });
       }
 
@@ -229,6 +232,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   void dispose() {
     windowManager.removeListener(this);
     WidgetsBinding.instance.removeObserver(this);
+    // Unsubscribe from route observer
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) {
+      appRouteObserver.unsubscribe(this);
+    }
     _splitterController?.dispose();
     _debounceTimer?.cancel();
     _editorStatusSub?.close();
@@ -236,20 +244,43 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     super.dispose();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Subscribe to route changes so we can re-focus after dialog pop (didPopNext)
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) {
+      appRouteObserver.subscribe(this, route);
+    }
+  }
+
   // WindowListener: regain focus when window is focused
   @override
   void onWindowFocus() {
-    final svc = ref.read(monacoEditorStatusProvider.notifier);
-    unawaited(svc.ensureEditorFocus(attempts: 3));
+    unawaited(_recoverEditorFocus());
   }
 
   // WidgetsBindingObserver: regain focus when app resumes
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      final svc = ref.read(monacoEditorStatusProvider.notifier);
-      unawaited(svc.ensureEditorFocus(attempts: 3));
+      unawaited(_recoverEditorFocus());
     }
+  }
+
+  // RouteAware: called when a route above this one has been popped (e.g., a dialog closed)
+  @override
+  void didPopNext() {
+    // Defer to next frame to allow focus to settle after dialog teardown.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_recoverEditorFocus());
+    });
+  }
+
+  Future<void> _recoverEditorFocus() async {
+    final svc = ref.read(monacoEditorStatusProvider.notifier);
+    await svc.recoverKeyboardFocus();
   }
 
   Future<void> _saveSplitRatio(double ratio) async {
@@ -298,6 +329,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     );
     if (newOptions != null && mounted) {
       await _saveAndApplyOptions(newOptions);
+      // Strong recovery after dialog containing TextFields
+      unawaited(_recoverEditorFocus());
     }
   }
 
@@ -374,9 +407,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       _requestedInitialFocus = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        unawaited(ref
-            .read(monacoEditorStatusProvider.notifier)
-            .ensureEditorFocus(attempts: 3));
+        unawaited(_recoverEditorFocus());
       });
     }
 
@@ -425,16 +456,18 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                     .read(selectionProvider.notifier)
                     .createVirtualFile(name.trim(), '');
               }
+              // Recover regardless of create/cancel
+              unawaited(_recoverEditorFocus());
             }),
             _tbL(Icons.content_paste_outlined, 'Paste', () {
               unawaited(_pasteClipboardAsContent());
             }),
-            _tbL(Icons.content_paste_go_rounded, 'Paste paths', () {
-              unawaited(
-                ref
-                    .read(selectionProvider.notifier)
-                    .pastePathsFromClipboard(context),
-              );
+            _tbL(Icons.content_paste_go_rounded, 'Paste paths', () async {
+              await ref
+                  .read(selectionProvider.notifier)
+                  .pastePathsFromClipboard(context);
+              // Some flows show a prompt; recover regardless
+              unawaited(_recoverEditorFocus());
             }),
             _tbL(Icons.file_open_outlined, 'Add files', () {
               ref.read(selectionProvider.notifier).pickFiles(context);
@@ -471,6 +504,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           ),
           _tbL(Icons.settings_outlined, 'Settings', () async {
             await _showEnhancedEditorSettings(context);
+            // Recover focus whether user applied or canceled
+            unawaited(_recoverEditorFocus());
           }),
           _tbL(
             Icons.view_agenda_outlined,
@@ -647,6 +682,9 @@ extension _ToolbarHelpers on _EditorScreenState {
       }
     } catch (e) {
       if (mounted) context.showErr('Paste failed: $e');
+    } finally {
+      // Always recover after this flow, even if canceled or errored.
+      unawaited(_recoverEditorFocus());
     }
   }
 
@@ -680,11 +718,7 @@ extension _ToolbarHelpers on _EditorScreenState {
           combined.isEmpty ? '# (Nothing selected)' : combined,
           language: 'markdown',
         );
-    unawaited(
-      ref.read(monacoEditorStatusProvider.notifier).ensureEditorFocus(
-            attempts: 3,
-          ),
-    );
+    unawaited(_recoverEditorFocus());
 
     // Combined view mode is tracked in SelectionState.viewingAll
   }
@@ -715,11 +749,7 @@ extension _ToolbarHelpers on _EditorScreenState {
         await ref
             .read(monacoEditorStatusProvider.notifier)
             .updateContent(text, language: language);
-        unawaited(
-          ref.read(monacoEditorStatusProvider.notifier).ensureEditorFocus(
-                attempts: 3,
-              ),
-        );
+        unawaited(_recoverEditorFocus());
       }
     } finally {
       _viewAllToggleBusy = false;

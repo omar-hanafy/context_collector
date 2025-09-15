@@ -1,4 +1,6 @@
 // lib/src/features/scan/presentation/ui/shared_drop_zone.dart
+import 'dart:async';
+
 import 'package:context_collector/context_collector.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
@@ -62,6 +64,11 @@ class _SharedDropZoneState extends ConsumerState<DropZone> {
               selectionNotifier.createVirtualFile(name.trim(), text);
             }
           }
+          // Recover Monaco focus after dialog/virtual-file creation in editor route.
+          // Safe to call even if editor is not currently mounted.
+          unawaited(
+            ref.read(monacoEditorStatusProvider.notifier).recoverKeyboardFocus(),
+          );
         }
       },
       child: AnimatedContainer(

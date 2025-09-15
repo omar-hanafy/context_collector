@@ -205,17 +205,16 @@ class MonacoService extends StateNotifier<EditorStatus> {
   /// then the JS Monaco instance can accept keyboard input.
   Future<void> ensureNativeFocus() async {
     if (_controller == null || !state.isReady) return;
-    // Prefer giving Flutter focus to the platform view's FocusNode.
+    // Ask Flutter to focus the platform view's FocusNode.
     if (_platformViewFocus.canRequestFocus) {
       _platformViewFocus.requestFocus();
-      await Future<void>.delayed(const Duration(milliseconds: 1));
-      return;
     }
-    // Fallback to controller-level focus if needed.
+    // Also nudge the native view to become first responder.
     try {
       await _controller!.focus();
-      await Future<void>.delayed(const Duration(milliseconds: 1));
     } catch (_) {}
+    // Allow a full frame for focus to settle through both layers.
+    await Future<void>.delayed(const Duration(milliseconds: 16));
   }
 
   /// Ensures the Monaco DOM input area gets focus reliably.
@@ -239,6 +238,28 @@ class MonacoService extends StateNotifier<EditorStatus> {
     try {
       await _controller!.layout();
     } catch (_) {}
+  }
+
+  /// Stronger focus recovery used after dialogs with TextFields close.
+  /// Releases Flutter's TextInput client, then reacquires platform + DOM focus.
+  Future<void> recoverKeyboardFocus({int attempts = 6}) async {
+    if (_controller == null || !state.isReady) return;
+    try {
+      FocusManager.instance.primaryFocus?.unfocus();
+    } catch (_) {}
+    try {
+      await SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+    } catch (_) {}
+    // Let the dialog's focus scope tear down.
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+    await ensureNativeFocus();
+    try {
+      await _controller!.ensureEditorFocus(attempts: attempts);
+    } catch (_) {
+      try {
+        await _controller!.focus();
+      } catch (_) {}
+    }
   }
 }
 
