@@ -74,9 +74,8 @@ msix_config:
   # Shown in the Store as the publisher name
   publisher_display_name: Omar Hanafy
 
-  # Must be 4-part and monotonically increasing; align with `version`
-  # Current app version: 3.0.0+4 → msix_version 3.0.0.4
-  msix_version: 3.0.0.4
+  # Store requires revision=0; keep 4-part, monotonic. Next releases: 3.0.1.0, 3.0.2.0, ...
+  msix_version: 3.0.0.0
 
   # 400x400+ PNG or multi-size .ico is recommended
   logo_path: windows/runner/resources/app_icon.ico
