@@ -19,10 +19,12 @@ dependencies:
   freezed_annotation: ^3.1.0
   json_annotation: ^4.9.0
   desktop_drop:
-    path: ../../Development/MyProjects/flutter-plugins/packages/desktop_drop
-  file_selector: ^1.0.3
+    git:
+      url: https://github.com/omar-hanafy/flutter-plugins.git
+      path: packages/desktop_drop
+  file_selector: ^1.0.4
   window_manager: ^0.5.1
-  flutter_helper_utils: ^8.3.0
+  flutter_helper_utils: ^8.4.0
   dart_helper_utils: ^5.4.0
   intl: ^0.20.2
   path: ^1.9.1
@@ -50,8 +52,8 @@ dev_dependencies:
     sdk: flutter
   msix: ^3.16.12
   very_good_analysis: ^9.0.0
-  build_runner: ^2.6.0
-  json_serializable: ^6.10.0
+  build_runner: ^2.8.0
+  json_serializable: ^6.11.1
 flutter:
   uses-material-design: true
   assets:
