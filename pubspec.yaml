@@ -65,9 +65,30 @@ flutter:
 
 
 msix_config:
-  display_name: ContextCollector
-  identity_name: com.omarhanafy.context.collector
+  # Displayed product name in Start menu and Store
+  display_name: Context Collector
+
+  # Must match Package/Identity/Name from Partner Center
+  identity_name: OmarHanafy.58591FADF4E9E
+
+  # Shown in the Store as the publisher name
   publisher_display_name: Omar Hanafy
-  msix_version: 1.0.0.0
+
+  # Must be 4-part and monotonically increasing; align with `version`
+  # Current app version: 3.0.0+4 → msix_version 3.0.0.4
+  msix_version: 3.0.0.4
+
+  # 400x400+ PNG or multi-size .ico is recommended
   logo_path: windows/runner/resources/app_icon.ico
+
+  # Windows capabilities required by the app
   capabilities: internetClient
+
+  # Languages included in this package
+  languages: en-us
+
+  # Generate a package intended for Microsoft Store submission
+  store: true
+
+  # Must match Package/Identity/Publisher (CN=...)
+  publisher: "CN=682B2A9C-1AF5-466C-AD40-B171147739EA"

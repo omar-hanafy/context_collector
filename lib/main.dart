@@ -103,29 +103,22 @@ void main() async {
 
 /// Initialize auto updater for automatic updates
 void _initializeAutoUpdater(ProviderContainer container) {
-  // Only initialize on supported platforms
-  if (!Platform.isMacOS && !Platform.isWindows) {
-    debugPrint(
-      '[ContextCollector] Auto updater not supported on this platform',
-    );
+  // Enable only on macOS. For Windows Store builds, updates are handled by the Store.
+  if (!Platform.isMacOS) {
+    debugPrint('[ContextCollector] Auto updater disabled on this platform');
     return;
   }
 
   debugPrint('[ContextCollector] 🔄 Initializing auto updater...');
 
-  // Initialize auto updater service
   container
       .read(autoUpdaterServiceProvider)
       .initialize()
       .then((_) {
-        debugPrint(
-          '[ContextCollector] ✅ Auto updater initialized successfully',
-        );
+        debugPrint('[ContextCollector] ✅ Auto updater initialized successfully');
       })
       .catchError((dynamic error) {
-        debugPrint(
-          '[ContextCollector] ⚠️ Auto updater initialization failed: $error',
-        );
+        debugPrint('[ContextCollector] ⚠️ Auto updater initialization failed: $error');
       });
 }
 
