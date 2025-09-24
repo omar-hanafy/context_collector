@@ -77,8 +77,10 @@ msix_config:
   # Store requires revision=0; keep 4-part, monotonic. Next releases: 3.0.1.0, 3.0.2.0, ...
   msix_version: 3.0.1.0
 
-  # 400x400+ PNG or multi-size .ico is recommended
-  logo_path: windows/runner/resources/app_icon.ico
+  # Use original high-res source so MSIX can downscale cleanly
+  logo_path: icons/ContextCollector.png
+  # Keep original bounds when resizing tiles to avoid edge cropping
+  trim_logo: false
 
   # Windows capabilities required by the app
   capabilities: internetClient
