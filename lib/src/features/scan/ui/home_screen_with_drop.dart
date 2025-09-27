@@ -13,7 +13,7 @@ import '../../../shared/consts.dart';
 import '../../../shared/dialogs/name_prompt.dart';
 import '../../../shared/widgets/app_bar_title.dart';
 import '../../editor/ui/widgets/prewarm_monaco.dart';
-import '../../virtual_tree/ui/virtual_tree_view.dart';
+import '../../virtual_tree/widgets/collector_tree_view.dart';
 import '../state/file_list_state.dart';
 
 /// Desktop-only home with a clean hero and a horizontal action bar.
@@ -151,7 +151,7 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
                       // HERO (clickable drop zone)
                       _HeroDropZone(
                         isDragging: _isDragging,
-                        onTap: () => selection.openPrompt(),
+                        onTap: selection.openPrompt,
                       ),
                       const SizedBox(height: 20),
 
@@ -161,7 +161,7 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
                         children: [
                           OutlinedButton.icon(
                             onPressed: () =>
-                                VirtualTreeView.showCreateVirtualFileFlow(
+                                CollectorTreeView.showCreateVirtualFileFlow(
                                   context,
                                   ref,
                                 ),

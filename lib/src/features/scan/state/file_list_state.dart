@@ -3,11 +3,12 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_directory_tree/flutter_directory_tree.dart' as tree;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as path;
 
 import '../../settings/presentation/state/preferences_notifier.dart';
-import '../../virtual_tree/api/virtual_tree_api.dart';
+import '../../virtual_tree/directory_tree_adapter.dart';
 import '../models/scan_result.dart';
 import '../models/scanned_file.dart';
 import '../services/markdown_builder.dart';
@@ -25,7 +26,6 @@ class SelectionState {
     this.sessionStarted = false, // New: Tracks if an editor session is active
     this.error,
     this.combinedContent = '',
-    this.virtualTreeJson,
     this.activeFileId,
     this.viewingAll = false,
     this.pendingRenameFileId,
@@ -39,11 +39,12 @@ class SelectionState {
   final bool sessionStarted;
   final String? error;
   final String combinedContent;
-  final String? virtualTreeJson;
   final String? activeFileId;
+
   // When true, Monaco shows ephemeral combined content and should not
   // be flushed back into any single file.
   final bool viewingAll;
+
   // When set (e.g., from Dock/global text drop), UI should prompt to rename
   // the indicated file id.
   final String? pendingRenameFileId;
@@ -81,7 +82,6 @@ class SelectionState {
     String? error,
     bool clearError = false,
     String? combinedContent,
-    String? virtualTreeJson,
     String? activeFileId,
     bool? viewingAll,
     String? pendingRenameFileId,
@@ -94,7 +94,6 @@ class SelectionState {
       sessionStarted: sessionStarted ?? this.sessionStarted,
       error: clearError ? null : error ?? this.error,
       combinedContent: combinedContent ?? this.combinedContent,
-      virtualTreeJson: virtualTreeJson ?? this.virtualTreeJson,
       activeFileId: activeFileId ?? this.activeFileId,
       viewingAll: viewingAll ?? this.viewingAll,
       pendingRenameFileId: pendingRenameFileId ?? this.pendingRenameFileId,
@@ -131,13 +130,12 @@ class FileListNotifier extends StateNotifier<SelectionState> {
   final Ref ref;
   final MarkdownBuilder markdownBuilder;
 
-  VirtualTreeAPI? virtualTree;
+  DirectoryTreeAdapter? treeAdapter;
 
-  void initializeVirtualTree(VirtualTreeAPI tree) {
-    virtualTree = tree;
-    tree
-      ..onNodeEdited(onFileContentChanged)
-      ..onSelectionChanged(updateSelectionFromTree);
+  void initializeDirectoryTree(DirectoryTreeAdapter adapter) {
+    treeAdapter?.detachSelectionRelay();
+    treeAdapter = adapter..attachSelectionRelay(onTreeSelectionChanged);
+    _rebuildTreeFromState();
   }
 
   //============================================================================
@@ -385,26 +383,8 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     String ext = '.txt',
     bool promptForName = false,
   }) {
-    // Collect top-level names under '/tree' to avoid collisions.
-    final names = <String>{};
-    final tree = virtualTree?.getCurrentTree();
-    if (tree != null) {
-      // Find the '/tree' folder node
-      final treeFolder = tree.nodes.values.firstWhere(
-        (n) => n.virtualPath == '/tree' && n.type == NodeType.folder,
-        orElse: () => TreeNode(
-          id: 'tmp',
-          name: 'tree',
-          type: NodeType.folder,
-          parentId: tree.rootId,
-          virtualPath: '/tree',
-        ),
-      );
-      for (final id in treeFolder.childIds) {
-        final n = tree.nodes[id];
-        if (n != null) names.add(n.name);
-      }
-    }
+    // Collect existing file names to avoid collisions for the auto name.
+    final names = state.fileMap.values.map((f) => f.name).toSet();
 
     String candidate = '$base$ext';
     int i = 2;
@@ -475,14 +455,13 @@ class FileListNotifier extends StateNotifier<SelectionState> {
   }
 
   void _rebuildTreeFromState() {
-    if (virtualTree != null && mounted) {
-      final treeData = virtualTree!.buildTree(
-        files: state.fileMap.values.toList(),
-        scanMetadata: state.scanHistory,
+    final adapter = treeAdapter;
+    if (adapter != null && mounted) {
+      adapter.rebuildFromScanner(
+        files: state.fileMap.values,
+        metadata: state.scanHistory,
+        selectedFileIds: state.selectedFileIds,
       );
-      if (mounted) {
-        state = state.copyWith(virtualTreeJson: treeData.toJson());
-      }
     }
   }
 
@@ -534,7 +513,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     state = state.copyWith(clearError: true);
   }
 
-  void updateSelectionFromTree(Set<String> fileIds) {
+  void onTreeSelectionChanged(Set<String> fileIds) {
     _updateSelectionAndContent(fileIds);
   }
 
@@ -561,7 +540,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     state = state.copyWith(selectedFileIds: newSelection);
     // Instant update - no debouncing
     _rebuildCombinedContent();
-    virtualTree?.setSelectedFileIds(newSelection);
+    treeAdapter?.setSelectedEntryIds(newSelection);
   }
 
   void removeFile(ScannedFile file) {
@@ -578,7 +557,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
   }
 
   void clearFiles() {
-    virtualTree?.clearTree();
+    treeAdapter?.clear();
     state = const SelectionState();
   }
 
@@ -589,6 +568,12 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     newFileMap[fileId] = file.copyWith(editedContent: newContent);
     state = state.copyWith(fileMap: newFileMap);
     _rebuildCombinedContent();
+  }
+
+  @override
+  void dispose() {
+    treeAdapter?.detachSelectionRelay();
+    super.dispose();
   }
 
   /// New: Called from UI to create a virtual file.
@@ -658,48 +643,37 @@ class FileListNotifier extends StateNotifier<SelectionState> {
   /// and then re-adding the same directory will incorrectly trigger the duplicate
   /// detection dialog, even though the files are no longer in the tree.
   void removeNodes(Set<String> topLevelNodeIds) {
-    if (virtualTree == null) return;
+    final adapter = treeAdapter;
+    if (adapter == null) return;
 
-    final allNodes = virtualTree!.getCurrentTree()?.nodes ?? {};
-    if (allNodes.isEmpty) return;
+    final data = adapter.data;
+    if (data.nodes.isEmpty) return;
 
-    // --- Step 1: Collect all file IDs and source paths to be removed ---
-    final fileIdsToRemove = <String>{};
-    final nodesToRemove = <String>{};
-    final sourcePathsToRemove = <String>{};
+    final rawFileIdsToRemove = adapter.collectEntryIds(topLevelNodeIds);
+    final sourcePathsToRemove = adapter.collectSourcePaths(topLevelNodeIds);
 
-    void collectDescendants(String nodeId) {
-      if (nodesToRemove.contains(nodeId)) return;
-      nodesToRemove.add(nodeId);
-      final node = allNodes[nodeId];
-      if (node == null) return;
-      if (node.fileId != null) {
-        fileIdsToRemove.add(node.fileId!);
-      }
-      // If a folder node has an original source path, it's a candidate for history cleanup
-      if (node.type == NodeType.folder && node.sourcePath != null) {
-        sourcePathsToRemove.add(node.sourcePath!);
-      }
-      for (final childId in node.childIds) {
-        collectDescendants(childId);
-      }
-    }
+    final removeVirtualDescendants = topLevelNodeIds.contains(
+      tree.TreeBuilder.treeRootId,
+    );
+    final fileIdsToRemove = <String>{
+      for (final fileId in rawFileIdsToRemove)
+        if (_shouldRemoveFileId(
+          fileId: fileId,
+          removeVirtualDescendants: removeVirtualDescendants,
+          topLevelNodeIds: topLevelNodeIds,
+          adapter: adapter,
+        ))
+          fileId,
+    };
 
-    for (final nodeId in topLevelNodeIds) {
-      collectDescendants(nodeId);
-    }
+    if (fileIdsToRemove.isEmpty && sourcePathsToRemove.isEmpty) return;
 
-    // Nothing to do
-    if (fileIdsToRemove.isEmpty && nodesToRemove.isEmpty) return;
-
-    // --- Step 2: Remove files from the master file map ---
     final newFileMap = Map<String, ScannedFile>.from(state.fileMap)
       ..removeWhere((fileId, _) => fileIdsToRemove.contains(fileId));
 
     final newSelectedFileIds = Set<String>.from(state.selectedFileIds)
       ..removeAll(fileIdsToRemove);
 
-    // --- Step 3: Clean the scanHistory (THE CRITICAL BUG FIX) ---
     final newScanHistory = _removePathsFromScanHistory(sourcePathsToRemove);
 
     // --- Step 4: Update state and trigger a full tree rebuild ---
@@ -762,5 +736,28 @@ class FileListNotifier extends StateNotifier<SelectionState> {
       }
     }
     return newScanHistory;
+  }
+
+  bool _shouldRemoveFileId({
+    required String fileId,
+    required bool removeVirtualDescendants,
+    required Set<String> topLevelNodeIds,
+    required DirectoryTreeAdapter adapter,
+  }) {
+    final file = state.fileMap[fileId];
+    final isVirtual = file?.isVirtual ?? false;
+    if (!isVirtual) {
+      return true;
+    }
+    if (!removeVirtualDescendants) {
+      return true;
+    }
+
+    final nodeId = adapter.controller.nodeIdForEntryId(fileId);
+    if (nodeId != null && topLevelNodeIds.contains(nodeId)) {
+      return true;
+    }
+
+    return false;
   }
 }

@@ -2,12 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:window_manager/window_manager.dart';
-import '../../../../app/route_observers.dart';
+import 'package:resizable_splitter/resizable_splitter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:window_manager/window_manager.dart';
 
+import '../../../../app/route_observers.dart';
 import '../../../../context_collector.dart';
 import '../../../../shared/dialogs/name_prompt.dart';
 import '../../../../shared/widgets/shared_drop_zone.dart';
@@ -161,8 +163,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
       final wasViewingAll = previous?.viewingAll ?? false;
       final isViewingAll = next.viewingAll;
+      final combinedChanged = previous?.combinedContent != next.combinedContent;
 
       if ((previous != null && wasViewingAll) && !isViewingAll) {
+        // Cancel stale writes queued while in view-all so they don't override file view.
+        _debounceTimer?.cancel();
         String targetText = '';
         String? language;
         if (nextId != null) {
@@ -173,6 +178,19 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           }
         }
         await editorService.updateContent(targetText, language: language);
+        return;
+      }
+
+      if (isViewingAll) {
+        // Drop pending file writes now that combined view is active.
+        _debounceTimer?.cancel();
+        if (!wasViewingAll || combinedChanged) {
+          final content = next.combinedContent;
+          await editorService.updateContent(
+            content.isEmpty ? '# (Nothing selected)' : content,
+            language: 'markdown',
+          );
+        }
         return;
       }
 
@@ -209,8 +227,15 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
       if (!isViewingAll && (activeChanged || contentChanged)) {
         _debounceTimer?.cancel();
+        // Capture the file we intend to update so we can drop stale writes.
+        final scheduledActiveId = nextId;
         _debounceTimer = Timer(const Duration(milliseconds: 80), () async {
           if (!mounted) return;
+          final s = ref.read(selectionProvider);
+          if (s.viewingAll) return;
+          if (scheduledActiveId != null && s.activeFileId != scheduledActiveId) {
+            return;
+          }
           await editorService.updateContent(targetText, language: language);
         });
       }
@@ -429,54 +454,52 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         leading: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: [
-            const SizedBox(width: 8),
-            // Home: same action as Clear All, but placed at start
-            _tbL(
-              Icons.home_outlined,
-              'Home',
-              selectionState.hasFiles
-                  ? () => selectionNotifier.clearFiles()
-                  : null,
-            ),
-            const SizedBox(width: 8),
-            // Keep refresh first for utility
-            _tbL(Icons.refresh, 'Reload', () {
-              ref.read(selectionProvider.notifier).refreshAllContents();
-            }),
-            // Mirror home ordering (Prompt auto-exists; no button needed)
-            _tbL(Icons.note_add_outlined, 'New file', () async {
-              final name = await promptForNewFileName(
-                context,
-                initialName: 'pasted.txt',
-              );
-              if (name != null && name.trim().isNotEmpty) {
-                ref
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              const SizedBox(width: 8),
+              // Home: same action as Clear All, but placed at start
+              _tbL(
+                Icons.home_outlined,
+                'Home',
+                selectionState.hasFiles ? selectionNotifier.clearFiles : null,
+              ),
+              const SizedBox(width: 8),
+              // Keep refresh first for utility
+              _tbL(Icons.refresh, 'Reload', () {
+                ref.read(selectionProvider.notifier).refreshAllContents();
+              }),
+              // Mirror home ordering (Prompt auto-exists; no button needed)
+              _tbL(Icons.note_add_outlined, 'New file', () async {
+                final name = await promptForNewFileName(
+                  context,
+                  initialName: 'pasted.txt',
+                );
+                if (name != null && name.trim().isNotEmpty) {
+                  ref
+                      .read(selectionProvider.notifier)
+                      .createVirtualFile(name.trim(), '');
+                }
+                // Recover regardless of create/cancel
+                unawaited(_recoverEditorFocus());
+              }),
+              _tbL(Icons.content_paste_outlined, 'Paste', () {
+                unawaited(_pasteClipboardAsContent());
+              }),
+              _tbL(Icons.content_paste_go_rounded, 'Paste paths', () async {
+                await ref
                     .read(selectionProvider.notifier)
-                    .createVirtualFile(name.trim(), '');
-              }
-              // Recover regardless of create/cancel
-              unawaited(_recoverEditorFocus());
-            }),
-            _tbL(Icons.content_paste_outlined, 'Paste', () {
-              unawaited(_pasteClipboardAsContent());
-            }),
-            _tbL(Icons.content_paste_go_rounded, 'Paste paths', () async {
-              await ref
-                  .read(selectionProvider.notifier)
-                  .pastePathsFromClipboard(context);
-              // Some flows show a prompt; recover regardless
-              unawaited(_recoverEditorFocus());
-            }),
-            _tbL(Icons.file_open_outlined, 'Add files', () {
-              ref.read(selectionProvider.notifier).pickFiles(context);
-            }),
-            _tbL(Icons.folder_open_outlined, 'Add folder', () {
-              ref.read(selectionProvider.notifier).pickDirectory(context);
-            }),
-            // Save moved to right-side actions to avoid leading overflow
-          ],
+                    .pastePathsFromClipboard(context);
+                // Some flows show a prompt; recover regardless
+                unawaited(_recoverEditorFocus());
+              }),
+              _tbL(Icons.file_open_outlined, 'Add files', () {
+                ref.read(selectionProvider.notifier).pickFiles(context);
+              }),
+              _tbL(Icons.folder_open_outlined, 'Add folder', () {
+                ref.read(selectionProvider.notifier).pickDirectory(context);
+              }),
+              // Save moved to right-side actions to avoid leading overflow
+            ],
           ),
         ),
 
@@ -596,25 +619,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
 // === Helper methods for compact toolbar and smart paste ===
 extension _ToolbarHelpers on _EditorScreenState {
-  // Uniform compact icon buttons
-  Widget _tb(
-    IconData icon,
-    String tip,
-    VoidCallback? onPressed, {
-    Color? color,
-  }) {
-    final Color? effectiveColor =
-        onPressed == null ? null : (color ?? context.onSurface);
-    return IconButton(
-      icon: Icon(icon, size: 18, color: effectiveColor),
-      tooltip: tip,
-      onPressed: onPressed,
-      padding: const EdgeInsets.all(6),
-      constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-      splashRadius: 18,
-    );
-  }
-
   // Labeled toolbar action for wide screens
   Widget _tbL(
     IconData icon,
@@ -623,7 +627,7 @@ extension _ToolbarHelpers on _EditorScreenState {
     Color? color,
   }) {
     final onSurf = context.onSurface;
-    final disabledOnSurf = onSurf.withOpacity(0.38);
+    final disabledOnSurf = onSurf.setOpacity(0.38);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
       child: TextButton.icon(
@@ -637,17 +641,17 @@ extension _ToolbarHelpers on _EditorScreenState {
           ),
         ),
         style: ButtonStyle(
-          foregroundColor: MaterialStateProperty.resolveWith((states) {
-            if (states.contains(MaterialState.disabled)) {
+          foregroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.disabled)) {
               return disabledOnSurf;
             }
             return color ?? onSurf;
           }),
-          padding: const MaterialStatePropertyAll(
+          padding: const WidgetStatePropertyAll(
             EdgeInsets.symmetric(horizontal: 6, vertical: 4),
           ),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          minimumSize: const MaterialStatePropertyAll(Size(0, 28)),
+          minimumSize: const WidgetStatePropertyAll(Size(0, 28)),
           visualDensity: VisualDensity.compact,
         ),
       ),
@@ -692,6 +696,8 @@ extension _ToolbarHelpers on _EditorScreenState {
 
   // View All: show combined markdown of selected files in Monaco (non-destructive)
   Future<void> _viewAllInMonaco() async {
+    // Kill any pending file write so combined view stays visible.
+    _debounceTimer?.cancel();
     // Flush current editor text BEFORE entering view-all mode
     final controller = ref.read(monacoControllerProvider);
     final activeId = ref.read(selectionProvider).activeFileId;
@@ -703,13 +709,14 @@ extension _ToolbarHelpers on _EditorScreenState {
       } catch (_) {}
     }
 
-    // Now enter combined view mode state
-    ref.read(selectionProvider.notifier).setViewingAll(true);
     final status = ref.read(monacoEditorStatusProvider);
     if (!status.isReady) {
       if (mounted) context.showInfo('Editor is still loading…');
       return;
     }
+
+    // Now enter combined view mode state
+    ref.read(selectionProvider.notifier).setViewingAll(true);
 
     final combined = ref.read(selectionProvider).combinedContent;
     await ref
@@ -728,6 +735,8 @@ extension _ToolbarHelpers on _EditorScreenState {
     if (_viewAllToggleBusy) return;
     _viewAllToggleBusy = true;
     try {
+      // Cancel queued writes before toggling modes to avoid races.
+      _debounceTimer?.cancel();
       final viewingAll = ref.read(selectionProvider).viewingAll;
       if (!viewingAll) {
         // Enter combined view (do all work here)

@@ -1,10 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../api/virtual_tree_api.dart';
-import '../api/virtual_tree_impl.dart';
-import '../state/tree_state.dart';
 
-/// Provider for VirtualTreeAPI implementation
-final virtualTreeProvider = Provider<VirtualTreeAPI>((ref) {
-  final notifier = ref.watch(treeStateProvider.notifier);
-  return VirtualTreeImpl(notifier);
-});
+import '../directory_tree_adapter.dart';
+
+/// Shared DirectoryTreeAdapter instance for the tree feature.
+final directoryTreeAdapterProvider =
+    ChangeNotifierProvider<DirectoryTreeAdapter>((ref) {
+      final adapter = DirectoryTreeAdapter();
+      ref.onDispose(adapter.dispose);
+      return adapter;
+    });

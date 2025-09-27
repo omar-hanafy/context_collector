@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'settings_service.dart';
@@ -16,8 +16,9 @@ class MonacoService extends StateNotifier<EditorStatus> {
   String? _queuedContent;
   String? _queuedLanguage;
   // Ensures Flutter gives keyboard focus to the platform view (WebView)
-  final FocusNode _platformViewFocus =
-      FocusNode(debugLabel: 'MonacoPlatformView');
+  final FocusNode _platformViewFocus = FocusNode(
+    debugLabel: 'MonacoPlatformView',
+  );
   Completer<void>? _initCompleter;
   // Ensures only the latest updateContent() call wins.
   int _setEpoch = 0;

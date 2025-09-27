@@ -34,12 +34,14 @@ void main() async {
   // Create ProviderScope container for early access
   final container = ProviderContainer();
 
-  // Wire Selection → VirtualTree before any drops or navigation occur.
+  // Wire Selection → DirectoryTree before any drops or navigation occur.
   // This eliminates a race where a very-early drop happens before the
   // tree is connected, leaving the initial scan invisible.
   container
       .read(selectionProvider.notifier)
-      .initializeVirtualTree(container.read(virtualTreeProvider));
+      .initializeDirectoryTree(
+        container.read(directoryTreeAdapterProvider),
+      );
 
   // Initialize desktop_drop early and listen for global Dock/Finder drops.
   // This handler processes both files and memory-backed text dropped onto the
@@ -115,10 +117,14 @@ void _initializeAutoUpdater(ProviderContainer container) {
       .read(autoUpdaterServiceProvider)
       .initialize()
       .then((_) {
-        debugPrint('[ContextCollector] ✅ Auto updater initialized successfully');
+        debugPrint(
+          '[ContextCollector] ✅ Auto updater initialized successfully',
+        );
       })
       .catchError((dynamic error) {
-        debugPrint('[ContextCollector] ⚠️ Auto updater initialization failed: $error');
+        debugPrint(
+          '[ContextCollector] ⚠️ Auto updater initialization failed: $error',
+        );
       });
 }
 

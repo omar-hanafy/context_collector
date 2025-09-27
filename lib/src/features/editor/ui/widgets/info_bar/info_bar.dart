@@ -130,12 +130,42 @@ class _MonacoEditorInfoBarState extends ConsumerState<MonacoEditorInfoBar> {
         tooltip: wrapOn ? 'Word Wrap: On' : 'Word Wrap: Off',
         onPressed: _toggleWordWrap,
       ),
-      IconButton(
-        icon: const Icon(EneftyIcons.copy_outline, size: 20),
-        tooltip: 'Copy Content (Right-click for full paths)',
-        onPressed: widget.onCopy,
-      ),
+      _buildCopyButton(),
     ];
+  }
+
+  Widget _buildCopyButton() {
+    final copyButton = IconButton(
+      icon: const Icon(EneftyIcons.copy_outline, size: 20),
+      tooltip: 'Copy Content (Right-click to copy paths)',
+      onPressed: widget.onCopy,
+    );
+
+    final hasAltActions =
+        widget.onCopyFullPaths != null || widget.onCopyAiPaths != null;
+    if (!hasAltActions) {
+      return copyButton;
+    }
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onSecondaryTapDown: (_) => _handleSecondaryCopy(),
+      child: copyButton,
+    );
+  }
+
+  void _handleSecondaryCopy() {
+    if (widget.onCopyFullPaths != null) {
+      widget.onCopyFullPaths!.call();
+      return;
+    }
+
+    if (widget.onCopyAiPaths != null) {
+      widget.onCopyAiPaths!.call();
+      return;
+    }
+
+    widget.onCopy();
   }
 }
 

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../virtual_tree/ui/virtual_tree_view.dart';
+import '../../virtual_tree/widgets/collector_tree_view.dart';
 import '../state/file_list_state.dart';
 
 /// Main file list screen (without drop zone - handled globally in editor)
@@ -39,9 +39,9 @@ class _FileListScreenState extends ConsumerState<FileListScreen> {
       }
     });
 
-    // The FileListScreen now always shows the VirtualTreeView.
+    // The FileListScreen now always shows the CollectorTreeView.
     // The parent widget is responsible for switching between the HomeScreen and this screen.
-    // The VirtualTreeView itself handles the display of an empty state.
-    return const VirtualTreeView();
+    // The CollectorTreeView itself handles the display of an empty state.
+    return const CollectorTreeView();
   }
 }

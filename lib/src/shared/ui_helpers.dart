@@ -7,12 +7,15 @@ extension UiSnackbars on BuildContext {
       SnackBar(
         content: Row(
           children: [
-            Icon(Icons.check_circle, color: cs.onPrimary, size: 20),
+            Icon(Icons.check_circle, color: cs.primary, size: 20),
             const SizedBox(width: 8),
-            Text(message),
+            Text(
+              message,
+              style: TextStyle(color: cs.primary),
+            ),
           ],
         ),
-        backgroundColor: cs.primary,
+        backgroundColor: cs.primaryContainer,
         behavior: SnackBarBehavior.floating,
         duration: duration ?? const Duration(seconds: 2),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

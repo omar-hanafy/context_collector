@@ -9,6 +9,12 @@
 </p>
 
 <p align="center">
+  <a href="https://apps.microsoft.com/detail/9NTV43WNQJPW?mode=full">
+    <img src="https://get.microsoft.com/images/en-us%20dark.svg" width="200" alt="Download Context Collector from the Microsoft Store">
+  </a>
+</p>
+
+<p align="center">
   <!-- Badges will be added here -->
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-blue" alt="Platforms: macOS, Windows">
@@ -79,7 +85,7 @@ Every chunk includes full file paths and metadata, making it ideal for working s
 
 1. Go to [**Releases**](https://github.com/omar-hanafy/context_collector/releases) and download the latest:
    - **macOS**: `.dmg` file
-   - **Windows**: `.exe` installer
+   - **Windows**: `.exe` installer or install via the [Microsoft Store](https://apps.microsoft.com/detail/9NTV43WNQJPW?mode=full)
 2. Install and run—zero setup required.
 
 ### Option 2: Build from source (Flutter 3.22+)
@@ -147,8 +153,6 @@ flutter run  # or flutter build macos / windows
 * 🌐 Add web support.
 * 🤖 AI summarization of context.
 
-Have an idea? [Open an issue](https://github.com/omar-hanafy/context_collector/issues) or join our Discord! <!-- Add Discord link if you have one -->
-
 ---
 
 ## 🤝 Contributing
@@ -161,11 +165,12 @@ Whether you're fixing bugs, adding features, or improving documentation, your he
 
 If you find this project helpful or valuable, please consider supporting its development:
 
-<p align="center">
+<p align="start">
   <a href="https://www.buymeacoffee.com/omar.hanafy" target="_blank">
     <img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174">
   </a>
 </p>
+
 
 Your support helps maintain and improve Context Collector. Thank you!
 

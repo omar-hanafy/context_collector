@@ -38,15 +38,8 @@ class FileDisplayHelper {
 
   /// Build status indicator for file
   static Widget? buildStatusIndicator(BuildContext context, ScannedFile file) {
-    if (file.isDirty) {
-      return Tooltip(
-        message: 'Modified',
-        child: Icon(
-          Icons.edit,
-          size: 14,
-          color: Theme.of(context).colorScheme.tertiary,
-        ),
-      );
+    if (file.isVirtual) {
+      return null;
     }
 
     if (file.error != null) {
@@ -56,17 +49,6 @@ class FileDisplayHelper {
           Icons.error_outline,
           size: 14,
           color: Theme.of(context).colorScheme.error,
-        ),
-      );
-    }
-
-    if (file.isVirtual) {
-      return Tooltip(
-        message: 'Virtual file',
-        child: Icon(
-          Icons.add_circle_outline,
-          size: 14,
-          color: Theme.of(context).colorScheme.secondary,
         ),
       );
     }
