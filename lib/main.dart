@@ -1,9 +1,9 @@
 // lib/main.dart
+import 'dart:async';
 import 'dart:io';
 
 import 'package:context_collector/context_collector.dart';
 import 'package:desktop_drop/desktop_drop.dart';
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
@@ -32,16 +32,13 @@ void main() async {
   });
 
   // Create ProviderScope container for early access
-  final container = ProviderContainer();
+  final rootContainer = ProviderContainer();
 
-  // Wire Selection → DirectoryTree before any drops or navigation occur.
-  // This eliminates a race where a very-early drop happens before the
-  // tree is connected, leaving the initial scan invisible.
-  container
-      .read(selectionProvider.notifier)
-      .initializeDirectoryTree(
-        container.read(directoryTreeAdapterProvider),
-      );
+  final initialSession = rootContainer
+      .read(sessionManagerProvider.notifier)
+      .createSession();
+  rootContainer.read(activeSessionIdProvider.notifier).state =
+      initialSession.id;
 
   // Initialize desktop_drop early and listen for global Dock/Finder drops.
   // This handler processes both files and memory-backed text dropped onto the
@@ -53,34 +50,20 @@ void main() async {
     // handling with in-window DropTargets.
     final cameFromDockOrFinder = event.location == Offset.zero;
     if (!cameFromDockOrFinder) return;
-
-    final fileItems = <XFile>[];
-    final textPayloads = <String>{};
-
-    for (final item in event.files) {
-      if (item.isMemoryBacked && item.isTextLike) {
-        try {
-          final text = await item.readAsText();
-          final normalized = text?.trim();
-          if (normalized != null && normalized.isNotEmpty) {
-            textPayloads.add(normalized);
-          }
-        } catch (_) {}
-        continue;
-      }
-      fileItems.add(item);
-    }
+    final split = await DropPayloadSplitter.fromRawEvent(event);
 
     // Handle files dropped onto the Dock/Finder globally (regardless of session state)
-    if (fileItems.isNotEmpty) {
-      await container
+    if (split.hasFiles) {
+      final targetContainer = _resolveActiveSessionContainer(rootContainer);
+      await targetContainer
           .read(selectionProvider.notifier)
-          .processDroppedItems(fileItems);
+          .processDroppedItems(split.files);
     }
     // For pure text/links (no files in this drop): create a virtual file and prompt to rename.
-    if (fileItems.isEmpty) {
-      for (final text in textPayloads) {
-        container
+    if (split.hasTextOnly) {
+      for (final text in split.texts) {
+        final targetContainer = _resolveActiveSessionContainer(rootContainer);
+        targetContainer
             .read(selectionProvider.notifier)
             .createVirtualFileWithAutoName(text, promptForName: true);
       }
@@ -90,21 +73,49 @@ void main() async {
   DesktopDrop.instance.init();
 
   // 🔄 INITIALIZE AUTO UPDATER
-  _initializeAutoUpdater(container);
+  unawaited(_initializeAutoUpdater(rootContainer));
 
   // Run the main app normally - no loading screens!
   runApp(
     UncontrolledProviderScope(
-      container: container,
+      container: rootContainer,
       child: const ContextCollectorApp(),
     ),
   );
 }
 
+ProviderContainer _resolveActiveSessionContainer(
+  ProviderContainer rootContainer,
+) {
+  var sessions = rootContainer.read(sessionManagerProvider);
+  if (sessions.isEmpty) {
+    final entry = rootContainer
+        .read(sessionManagerProvider.notifier)
+        .createSession();
+    rootContainer.read(activeSessionIdProvider.notifier).state = entry.id;
+    sessions = rootContainer.read(sessionManagerProvider);
+  }
+
+  final activeId = rootContainer.read(activeSessionIdProvider);
+
+  SessionEntry targetEntry;
+  if (activeId != null) {
+    targetEntry = sessions.firstWhere(
+      (entry) => entry.id == activeId,
+      orElse: () => sessions.last,
+    );
+  } else {
+    targetEntry = sessions.last;
+    rootContainer.read(activeSessionIdProvider.notifier).state = targetEntry.id;
+  }
+
+  return targetEntry.container;
+}
+
 // Monaco preloading removed; editor is created on the editor route
 
 /// Initialize auto updater for automatic updates
-void _initializeAutoUpdater(ProviderContainer container) {
+Future<void> _initializeAutoUpdater(ProviderContainer container) async {
   // Enable only on macOS. For Windows Store builds, updates are handled by the Store.
   if (!Platform.isMacOS) {
     debugPrint('[ContextCollector] Auto updater disabled on this platform');
@@ -113,19 +124,15 @@ void _initializeAutoUpdater(ProviderContainer container) {
 
   debugPrint('[ContextCollector] 🔄 Initializing auto updater...');
 
-  container
-      .read(autoUpdaterServiceProvider)
-      .initialize()
-      .then((_) {
-        debugPrint(
-          '[ContextCollector] ✅ Auto updater initialized successfully',
-        );
-      })
-      .catchError((dynamic error) {
-        debugPrint(
-          '[ContextCollector] ⚠️ Auto updater initialization failed: $error',
-        );
-      });
+  try {
+    await container.read(autoUpdaterServiceProvider).initialize();
+    debugPrint('[ContextCollector] ✅ Auto updater initialized successfully');
+  } catch (error, stackTrace) {
+    debugPrint(
+      '[ContextCollector] ⚠️ Auto updater initialization failed: $error',
+    );
+    debugPrintStack(stackTrace: stackTrace);
+  }
 }
 
 class ContextCollectorApp extends ConsumerWidget {
@@ -140,7 +147,7 @@ class ContextCollectorApp extends ConsumerWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
-      home: const SessionNavigator(),
+      home: const TabShell(),
       debugShowCheckedModeBanner: false,
     );
   }

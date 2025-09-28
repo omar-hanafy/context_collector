@@ -1,5 +1,7 @@
 export '../main.dart';
+export 'app/session_manager.dart';
 export 'app/session_navigator.dart';
+export 'app/tab_shell.dart';
 export 'features/editor/editor.dart';
 export 'features/scan/scan.dart';
 export 'features/settings/settings.dart';

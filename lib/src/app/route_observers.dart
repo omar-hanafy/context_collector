@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Global route observer for tracking route changes within the app's Navigator.
-final RouteObserver<PageRoute<dynamic>> appRouteObserver =
-    RouteObserver<PageRoute<dynamic>>();
+/// Provides a RouteObserver scoped to the current ProviderContainer.
+final routeObserverProvider = Provider<RouteObserver<PageRoute<dynamic>>>(
+  (_) => RouteObserver<PageRoute<dynamic>>(),
+);

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
@@ -15,11 +16,13 @@ class MonacoService extends StateNotifier<EditorStatus> {
   MonacoController? _controller;
   String? _queuedContent;
   String? _queuedLanguage;
+
   // Ensures Flutter gives keyboard focus to the platform view (WebView)
   final FocusNode _platformViewFocus = FocusNode(
     debugLabel: 'MonacoPlatformView',
   );
   Completer<void>? _initCompleter;
+
   // Ensures only the latest updateContent() call wins.
   int _setEpoch = 0;
 
@@ -69,11 +72,25 @@ class MonacoService extends StateNotifier<EditorStatus> {
         focusNode: _platformViewFocus,
         canRequestFocus: true,
         onKeyEvent: (node, event) {
-          // Ensure macOS forwards keys to the platform view (WKWebView)
-          if (event is KeyDownEvent) {
-            return KeyEventResult.skipRemainingHandlers;
+          if (event is! KeyDownEvent) {
+            return KeyEventResult.ignored;
           }
-          return KeyEventResult.ignored;
+
+          final hardware = HardwareKeyboard.instance;
+          final isMac = defaultTargetPlatform == TargetPlatform.macOS;
+          final primaryDown = isMac
+              ? hardware.isMetaPressed
+              : hardware.isControlPressed;
+          final hasModifier =
+              primaryDown || hardware.isAltPressed || hardware.isShiftPressed;
+
+          // Let shortcut combos bubble up to GlobalHotkeys / native menus.
+          if (hasModifier) {
+            return KeyEventResult.ignored;
+          }
+
+          // Plain typing keys should still be captured by the WebView.
+          return KeyEventResult.skipRemainingHandlers;
         },
         descendantsAreFocusable: true,
         child: _controller!.webViewWidget,
@@ -299,6 +316,8 @@ class EditorStatus {
   }
 
   bool get isReady => lifecycle == EditorLifecycle.ready;
+
   bool get isLoading => !isReady && lifecycle != EditorLifecycle.error;
+
   bool get hasError => lifecycle == EditorLifecycle.error;
 }

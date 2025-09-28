@@ -133,8 +133,9 @@ class FileListNotifier extends StateNotifier<SelectionState> {
   DirectoryTreeAdapter? treeAdapter;
 
   void initializeDirectoryTree(DirectoryTreeAdapter adapter) {
-    treeAdapter?.detachSelectionRelay();
-    treeAdapter = adapter..attachSelectionRelay(onTreeSelectionChanged);
+    treeAdapter?.selectionRelay = null;
+    treeAdapter = adapter;
+    treeAdapter!.selectionRelay = onTreeSelectionChanged;
     _rebuildTreeFromState();
   }
 
@@ -572,7 +573,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
 
   @override
   void dispose() {
-    treeAdapter?.detachSelectionRelay();
+    treeAdapter?.selectionRelay = null;
     super.dispose();
   }
 

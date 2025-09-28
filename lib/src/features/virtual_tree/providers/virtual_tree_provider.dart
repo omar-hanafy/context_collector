@@ -5,7 +5,5 @@ import '../directory_tree_adapter.dart';
 /// Shared DirectoryTreeAdapter instance for the tree feature.
 final directoryTreeAdapterProvider =
     ChangeNotifierProvider<DirectoryTreeAdapter>((ref) {
-      final adapter = DirectoryTreeAdapter();
-      ref.onDispose(adapter.dispose);
-      return adapter;
+      return DirectoryTreeAdapter();
     });

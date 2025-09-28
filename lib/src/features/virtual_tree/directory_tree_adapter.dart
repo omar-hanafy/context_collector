@@ -39,19 +39,19 @@ class DirectoryTreeAdapter extends ChangeNotifier {
   bool _suppressBubble = false;
   tree.TreeNode? _promptNode;
   final Set<String> _hiddenNodeIds = <String>{};
+  bool _isDisposed = false;
 
   tree.DirectoryTreeController get controller => _controller;
+
   tree.TreeNode? get promptNode => _promptNode;
+
   String? get promptEntryId => _promptNode?.entryId;
+
   String? get promptNodeId => _promptNode?.id;
 
   /// Hook the scanner selection callback after the adapter is constructed.
-  void attachSelectionRelay(ValueChanged<Set<String>> callback) {
+  set selectionRelay(ValueChanged<Set<String>>? callback) {
     _selectionRelay = callback;
-  }
-
-  void detachSelectionRelay() {
-    _selectionRelay = null;
   }
 
   /// Rebuild the packaged tree from the latest scanner state.
@@ -234,9 +234,15 @@ class DirectoryTreeAdapter extends ChangeNotifier {
 
   @override
   void dispose() {
-    _controller.selection.removeListener(_relaySelection);
-    _controller.removeListener(_bubbleChanges);
-    _controller.dispose();
+    if (_isDisposed) {
+      return;
+    }
+    _isDisposed = true;
+    final controller = _controller;
+    controller.selection.removeListener(_relaySelection);
+    controller
+      ..removeListener(_bubbleChanges)
+      ..dispose();
     super.dispose();
   }
 }
@@ -281,11 +287,12 @@ class _CollectorFlattenStrategy extends tree.SortedFlattenStrategy {
   }
 }
 
-class CollectorSortDelegate extends tree.SortDelegate {
-  const CollectorSortDelegate();
+const String _promptNodeName = 'Prompt';
 
-  static const String _promptName = 'Prompt';
-  final tree.SortDelegate _alpha = const tree.AlphaSortDelegate();
+class CollectorSortDelegate extends tree.SortDelegate {
+  const CollectorSortDelegate([this._alpha = const tree.AlphaSortDelegate()]);
+
+  final tree.SortDelegate _alpha;
 
   @override
   List<String> sortChildIds(tree.TreeData data, String parentId) {
@@ -296,7 +303,7 @@ class CollectorSortDelegate extends tree.SortDelegate {
         return node != null &&
             node.entryId != null &&
             node.isVirtual &&
-            node.name == _promptName;
+            node.name == _promptNodeName;
       });
       if (index > 0) {
         final promptId = ordered.removeAt(index);

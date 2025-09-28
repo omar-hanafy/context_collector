@@ -3,7 +3,6 @@ import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../editor/data/settings_service.dart';
-import '../../services/appearance_sync.dart';
 
 /// Provides the Flutter ThemeMode for the whole app.
 /// - First run: ThemeMode.system
@@ -21,7 +20,7 @@ class ThemeNotifier extends StateNotifier<ThemeMode> {
     try {
       if (await EditorSettingsService.hasSavedOptions()) {
         final options = await EditorSettingsService.load();
-        state = AppearanceSync.themeModeFromMonaco(options.theme);
+        state = themeModeFromMonaco(options.theme);
       } else {
         state = ThemeMode.system; // default on fresh install
       }
@@ -33,6 +32,15 @@ class ThemeNotifier extends StateNotifier<ThemeMode> {
 
   /// Preferred path: call this after saving Monaco options.
   Future<void> setThemeFromMonaco(MonacoTheme monacoTheme) async {
-    state = AppearanceSync.themeModeFromMonaco(monacoTheme);
+    state = themeModeFromMonaco(monacoTheme);
+  }
+
+  static ThemeMode themeModeFromMonaco(MonacoTheme theme) {
+    final id = theme.id.toLowerCase().replaceAll('_', '-');
+    if (id.contains('light')) return ThemeMode.light;
+    if (id.contains('dark') || id.contains('black') || id.contains('night')) {
+      return ThemeMode.dark;
+    }
+    return ThemeMode.light;
   }
 }

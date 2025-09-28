@@ -8,7 +8,9 @@ import 'route_observers.dart';
 /// - Home screen is always the base page
 /// - Editor screen appears when a session has files
 class SessionNavigator extends ConsumerWidget {
-  const SessionNavigator({super.key});
+  const SessionNavigator({super.key, required this.navigatorKey});
+
+  final GlobalKey<NavigatorState> navigatorKey;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -16,31 +18,101 @@ class SessionNavigator extends ConsumerWidget {
     final inSession = state.hasFiles;
 
     final pages = <Page<void>>[
-      const MaterialPage<void>(
-        key: ValueKey('home'),
-        child: HomeScreenWithDrop(),
+      _desktopTransitionPage(
+        key: const ValueKey('home'),
+        child: const HomeScreenWithDrop(),
       ),
       if (inSession)
-        const MaterialPage<void>(
-          key: ValueKey('editor'),
-          child: EditorScreen(),
+        _desktopTransitionPage(
+          key: const ValueKey('editor'),
+          child: const EditorScreen(),
         ),
     ];
 
+    final routeObserver = ref.watch(routeObserverProvider);
+
     return Navigator(
+      key: navigatorKey,
       pages: pages,
-      observers: [appRouteObserver],
+      observers: [routeObserver],
       onDidRemovePage: (page) {
-        // Only react to the Editor page being removed
-        if (page.key == const ValueKey('editor')) {
-          // Defer provider mutation until after this build frame
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (ref.read(selectionProvider).hasFiles) {
-              ref.read(selectionProvider.notifier).clearFiles();
-            }
-          });
+        if (page.key != const ValueKey('editor')) {
+          return;
         }
+
+        final notifier = ref.read(selectionProvider.notifier);
+        final shouldClear = ref.read(selectionProvider).hasFiles;
+        if (!shouldClear) return;
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!notifier.mounted) return;
+          notifier.clearFiles();
+        });
       },
+    );
+  }
+}
+
+const _desktopTransitionDuration = Duration(milliseconds: 260);
+const _desktopReverseTransitionDuration = Duration(milliseconds: 200);
+const _desktopSlideBegin = Offset(0, 0.018);
+const _desktopScaleBegin = 0.98;
+
+Page<void> _desktopTransitionPage({
+  required LocalKey key,
+  required Widget child,
+}) {
+  return _DesktopTransitionPage(
+    key: key,
+    child: child,
+  );
+}
+
+class _DesktopTransitionPage extends Page<void> {
+  const _DesktopTransitionPage({
+    required super.key,
+    required this.child,
+  });
+
+  final Widget child;
+
+  @override
+  Route<void> createRoute(BuildContext context) {
+    return PageRouteBuilder<void>(
+      settings: this,
+      transitionDuration: _desktopTransitionDuration,
+      reverseTransitionDuration: _desktopReverseTransitionDuration,
+      pageBuilder: (context, animation, secondaryAnimation) => child,
+      transitionsBuilder:
+          (
+            context,
+            animation,
+            secondaryAnimation,
+            child,
+          ) {
+            final curved = CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+              reverseCurve: Curves.easeInCubic,
+            );
+
+            return FadeTransition(
+              opacity: curved,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: _desktopSlideBegin,
+                  end: Offset.zero,
+                ).animate(curved),
+                child: ScaleTransition(
+                  scale: Tween<double>(
+                    begin: _desktopScaleBegin,
+                    end: 1,
+                  ).animate(curved),
+                  child: child,
+                ),
+              ),
+            );
+          },
     );
   }
 }

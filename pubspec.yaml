@@ -1,7 +1,7 @@
 name: context_collector
 description: A desktop app for collecting and combining text from multiple files.
 publish_to: 'none'
-version: 3.0.1+5
+version: 3.1.0+6
 
 environment:
   sdk: '>=3.8.1 <4.0.0'
@@ -78,7 +78,7 @@ msix_config:
   publisher_display_name: Omar Hanafy
 
   # Store requires revision=0; keep 4-part, monotonic. Next releases: 3.0.1.0, 3.0.2.0, ...
-  msix_version: 3.0.1.0
+  msix_version: 3.1.0.0
 
   # Use original high-res source so MSIX can downscale cleanly
   logo_path: icons/ContextCollector.png
