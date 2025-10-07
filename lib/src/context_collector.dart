@@ -1,4 +1,6 @@
 export '../main.dart';
+export 'app/persistence/saved_session.dart';
+export 'app/persistence/session_persistence_service.dart';
 export 'app/session_manager.dart';
 export 'app/session_navigator.dart';
 export 'app/tab_shell.dart';

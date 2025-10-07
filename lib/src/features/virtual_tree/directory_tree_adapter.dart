@@ -17,6 +17,8 @@ class DirectoryTreeAdapter extends ChangeNotifier {
         rootId: tree.TreeBuilder.rootId,
         visibleRootId: tree.TreeBuilder.treeRootId,
       ),
+      // Align tree behavior with checkbox UI by allowing multi-selection.
+      selection: tree.SelectionController(mode: tree.SelectionMode.multi),
       flattenStrategy: _CollectorFlattenStrategy(
         () => _hiddenNodeIds,
         _sortDelegate,
@@ -115,12 +117,13 @@ class DirectoryTreeAdapter extends ChangeNotifier {
       _controller.rebuild(
         data,
         tryPreserveState: true,
-        reseedFromCore: true,
+        // Seed once on first build; subsequent rebuilds keep user-driven expansion state.
+        reseedFromCore: !hadTree,
       );
-      if (hadTree && !wasRootExpanded) {
+      if (hadTree) {
         _controller.expansions.setExpanded(
           tree.TreeBuilder.treeRootId,
-          false,
+          wasRootExpanded,
         );
       }
       setSelectedEntryIds(selectedFileIds);

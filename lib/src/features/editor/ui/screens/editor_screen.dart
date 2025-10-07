@@ -13,6 +13,7 @@ import '../../../../context_collector.dart';
 import '../../../../shared/dialogs/name_prompt.dart';
 import '../../../scan/ui/file_display_helper.dart';
 import '../widgets/editor_top_bar.dart';
+import '../widgets/info_bar/copy_feedback.dart';
 // Route focus restorer not needed with push/pop lifecycle.
 
 /// Refactored editor screen using flutter_monaco package
@@ -380,35 +381,29 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   }
 
   /// Copy full paths of selected files to clipboard
-  Future<void> _copyFullPathsToClipboard() async {
+  Future<CopyFeedback> _copyFullPathsToClipboard() async {
     try {
       await ref.read(selectionProvider.notifier).copyFullPathsToClipboard();
-      if (mounted) {
-        context.showOk('Full paths copied to clipboard!');
-      }
+      return CopyFeedback.success;
     } catch (e) {
-      if (mounted) {
-        context.showErr('Error copying paths: $e');
-      }
+      debugPrint('[EditorScreen] Error copying full paths: $e');
+      return CopyFeedback.error;
     }
   }
 
   /// Copy AI-formatted paths of selected files to clipboard
-  Future<void> _copyAiPathsToClipboard() async {
+  Future<CopyFeedback> _copyAiPathsToClipboard() async {
     try {
       await ref.read(selectionProvider.notifier).copyAiPathsToClipboard();
-      if (mounted) {
-        context.showOk('AI paths copied to clipboard!');
-      }
+      return CopyFeedback.success;
     } catch (e) {
-      if (mounted) {
-        context.showErr('Error copying AI paths: $e');
-      }
+      debugPrint('[EditorScreen] Error copying AI paths: $e');
+      return CopyFeedback.error;
     }
   }
 
   /// Copy the editor's current content
-  Future<void> _copyEditorContentToClipboard() async {
+  Future<CopyFeedback> _copyEditorContentToClipboard() async {
     // Flush Monaco → state for the active file so combined content has the latest edits
     final controller = ref.read(monacoControllerProvider);
     final activeId = ref.read(selectionProvider).activeFileId;
@@ -424,21 +419,15 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
     final content = ref.read(selectionProvider).combinedContent;
     if (content.isEmpty) {
-      if (mounted) {
-        context.showInfo('Nothing to copy.');
-      }
-      return;
+      return CopyFeedback.empty;
     }
 
     try {
       await Clipboard.setData(ClipboardData(text: content));
-      if (mounted) {
-        context.showOk('Combined context copied to clipboard!');
-      }
+      return CopyFeedback.success;
     } catch (e) {
-      if (mounted) {
-        context.showErr('Error copying to clipboard: $e');
-      }
+      debugPrint('[EditorScreen] Error copying editor content: $e');
+      return CopyFeedback.error;
     }
   }
 

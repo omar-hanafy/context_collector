@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:enefty_icons/enefty_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
@@ -5,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/providers.dart';
 import '../../../data/settings_service.dart';
+import 'copy_feedback.dart';
 import 'language_selector.dart';
 import 'stats_row.dart';
 
@@ -17,16 +20,26 @@ class MonacoEditorInfoBar extends ConsumerStatefulWidget {
     super.key,
   });
 
-  final VoidCallback onCopy;
-  final VoidCallback? onCopyFullPaths;
-  final VoidCallback? onCopyAiPaths;
+  final Future<CopyFeedback> Function() onCopy;
+  final Future<CopyFeedback> Function()? onCopyFullPaths;
+  final Future<CopyFeedback> Function()? onCopyAiPaths;
 
   @override
-  ConsumerState<MonacoEditorInfoBar> createState() => _MonacoEditorInfoBarState();
+  ConsumerState<MonacoEditorInfoBar> createState() =>
+      _MonacoEditorInfoBarState();
 }
 
 class _MonacoEditorInfoBarState extends ConsumerState<MonacoEditorInfoBar> {
   bool? _wordWrap;
+  CopyFeedback? _copyFeedback;
+  Timer? _copyFeedbackReset;
+  bool _copyInFlight = false;
+
+  @override
+  void dispose() {
+    _copyFeedbackReset?.cancel();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -75,7 +88,10 @@ class _MonacoEditorInfoBarState extends ConsumerState<MonacoEditorInfoBar> {
           ValueListenableBuilder<LiveStats>(
             valueListenable: controller.liveStats,
             builder: (context, stats, _) {
-              return StatsRow(stats: stats);
+              return StatsRow(
+                stats: stats,
+                controller: controller,
+              );
             },
           ),
           const SizedBox(width: 12),
@@ -135,10 +151,36 @@ class _MonacoEditorInfoBarState extends ConsumerState<MonacoEditorInfoBar> {
   }
 
   Widget _buildCopyButton() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    final (iconData, Color? color, String tooltip) = switch (_copyFeedback) {
+      CopyFeedback.success => (
+        Icons.check_rounded,
+        colorScheme.primary,
+        'Copied!',
+      ),
+      CopyFeedback.empty => (
+        Icons.do_not_disturb_on_outlined,
+        colorScheme.onSurfaceVariant,
+        'Nothing to copy',
+      ),
+      CopyFeedback.error => (
+        Icons.error_outline,
+        colorScheme.error,
+        'Copy failed',
+      ),
+      null => (
+        EneftyIcons.copy_outline,
+        null,
+        'Copy Content (Right-click to copy paths)',
+      ),
+    };
+
     final copyButton = IconButton(
-      icon: const Icon(EneftyIcons.copy_outline, size: 20),
-      tooltip: 'Copy Content (Right-click to copy paths)',
-      onPressed: widget.onCopy,
+      icon: Icon(iconData, size: 20, color: color),
+      tooltip: tooltip,
+      onPressed: _copyInFlight ? null : () => _triggerCopy(widget.onCopy),
     );
 
     final hasAltActions =
@@ -155,17 +197,45 @@ class _MonacoEditorInfoBarState extends ConsumerState<MonacoEditorInfoBar> {
   }
 
   void _handleSecondaryCopy() {
+    if (_copyInFlight) return;
     if (widget.onCopyFullPaths != null) {
-      widget.onCopyFullPaths!.call();
+      _triggerCopy(widget.onCopyFullPaths!);
       return;
     }
 
     if (widget.onCopyAiPaths != null) {
-      widget.onCopyAiPaths!.call();
+      _triggerCopy(widget.onCopyAiPaths!);
       return;
     }
 
-    widget.onCopy();
+    _triggerCopy(widget.onCopy);
+  }
+
+  Future<void> _triggerCopy(Future<CopyFeedback> Function() action) async {
+    _copyFeedbackReset?.cancel();
+    setState(() {
+      _copyInFlight = true;
+      _copyFeedback = null;
+    });
+
+    CopyFeedback result;
+    try {
+      result = await action();
+    } catch (_) {
+      result = CopyFeedback.error;
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _copyInFlight = false;
+      _copyFeedback = result;
+    });
+
+    _copyFeedbackReset = Timer(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      setState(() => _copyFeedback = null);
+    });
   }
 }
 

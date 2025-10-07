@@ -579,12 +579,19 @@ class FileListNotifier extends StateNotifier<SelectionState> {
 
   /// New: Called from UI to create a virtual file.
   /// This creates the data object and triggers a tree rebuild.
-  void createVirtualFile(String fileName, String content) {
-    // Virtual path is just the file name, as it will live at the top level
+  /// If [virtualPath] is omitted, the file name is used as its virtual path.
+  void createVirtualFile(
+    String fileName,
+    String content, {
+    String? virtualPath,
+  }) {
+    final effectivePath = (virtualPath == null || virtualPath.isEmpty)
+        ? fileName
+        : virtualPath;
     final virtualFile = UnifiedFileService.createVirtualFile(
       name: fileName,
       content: content,
-      virtualPath: fileName,
+      virtualPath: effectivePath,
     );
 
     // Add to state and rebuild everything. This is simpler and more robust.

@@ -11,14 +11,13 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_monaco: ^1.0.0
-  ai_token_calculator:
-    path: ./packages/ai_token_calculator
   flutter_directory_tree:
     path: ./packages/flutter_directory_tree
   cupertino_icons: ^1.0.8
   flutter_riverpod: ^2.6.1
   freezed: ^3.2.0
   freezed_annotation: ^3.1.0
+  tiktoken: ^1.0.3
   json_annotation: ^4.9.0
   desktop_drop:
     git:

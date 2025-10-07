@@ -11,6 +11,7 @@ import '../features/scan/services/markdown_builder.dart';
 import '../features/scan/state/file_list_state.dart';
 import '../features/virtual_tree/directory_tree_adapter.dart';
 import '../features/virtual_tree/providers/virtual_tree_provider.dart';
+import 'persistence/session_persistence_service.dart';
 import 'route_observers.dart';
 
 /// Per-session UI metadata, scoped within each session's ProviderContainer.
@@ -24,6 +25,9 @@ class SessionEntry {
   final String id;
   final ProviderContainer container;
   final GlobalKey<NavigatorState> navigatorKey;
+  Timer? autoSaveTimer;
+  ProviderSubscription<SelectionState>? autoSaveSubscription;
+  Timer? autoSavePeriodic;
 }
 
 class SessionManager extends StateNotifier<List<SessionEntry>> {
@@ -74,6 +78,7 @@ class SessionManager extends StateNotifier<List<SessionEntry>> {
         );
 
     final entry = SessionEntry(sessionId, container);
+    _attachAutoSave(entry);
     state = [...state, entry];
     return entry;
   }
@@ -104,6 +109,13 @@ class SessionManager extends StateNotifier<List<SessionEntry>> {
       }
     }
 
+    entry.autoSaveTimer?.cancel();
+    entry.autoSaveTimer = null;
+    entry.autoSavePeriodic?.cancel();
+    entry.autoSavePeriodic = null;
+    entry.autoSaveSubscription?.close();
+    entry.autoSaveSubscription = null;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       entry.container.dispose();
     });
@@ -111,6 +123,12 @@ class SessionManager extends StateNotifier<List<SessionEntry>> {
 
   void _disposeAllSessions() {
     for (final entry in state) {
+      entry.autoSaveTimer?.cancel();
+      entry.autoSavePeriodic?.cancel();
+      entry.autoSaveSubscription?.close();
+      entry.autoSaveTimer = null;
+      entry.autoSavePeriodic = null;
+      entry.autoSaveSubscription = null;
       entry.container.dispose();
     }
   }
@@ -119,6 +137,35 @@ class SessionManager extends StateNotifier<List<SessionEntry>> {
     final service = entry.container.read(monacoEditorStatusProvider.notifier);
     await service.layout();
     await service.recoverKeyboardFocus();
+  }
+
+  void _attachAutoSave(SessionEntry entry) {
+    final container = entry.container;
+    final persistence = container.read(sessionPersistenceProvider);
+    entry.autoSaveTimer?.cancel();
+    entry.autoSaveTimer = null;
+    entry.autoSavePeriodic?.cancel();
+    entry.autoSavePeriodic = null;
+    entry.autoSaveSubscription?.close();
+    entry.autoSaveSubscription = container.listen<SelectionState>(
+      selectionProvider,
+      (previous, next) {
+        if (!(next.sessionStarted ||
+            next.hasFiles ||
+            next.scanHistory.isNotEmpty)) {
+          return;
+        }
+        entry.autoSaveTimer?.cancel();
+        entry.autoSaveTimer = Timer(const Duration(seconds: 2), () {
+          unawaited(persistence.saveSession(entry, isActive: true));
+        });
+      },
+      fireImmediately: false,
+    );
+
+    entry.autoSavePeriodic = Timer.periodic(const Duration(seconds: 30), (_) {
+      unawaited(persistence.saveSession(entry, isActive: true));
+    });
   }
 }
 

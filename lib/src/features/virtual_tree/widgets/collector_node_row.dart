@@ -121,7 +121,13 @@ class _CollectorNodeRowState extends State<CollectorNodeRow> {
         height: 20,
         child: Checkbox(
           value: widget.visualState.isSelected,
-          onChanged: (_) => widget.controller.toggleSelection(widget.node.id),
+          onChanged: (checked) {
+            if (checked ?? false) {
+              widget.controller.selection.addAll([widget.node.id]);
+            } else {
+              widget.controller.selection.removeAll([widget.node.id]);
+            }
+          },
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           visualDensity: VisualDensity.compact,
         ),

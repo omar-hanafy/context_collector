@@ -7,6 +7,7 @@ import 'package:flutter/gestures.dart' show kMiddleMouseButton;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 
 import '../features/editor/data/providers.dart';
 import '../features/editor/data/settings_service.dart';
@@ -15,6 +16,8 @@ import '../features/scan/state/file_list_state.dart';
 import '../features/settings/presentation/state/theme_notifier.dart';
 import '../shared/services/drop_payload_splitter.dart';
 import 'global_hotkeys.dart';
+import 'persistence/saved_session.dart';
+import 'persistence/session_persistence_service.dart';
 import 'session_manager.dart';
 import 'session_navigator.dart';
 import 'shortcuts/shortcut_registry.dart' as app_shortcuts;
@@ -28,10 +31,22 @@ enum _TabMenuAction {
   pastePaths,
   addFiles,
   addFolder,
+  duplicate,
+  saveWorkspace,
   saveCombined,
   close,
   closeOthers,
   closeAll,
+  shortcutSettings,
+}
+
+enum _MacEditCommand {
+  undo,
+  redo,
+  cut,
+  copy,
+  paste,
+  selectAll,
 }
 
 class _MenuItem {
@@ -56,12 +71,17 @@ class TabShell extends ConsumerStatefulWidget {
 }
 
 class _TabShellState extends ConsumerState<TabShell> {
+  static const MethodChannel _macEditChannel = MethodChannel(
+    'context_collector/macos_edit',
+  );
+
   final Map<String, GlobalKey> _tabKeys = <String, GlobalKey>{};
   final GlobalKey _addTabKey = GlobalKey();
   String? _hoverTabId;
   bool _isDragging = false;
   String? _editingSessionId;
   bool _isAddTabDropTarget = false;
+  final Uuid _uuid = const Uuid();
 
   void _activateSession(SessionEntry session) {
     final activeId = ref.read(activeSessionIdProvider);
@@ -85,6 +105,14 @@ class _TabShellState extends ConsumerState<TabShell> {
     final current = session.container.read(sessionTitleProvider);
     if (trimmed.isNotEmpty && trimmed != current) {
       controller.state = trimmed;
+      unawaited(
+        _saveWorkspace(
+          session,
+          markActive: true,
+          showSnack: false,
+          syncEditor: false,
+        ),
+      );
     }
     if (_editingSessionId != null) {
       setState(() => _editingSessionId = null);
@@ -214,11 +242,53 @@ class _TabShellState extends ConsumerState<TabShell> {
       PlatformMenu(
         label: 'Context Collector',
         menus: <PlatformMenuItem>[
-          PlatformMenuItem(
-            label: 'Preferences…',
-            shortcut: s(TabShortcutCommand.settings),
-            onSelected: () =>
-                unawaited(_handleShortcut(TabShortcutCommand.settings)),
+          const PlatformMenuItemGroup(
+            members: <PlatformMenuItem>[
+              PlatformProvidedMenuItem(
+                type: PlatformProvidedMenuItemType.about,
+              ),
+            ],
+          ),
+          PlatformMenuItemGroup(
+            members: <PlatformMenuItem>[
+              PlatformMenuItem(
+                label: 'Preferences…',
+                shortcut: s(TabShortcutCommand.settings),
+                onSelected: () =>
+                    unawaited(_handleShortcut(TabShortcutCommand.settings)),
+              ),
+              PlatformMenuItem(
+                label: 'Keyboard Shortcuts…',
+                onSelected: () => unawaited(_openShortcutSettings()),
+              ),
+            ],
+          ),
+          const PlatformMenuItemGroup(
+            members: <PlatformMenuItem>[
+              PlatformProvidedMenuItem(
+                type: PlatformProvidedMenuItemType.servicesSubmenu,
+              ),
+            ],
+          ),
+          const PlatformMenuItemGroup(
+            members: <PlatformMenuItem>[
+              PlatformProvidedMenuItem(
+                type: PlatformProvidedMenuItemType.hide,
+              ),
+              PlatformProvidedMenuItem(
+                type: PlatformProvidedMenuItemType.hideOtherApplications,
+              ),
+              PlatformProvidedMenuItem(
+                type: PlatformProvidedMenuItemType.showAllApplications,
+              ),
+            ],
+          ),
+          const PlatformMenuItemGroup(
+            members: <PlatformMenuItem>[
+              PlatformProvidedMenuItem(
+                type: PlatformProvidedMenuItemType.quit,
+              ),
+            ],
           ),
         ],
       ),
@@ -239,6 +309,12 @@ class _TabShellState extends ConsumerState<TabShell> {
                 onSelected: () =>
                     unawaited(_handleShortcut(TabShortcutCommand.newFile)),
               ),
+              PlatformMenuItem(
+                label: 'Duplicate Tab',
+                shortcut: s(TabShortcutCommand.duplicate),
+                onSelected: () =>
+                    unawaited(_handleShortcut(TabShortcutCommand.duplicate)),
+              ),
             ],
           ),
           PlatformMenuItemGroup(
@@ -254,6 +330,13 @@ class _TabShellState extends ConsumerState<TabShell> {
                 shortcut: s(TabShortcutCommand.addFolder),
                 onSelected: () =>
                     unawaited(_handleShortcut(TabShortcutCommand.addFolder)),
+              ),
+              PlatformMenuItem(
+                label: 'Save Workspace…',
+                shortcut: s(TabShortcutCommand.saveWorkspace),
+                onSelected: () => unawaited(
+                  _handleShortcut(TabShortcutCommand.saveWorkspace),
+                ),
               ),
               PlatformMenuItem(
                 label: 'Save Combined…',
@@ -283,6 +366,12 @@ class _TabShellState extends ConsumerState<TabShell> {
                 onSelected: () =>
                     unawaited(_handleShortcut(TabShortcutCommand.closeAll)),
               ),
+              PlatformMenuItem(
+                label: 'Reopen Closed Tab',
+                shortcut: s(TabShortcutCommand.reopenClosed),
+                onSelected: () =>
+                    unawaited(_handleShortcut(TabShortcutCommand.reopenClosed)),
+              ),
             ],
           ),
         ],
@@ -290,6 +379,70 @@ class _TabShellState extends ConsumerState<TabShell> {
       PlatformMenu(
         label: 'Edit',
         menus: <PlatformMenuItem>[
+          PlatformMenuItemGroup(
+            members: <PlatformMenuItem>[
+              PlatformMenuItem(
+                label: 'Undo',
+                shortcut: const SingleActivator(
+                  LogicalKeyboardKey.keyZ,
+                  meta: true,
+                ),
+                onSelected: () =>
+                    unawaited(_performMacEditCommand(_MacEditCommand.undo)),
+              ),
+              PlatformMenuItem(
+                label: 'Redo',
+                shortcut: const SingleActivator(
+                  LogicalKeyboardKey.keyZ,
+                  meta: true,
+                  shift: true,
+                ),
+                onSelected: () =>
+                    unawaited(_performMacEditCommand(_MacEditCommand.redo)),
+              ),
+            ],
+          ),
+          PlatformMenuItemGroup(
+            members: <PlatformMenuItem>[
+              PlatformMenuItem(
+                label: 'Cut',
+                shortcut: const SingleActivator(
+                  LogicalKeyboardKey.keyX,
+                  meta: true,
+                ),
+                onSelected: () =>
+                    unawaited(_performMacEditCommand(_MacEditCommand.cut)),
+              ),
+              PlatformMenuItem(
+                label: 'Copy',
+                shortcut: const SingleActivator(
+                  LogicalKeyboardKey.keyC,
+                  meta: true,
+                ),
+                onSelected: () =>
+                    unawaited(_performMacEditCommand(_MacEditCommand.copy)),
+              ),
+              PlatformMenuItem(
+                label: 'Paste',
+                shortcut: const SingleActivator(
+                  LogicalKeyboardKey.keyV,
+                  meta: true,
+                ),
+                onSelected: () =>
+                    unawaited(_performMacEditCommand(_MacEditCommand.paste)),
+              ),
+              PlatformMenuItem(
+                label: 'Select All',
+                shortcut: const SingleActivator(
+                  LogicalKeyboardKey.keyA,
+                  meta: true,
+                ),
+                onSelected: () => unawaited(
+                  _performMacEditCommand(_MacEditCommand.selectAll),
+                ),
+              ),
+            ],
+          ),
           PlatformMenuItemGroup(
             members: <PlatformMenuItem>[
               PlatformMenuItem(
@@ -330,7 +483,64 @@ class _TabShellState extends ConsumerState<TabShell> {
           ),
         ],
       ),
+      const PlatformMenu(
+        label: 'Window',
+        menus: <PlatformMenuItem>[
+          PlatformMenuItemGroup(
+            members: <PlatformMenuItem>[
+              PlatformProvidedMenuItem(
+                type: PlatformProvidedMenuItemType.minimizeWindow,
+              ),
+              PlatformProvidedMenuItem(
+                type: PlatformProvidedMenuItemType.zoomWindow,
+              ),
+            ],
+          ),
+          PlatformMenuItemGroup(
+            members: <PlatformMenuItem>[
+              PlatformProvidedMenuItem(
+                type: PlatformProvidedMenuItemType.arrangeWindowsInFront,
+              ),
+              PlatformProvidedMenuItem(
+                type: PlatformProvidedMenuItemType.toggleFullScreen,
+              ),
+            ],
+          ),
+        ],
+      ),
     ];
+  }
+
+  Future<void> _performMacEditCommand(_MacEditCommand command) async {
+    if (Theme.of(context).platform != TargetPlatform.macOS) {
+      return;
+    }
+
+    final String commandName = switch (command) {
+      _MacEditCommand.undo => 'undo',
+      _MacEditCommand.redo => 'redo',
+      _MacEditCommand.cut => 'cut',
+      _MacEditCommand.copy => 'copy',
+      _MacEditCommand.paste => 'paste',
+      _MacEditCommand.selectAll => 'selectAll',
+    };
+
+    try {
+      await _macEditChannel.invokeMethod<void>('perform', commandName);
+    } on MissingPluginException {
+      // Channel is only wired up on macOS.
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'tab_shell.dart',
+          context: ErrorDescription(
+            'while invoking macOS edit command "$commandName"',
+          ),
+        ),
+      );
+    }
   }
 
   void _updateHoverTab(Offset globalPosition, List<SessionEntry> sessions) {
@@ -424,6 +634,11 @@ class _TabShellState extends ConsumerState<TabShell> {
             .pickDirectory(context);
         unawaited(_restoreSessionFocus(current));
         return;
+      case TabShortcutCommand.saveWorkspace:
+        final current = session!;
+        await _saveWorkspace(current);
+        unawaited(_restoreSessionFocus(current));
+        return;
       case TabShortcutCommand.saveCombined:
         final current = session!;
         await _saveCombinedInSession(current);
@@ -435,10 +650,10 @@ class _TabShellState extends ConsumerState<TabShell> {
         return;
       case TabShortcutCommand.closeOthers:
         final current = session!;
-        _closeOthers(current.id);
+        await _closeOthers(current.id);
         return;
       case TabShortcutCommand.closeAll:
-        _closeAll();
+        await _closeAll();
         return;
       case TabShortcutCommand.settings:
         final current = session!;
@@ -447,6 +662,13 @@ class _TabShellState extends ConsumerState<TabShell> {
       case TabShortcutCommand.copyCombined:
         final current = session!;
         await _copyCombinedContent(current);
+        return;
+      case TabShortcutCommand.reopenClosed:
+        await _reopenLastClosedTab();
+        return;
+      case TabShortcutCommand.duplicate:
+        final current = session!;
+        await _duplicateSession(current);
         return;
     }
   }
@@ -580,10 +802,39 @@ class _TabShellState extends ConsumerState<TabShell> {
   }
 
   void _handleCloseTab(String id) {
-    if (_editingSessionId == id) {
-      setState(() => _editingSessionId = null);
+    final sessions = ref.read(sessionManagerProvider);
+    SessionEntry? entry;
+    for (final candidate in sessions) {
+      if (candidate.id == id) {
+        entry = candidate;
+        break;
+      }
     }
-    ref.read(sessionManagerProvider.notifier).closeSession(id);
+
+    unawaited(() async {
+      if (entry != null) {
+        final hasContent = await _hasPersistableContent(
+          entry,
+          includeLive: true,
+        );
+        if (hasContent) {
+          final saved = await _saveWorkspace(
+            entry,
+            markActive: false,
+            showSnack: false,
+            syncEditor: true,
+          );
+          if (saved == null) {
+            _showSnackBar('Close cancelled — failed to save workspace.');
+            return;
+          }
+        }
+      }
+      if (mounted && _editingSessionId == id) {
+        setState(() => _editingSessionId = null);
+      }
+      ref.read(sessionManagerProvider.notifier).closeSession(id);
+    }());
   }
 
   Future<void> _showTabContextMenu(
@@ -628,6 +879,12 @@ class _TabShellState extends ConsumerState<TabShell> {
         command: TabShortcutCommand.newFile,
       ),
       _MenuItem(
+        _TabMenuAction.duplicate,
+        'Duplicate tab',
+        Icons.copy_all_outlined,
+        command: TabShortcutCommand.duplicate,
+      ),
+      _MenuItem(
         _TabMenuAction.paste,
         'Paste',
         Icons.content_paste,
@@ -650,6 +907,12 @@ class _TabShellState extends ConsumerState<TabShell> {
         'Add folder',
         Icons.create_new_folder_outlined,
         command: TabShortcutCommand.addFolder,
+      ),
+      _MenuItem(
+        _TabMenuAction.saveWorkspace,
+        'Save workspace…',
+        Icons.save_as_rounded,
+        command: TabShortcutCommand.saveWorkspace,
       ),
       _MenuItem(
         _TabMenuAction.saveCombined,
@@ -675,6 +938,11 @@ class _TabShellState extends ConsumerState<TabShell> {
         Icons.clear_all,
         command: TabShortcutCommand.closeAll,
       ),
+      _MenuItem(
+        _TabMenuAction.shortcutSettings,
+        'Keyboard shortcuts…',
+        Icons.keyboard,
+      ),
     ];
 
     final theme = Theme.of(context);
@@ -685,7 +953,7 @@ class _TabShellState extends ConsumerState<TabShell> {
     final baseLabelStyle =
         theme.textTheme.bodySmall ?? DefaultTextStyle.of(context).style;
     final baseColor = baseLabelStyle.color;
-    final hintColor = baseColor?.withAlpha((baseColor.alpha * 0.6).round());
+    final hintColor = baseColor?.withValues(alpha: 0.6);
     final hintStyle = baseLabelStyle.copyWith(color: hintColor);
 
     final selection = await showMenu<_TabMenuAction>(
@@ -725,6 +993,11 @@ class _TabShellState extends ConsumerState<TabShell> {
 
     if (selection == null) {
       shouldRestoreFocus = false;
+    } else if (selection == _TabMenuAction.saveWorkspace) {
+      await _saveWorkspace(session);
+    } else if (selection == _TabMenuAction.shortcutSettings) {
+      shouldRestoreFocus = false;
+      await _openEditorSettings(session, highlightShortcuts: true);
     } else {
       final command = _commandForMenuAction(selection);
       if (command != null) {
@@ -748,14 +1021,17 @@ class _TabShellState extends ConsumerState<TabShell> {
         _TabMenuAction.newTab => TabShortcutCommand.newTab,
         _TabMenuAction.refresh => TabShortcutCommand.refresh,
         _TabMenuAction.newFile => TabShortcutCommand.newFile,
+        _TabMenuAction.duplicate => TabShortcutCommand.duplicate,
         _TabMenuAction.paste => TabShortcutCommand.paste,
         _TabMenuAction.pastePaths => TabShortcutCommand.pastePaths,
         _TabMenuAction.addFiles => TabShortcutCommand.addFiles,
         _TabMenuAction.addFolder => TabShortcutCommand.addFolder,
+        _TabMenuAction.saveWorkspace => TabShortcutCommand.saveWorkspace,
         _TabMenuAction.saveCombined => TabShortcutCommand.saveCombined,
         _TabMenuAction.close => TabShortcutCommand.close,
         _TabMenuAction.closeOthers => TabShortcutCommand.closeOthers,
         _TabMenuAction.closeAll => TabShortcutCommand.closeAll,
+        _TabMenuAction.shortcutSettings => null,
       };
 
   List<Widget> _buildShortcutHintWidgets({
@@ -806,6 +1082,115 @@ class _TabShellState extends ConsumerState<TabShell> {
     await session.container.read(selectionProvider.notifier).saveToFile();
   }
 
+  Future<SavedSession?> _saveWorkspace(
+    SessionEntry session, {
+    bool markActive = true,
+    bool showSnack = true,
+    bool syncEditor = true,
+  }) async {
+    if (syncEditor && ref.read(activeSessionIdProvider) == session.id) {
+      await _syncActiveEditorContent(session);
+    }
+    if (!await _hasPersistableContent(session)) {
+      if (showSnack) {
+        _showSnackBar('Nothing to save yet.');
+      }
+      return null;
+    }
+    final service = ref.read(sessionPersistenceProvider);
+    try {
+      final saved = await service.saveSession(
+        session,
+        isActive: markActive,
+      );
+      if (saved == null) {
+        if (showSnack) {
+          _showSnackBar('Nothing to save yet.');
+        }
+        return null;
+      }
+      if (showSnack) {
+        _showSnackBar('Saved workspace "${saved.title}"');
+      }
+      return saved;
+    } catch (error) {
+      if (showSnack) {
+        _showSnackBar('Save failed: $error');
+      }
+      return null;
+    }
+  }
+
+  Future<bool> _hasPersistableContent(
+    SessionEntry session, {
+    bool includeLive = false,
+  }) async {
+    final selection = session.container.read(selectionProvider);
+    String? liveContent;
+    if (includeLive &&
+        !selection.viewingAll &&
+        selection.activeFileId != null) {
+      final controller = session.container.read(monacoControllerProvider);
+      if (controller != null) {
+        try {
+          liveContent = await controller.getValue();
+        } catch (_) {}
+      }
+    }
+    final persistence = ref.read(sessionPersistenceProvider);
+    return persistence.hasPersistableContent(
+      selection,
+      liveEditorText: liveContent,
+      activeFileId: selection.activeFileId,
+    );
+  }
+
+  Future<void> _reopenLastClosedTab() async {
+    final service = ref.read(sessionPersistenceProvider);
+    try {
+      final snapshot = await service.takeMostRecentClosed();
+      if (snapshot == null) {
+        _showSnackBar('No recently closed tabs.');
+        return;
+      }
+      await service.restoreIntoNewSession(ref, snapshot);
+      _showSnackBar('Reopened "${snapshot.title}"');
+    } catch (error) {
+      _showSnackBar('Reopen failed: $error');
+    }
+  }
+
+  Future<void> _duplicateSession(SessionEntry session) async {
+    final snapshot = await _saveWorkspace(
+      session,
+      markActive: true,
+      showSnack: false,
+      syncEditor: true,
+    );
+    if (snapshot == null) {
+      _showSnackBar('Duplicate failed.');
+      return;
+    }
+
+    final service = ref.read(sessionPersistenceProvider);
+    final cloned = snapshot.copyWith(
+      sessionId: _uuid.v4(),
+      savedAt: DateTime.now().toUtc(),
+      isActive: false,
+    );
+
+    try {
+      await service.restoreIntoNewSession(
+        ref,
+        cloned,
+        removeSource: false,
+      );
+      _showSnackBar('Duplicated "${snapshot.title}"');
+    } catch (error) {
+      _showSnackBar('Duplicate failed: $error');
+    }
+  }
+
   Future<void> _copyCombinedContent(SessionEntry session) async {
     await _syncActiveEditorContent(session);
     final content = session.container.read(selectionProvider).combinedContent;
@@ -826,10 +1211,27 @@ class _TabShellState extends ConsumerState<TabShell> {
     unawaited(_restoreSessionFocus(session));
   }
 
-  Future<void> _openEditorSettings(SessionEntry session) async {
+  Future<void> _openShortcutSettings() async {
+    final sessions = ref.read(sessionManagerProvider);
+    final activeId = ref.read(activeSessionIdProvider);
+    final session = _resolveActiveSession(sessions, activeId);
+    if (session == null) {
+      return;
+    }
+    await _openEditorSettings(session, highlightShortcuts: true);
+  }
+
+  Future<void> _openEditorSettings(
+    SessionEntry session, {
+    bool highlightShortcuts = false,
+  }) async {
     final currentOptions = await EditorSettingsService.load();
     if (!mounted) return;
-    final updated = await EditorSettingsDialog.show(context, currentOptions);
+    final updated = await EditorSettingsDialog.show(
+      context,
+      currentOptions,
+      highlightShortcuts: highlightShortcuts,
+    );
     if (updated == null) {
       return;
     }
@@ -854,25 +1256,37 @@ class _TabShellState extends ConsumerState<TabShell> {
     });
   }
 
-  void _closeOthers(String keepId) {
+  Future<void> _closeOthers(String keepId) async {
     final sessions = ref.read(sessionManagerProvider);
-    final remaining = sessions.where((entry) => entry.id != keepId).toList();
-    if (remaining.isEmpty) return;
-    if (_editingSessionId != null && _editingSessionId != keepId) {
+    final targets = sessions.where((entry) => entry.id != keepId).toList();
+    if (targets.isEmpty) return;
+    if (mounted && _editingSessionId != null && _editingSessionId != keepId) {
       setState(() => _editingSessionId = null);
     }
-    for (final entry in remaining) {
+    for (final entry in targets) {
+      await _saveWorkspace(
+        entry,
+        markActive: false,
+        showSnack: false,
+        syncEditor: true,
+      );
       ref.read(sessionManagerProvider.notifier).closeSession(entry.id);
     }
   }
 
-  void _closeAll() {
+  Future<void> _closeAll() async {
     final sessions = ref.read(sessionManagerProvider);
     if (sessions.isEmpty) return;
-    if (_editingSessionId != null) {
+    if (mounted && _editingSessionId != null) {
       setState(() => _editingSessionId = null);
     }
     for (final entry in List<SessionEntry>.from(sessions)) {
+      await _saveWorkspace(
+        entry,
+        markActive: false,
+        showSnack: false,
+        syncEditor: true,
+      );
       ref.read(sessionManagerProvider.notifier).closeSession(entry.id);
     }
   }

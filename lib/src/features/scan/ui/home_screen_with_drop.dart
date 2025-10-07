@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_helper_utils/flutter_helper_utils.dart';
@@ -5,9 +7,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../app/persistence/saved_session.dart';
+import '../../../app/persistence/session_persistence_service.dart';
 import '../../../shared/consts.dart';
 import '../../../shared/dialogs/name_prompt.dart';
 import '../../../shared/widgets/app_bar_title.dart';
+import '../../editor/ui/widgets/info_bar/copy_feedback.dart';
 import '../../editor/ui/widgets/prewarm_monaco.dart';
 import '../../virtual_tree/widgets/collector_tree_view.dart';
 import '../state/file_list_state.dart';
@@ -21,6 +26,24 @@ class HomeScreenWithDrop extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
+  static final DateFormat _savedWorkspaceDateFormat = DateFormat(
+    'MMM d, HH:mm',
+  );
+
+  final GlobalKey _savedWorkspacesButtonKey = GlobalKey(
+    debugLabel: 'saved-workspaces-button',
+  );
+
+  CopyFeedback? _pasteFeedback;
+  Timer? _pasteFeedbackReset;
+  bool _pasteInFlight = false;
+
+  @override
+  void dispose() {
+    _pasteFeedbackReset?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final selection = ref.read(selectionProvider.notifier);
@@ -40,6 +63,12 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
         title: const AppBarTitle(),
         centerTitle: true,
         actions: [
+          IconButton(
+            key: _savedWorkspacesButtonKey,
+            tooltip: 'Saved workspaces',
+            icon: const Icon(Icons.history_rounded, size: 20),
+            onPressed: () => _showSavedWorkspacesMenu(context),
+          ),
           IconButton(
             onPressed: () async {
               final githubUrl = Uri.parse(
@@ -121,13 +150,44 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
                           label: const Text('New Virtual File'),
                         ),
                         const SizedBox(width: 12),
-                        OutlinedButton.icon(
-                          onPressed: () => _pasteClipboardAsContent(
-                            context,
-                            selection,
+                        Tooltip(
+                          message: switch (_pasteFeedback) {
+                            CopyFeedback.success => 'Pasted clipboard content',
+                            CopyFeedback.empty => 'Clipboard was empty',
+                            CopyFeedback.error => 'Paste failed',
+                            null =>
+                              'Paste clipboard text as a new virtual file',
+                          },
+                          child: OutlinedButton.icon(
+                            onPressed: _pasteInFlight
+                                ? null
+                                : () => _triggerPasteClipboard(
+                                    context,
+                                    selection,
+                                  ),
+                            icon: Icon(
+                              switch (_pasteFeedback) {
+                                CopyFeedback.success => Icons.check_rounded,
+                                CopyFeedback.empty =>
+                                  Icons.do_not_disturb_on_outlined,
+                                CopyFeedback.error => Icons.error_outline,
+                                null => Icons.content_paste_rounded,
+                              },
+                              color: switch (_pasteFeedback) {
+                                CopyFeedback.success => Theme.of(
+                                  context,
+                                ).colorScheme.primary,
+                                CopyFeedback.empty => Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                                CopyFeedback.error => Theme.of(
+                                  context,
+                                ).colorScheme.error,
+                                null => null,
+                              },
+                            ),
+                            label: const Text('Paste'),
                           ),
-                          icon: const Icon(Icons.content_paste_rounded),
-                          label: const Text('Paste'),
                         ),
                         const SizedBox(width: 12),
                         OutlinedButton.icon(
@@ -180,29 +240,161 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
     );
   }
 
-  Future<void> _pasteClipboardAsContent(
+  Future<void> _showSavedWorkspacesMenu(BuildContext context) async {
+    final persistence = ref.read(sessionPersistenceProvider);
+
+    List<SavedSessionIndexItem> entries;
+    try {
+      entries = await persistence.list(includeActive: false);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load workspaces: $error')),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    if (entries.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No saved workspaces yet.')),
+      );
+      return;
+    }
+
+    final buttonContext = _savedWorkspacesButtonKey.currentContext;
+    final overlay = Overlay.of(context);
+    if (buttonContext == null) return;
+    final buttonBox = buttonContext.findRenderObject() as RenderBox?;
+    final overlayBox = overlay.context.findRenderObject() as RenderBox?;
+    if (buttonBox == null || overlayBox == null || !buttonBox.hasSize) {
+      return;
+    }
+    final offset = buttonBox.localToGlobal(Offset.zero, ancestor: overlayBox);
+    final buttonRect = Rect.fromLTWH(
+      offset.dx,
+      offset.dy,
+      buttonBox.size.width,
+      buttonBox.size.height,
+    );
+    final menuPosition = RelativeRect.fromRect(
+      buttonRect,
+      Offset.zero & overlayBox.size,
+    );
+
+    final selection = await showMenu<SavedSessionIndexItem>(
+      context: context,
+      position: menuPosition,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      items: [
+        for (final item in entries)
+          PopupMenuItem<SavedSessionIndexItem>(
+            value: item,
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                item.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                '${item.fileCount} items — '
+                '${_savedWorkspaceDateFormat.format(item.savedAt.toLocal())}',
+              ),
+            ),
+          ),
+      ],
+    );
+
+    if (selection == null || !mounted) {
+      return;
+    }
+
+    SavedSession? snapshot;
+    try {
+      snapshot = await persistence.load(selection.sessionId);
+    } catch (error) {
+      await persistence.delete(selection.sessionId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to read workspace: $error')),
+        );
+      }
+      return;
+    }
+    if (snapshot == null) {
+      await persistence.delete(selection.sessionId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Workspace file missing.')),
+        );
+      }
+      return;
+    }
+
+    try {
+      await persistence.restoreIntoNewSession(ref, snapshot);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Restored "${snapshot.title}"')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Restore failed: $error')),
+      );
+    }
+  }
+
+  Future<void> _triggerPasteClipboard(
+    BuildContext context,
+    FileListNotifier selection,
+  ) async {
+    _pasteFeedbackReset?.cancel();
+    setState(() {
+      _pasteInFlight = true;
+      _pasteFeedback = null;
+    });
+
+    CopyFeedback? result;
+    try {
+      result = await _pasteClipboardAsContent(context, selection);
+    } catch (error, stack) {
+      debugPrint('[HomeScreen] Paste clipboard failed: $error');
+      debugPrintStack(stackTrace: stack);
+      result = CopyFeedback.error;
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _pasteInFlight = false;
+      _pasteFeedback = result;
+    });
+
+    if (result != null) {
+      _pasteFeedbackReset = Timer(const Duration(seconds: 2), () {
+        if (!mounted) return;
+        setState(() => _pasteFeedback = null);
+      });
+    }
+  }
+
+  Future<CopyFeedback?> _pasteClipboardAsContent(
     BuildContext context,
     FileListNotifier selection,
   ) async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     final text = (data?.text ?? '').trim();
     if (text.isEmpty) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Clipboard is empty.')));
-      }
-      return;
+      return CopyFeedback.empty;
     }
 
     final name = await promptForNewFileName(context, initialName: 'pasted.txt');
-    if (name == null || name.trim().isEmpty) return;
+    if (name == null || name.trim().isEmpty) return null;
     selection.createVirtualFile(name.trim(), text);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Created "$name" from clipboard text.')),
-      );
-    }
+    return CopyFeedback.success;
   }
 
   // Prompt action removed — Prompt file is auto-created when a session starts.
@@ -341,5 +533,3 @@ class _HeroDropZone extends StatelessWidget {
     );
   }
 }
-
-// (Prompt accent button removed — Prompt file is auto-present in sessions.)

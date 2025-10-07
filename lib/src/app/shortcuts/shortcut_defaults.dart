@@ -12,7 +12,10 @@ enum TabShortcutCommand {
   pastePaths,
   addFiles,
   addFolder,
+  saveWorkspace,
   saveCombined,
+  reopenClosed,
+  duplicate,
   close,
   closeOthers,
   closeAll,
@@ -51,7 +54,7 @@ const List<ShortcutBinding> kDefaultTabBindings = <ShortcutBinding>[
   ShortcutBinding(
     command: TabShortcutCommand.newFile,
     key: LogicalKeyboardKey.keyN,
-    shift: true,
+    // primary only: Cmd/Ctrl+N for a new virtual file
   ),
   ShortcutBinding(
     command: TabShortcutCommand.paste,
@@ -74,8 +77,23 @@ const List<ShortcutBinding> kDefaultTabBindings = <ShortcutBinding>[
     alt: true,
   ),
   ShortcutBinding(
+    command: TabShortcutCommand.saveWorkspace,
+    key: LogicalKeyboardKey.keyS,
+    alt: true,
+  ),
+  ShortcutBinding(
     command: TabShortcutCommand.saveCombined,
     key: LogicalKeyboardKey.keyS,
+    shift: true,
+  ),
+  ShortcutBinding(
+    command: TabShortcutCommand.reopenClosed,
+    key: LogicalKeyboardKey.keyT,
+    shift: true,
+  ),
+  ShortcutBinding(
+    command: TabShortcutCommand.duplicate,
+    key: LogicalKeyboardKey.keyD,
     shift: true,
   ),
   ShortcutBinding(
@@ -85,6 +103,6 @@ const List<ShortcutBinding> kDefaultTabBindings = <ShortcutBinding>[
   ShortcutBinding(
     command: TabShortcutCommand.copyCombined,
     key: LogicalKeyboardKey.keyC,
-    alt: true,
+    shift: true,
   ),
 ];

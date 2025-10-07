@@ -81,6 +81,19 @@ class MonacoService extends StateNotifier<EditorStatus> {
           final primaryDown = isMac
               ? hardware.isMetaPressed
               : hardware.isControlPressed;
+          if (!isMac && primaryDown) {
+            final LogicalKeyboardKey key = event.logicalKey;
+            const editCombos = <LogicalKeyboardKey>[
+              LogicalKeyboardKey.keyC,
+              LogicalKeyboardKey.keyV,
+              LogicalKeyboardKey.keyX,
+              LogicalKeyboardKey.keyA,
+              LogicalKeyboardKey.keyZ,
+            ];
+            if (editCombos.contains(key)) {
+              return KeyEventResult.skipRemainingHandlers;
+            }
+          }
           final hasModifier =
               primaryDown || hardware.isAltPressed || hardware.isShiftPressed;
 
@@ -167,8 +180,7 @@ class MonacoService extends StateNotifier<EditorStatus> {
       return;
     }
 
-    final epoch = ++_setEpoch;
-    // Language first (if valid), but never fail the write on language errors
+    // Apply language first (if requested). This does not disturb caret/scroll.
     final lang = _safeLangFromId(language);
     if (lang != null) {
       try {
@@ -176,6 +188,19 @@ class MonacoService extends StateNotifier<EditorStatus> {
       } catch (_) {}
       await Future<void>.delayed(const Duration(milliseconds: 16));
     }
+
+    String? current;
+    try {
+      current = await _controller!.getValue();
+    } catch (_) {}
+    if (current == content) {
+      if (mounted && state.hasContent != content.isNotEmpty) {
+        state = state.copyWith(hasContent: content.isNotEmpty);
+      }
+      return;
+    }
+
+    final epoch = ++_setEpoch;
     try {
       await _controller!.setValue(content);
     } catch (_) {}

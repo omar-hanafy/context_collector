@@ -47,10 +47,21 @@ class _GlobalHotkeysState extends State<GlobalHotkeys> {
     if (command == null) {
       return false;
     }
+    if (platform == TargetPlatform.macOS &&
+        _macMenuReservedCommands.contains(command)) {
+      return false;
+    }
 
     unawaited(widget.onCommand(command));
     return true;
   }
+
+  static const Set<TabShortcutCommand> _macMenuReservedCommands = <
+      TabShortcutCommand>{
+    TabShortcutCommand.paste,
+    TabShortcutCommand.pastePaths,
+    TabShortcutCommand.copyCombined,
+  };
 
   @override
   Widget build(BuildContext context) => widget.child;
