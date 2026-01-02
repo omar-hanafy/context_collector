@@ -14,13 +14,11 @@ enum FolderSelection {
   all,
 }
 
-/// Calculates the selection state of a folder based on its descendants.
+/// Determines if a folder should be checked, unchecked, or indeterminate based on its children.
 ///
-/// This is used to render "tri-state" checkboxes for directories (checked,
-/// unchecked, or indeterminate).
-///
-/// **Note:** This traverses the subtree of [folderId], so use with caution
-/// on very large deep trees in tight loops.
+/// ### Behavior
+/// *   **Recursion:** Traverses the entire subtree of the folder. Use with caution on deep trees.
+/// *   **Tri-State:** Returns [FolderSelection.partial] if only some descendants are selected.
 FolderSelection folderSelection({
   required TreeData data,
   required Set<String> selectedIds,

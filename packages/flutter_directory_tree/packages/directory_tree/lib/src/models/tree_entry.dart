@@ -1,19 +1,17 @@
 import 'package:path/path.dart' as p;
 
-/// Represents a raw input item to be organized into the tree.
+/// Defines a single item to be placed in the tree.
 ///
-/// A [TreeEntry] is typically a file, but it can represent any leaf entity
-/// (e.g., a database row, a virtual document) that has a path-like structure.
+/// [TreeEntry] is the atomic unit of input for the [TreeBuilder]. It represents
+/// a file or entity that needs to be positioned within the hierarchy based on its path.
 ///
-/// This is the *input* primitive for [TreeBuilder.build]. It differs from
-/// [TreeNode], which is the *output* graph node containing hierarchy
-/// relationships.
-///
-/// ### Key Properties
-/// *   [fullPath]: The absolute source path used to calculate the entry's
-///     position in the tree hierarchy.
-/// *   [id]: A stable identifier (e.g., database ID) used to persist selection
-///     state across tree rebuilds.
+/// ### Behavior
+/// *   **Identity:** The [id] must be stable (e.g., a database PK or file path) to
+///     persist selection states across tree rebuilds.
+/// *   **Positioning:** [fullPath] determines where this item appears in the
+///     generated [TreeData].
+/// *   **Virtualization:** If [isVirtual] is true, the builder treats it as an
+///     in-memory entity, useful for "New File" placeholders.
 class TreeEntry {
   /// Creates a new [TreeEntry].
   const TreeEntry({

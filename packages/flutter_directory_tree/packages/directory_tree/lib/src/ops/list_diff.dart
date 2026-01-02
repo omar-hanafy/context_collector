@@ -22,18 +22,13 @@ class ListDiff {
   bool get isNoop => removeIndicesDesc.isEmpty && insertIndicesAsc.isEmpty;
 }
 
-/// Calculates the minimal set of operations to transform [before] into [after].
+/// Computes the difference between two flat lists to enable smooth UI animations using [ListDiff].
 ///
-/// This function uses the Longest Increasing Subsequence (LIS) algorithm to
-/// preserve as many existing items as possible, ensuring stable and smooth
-/// UI animations.
-///
-/// ### Performance
-/// Time Complexity: O(N log N)
-///
-/// ### Usage
-/// Call this when the flattened tree changes (e.g., after expansion or
-/// filtering) to determine exactly which rows to animate in or out.
+/// ### Behavior
+/// *   **Minimality:** Uses the Longest Increasing Subsequence (LIS) algorithm to
+///     keep as many rows stable as possible.
+/// *   **Animation:** Returns indices sorted specifically for sequential processing
+///     (removals descending, insertions ascending) to avoid index shifting bugs.
 ListDiff diffVisibleNodes(List<VisibleNode> before, List<VisibleNode> after) {
   if (identical(before, after) ||
       (before.length == after.length && _sameIds(before, after))) {

@@ -1,17 +1,16 @@
 import 'package:directory_tree/src/models/tree_node.dart';
 
-/// An immutable snapshot of the entire directory tree structure.
+/// Holds the complete state of the directory tree at a specific point in time.
 ///
-/// [TreeData] holds the complete graph of [TreeNode]s and metadata about the
-/// tree's root. It is the output of [TreeBuilder.build].
+/// [TreeData] is the "source of truth" for your UI. It contains the graph of
+/// [TreeNode]s and the entry points for traversal.
 ///
-/// ### Usage
-/// *   Pass this object to a [FlattenStrategy] to generate a linear list for
-///     UI rendering.
-/// *   Use [nodes] to look up specific node details by ID.
-///
-/// This class is designed to be inexpensive to copy, facilitating efficient
-/// state management updates (e.g., when toggling expansion).
+/// ### Behavior
+/// *   **Traversal:** Use [nodes] combined with [rootId] or [visibleRootId] to
+///     walk the tree.
+/// *   **Updates:** This class is immutable. To change the tree (e.g., expand a folder),
+///     you typically create a new [TreeData] (or a sidecar state object) rather than mutating this one.
+/// *   **Rendering:** Pass this to [FlattenStrategy.flatten] to produce a renderable list.
 class TreeData {
   /// Creates a new [TreeData] instance.
   const TreeData({

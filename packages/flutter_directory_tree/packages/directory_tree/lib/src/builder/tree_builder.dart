@@ -7,27 +7,21 @@ import 'package:path/path.dart' as p;
 
 /// The engine for constructing a deterministic, normalized directory tree.
 ///
-/// [TreeBuilder] transforms a flat list of [TreeEntry]s and configuration
-/// rules into a structured [TreeData] graph. It handles complex logic such as:
+/// [TreeBuilder] is responsible for taking raw [TreeEntry] items and producing
+/// a navigable [TreeData] graph. It handles the complexity of:
 ///
-/// 1.  **Path Normalization:** Converting Windows/Posix paths to a standard
-///     format.
-/// 2.  **Anchor Compression:** Grouping files under the shallowest possible
-///     common ancestors (TRD §3).
-/// 3.  **Virtual Merging:** Integrating virtual entities with physical
-///     directories.
-/// 4.  **Deduplication:** Handling casing conflicts and duplicate entries.
+/// 1.  **Path Normalization:** Abstracting OS-specific separators so Windows and
+///     POSIX paths behave consistently.
+/// 2.  **Anchor Compression:** Identifying the most logical root folders ("anchors")
+///     to avoid showing empty parent directories (e.g., collapsing `/Users/me/projects`
+///     if all files are inside `projects`).
+/// 3.  **Virtual Merging:** Blending virtual files (in-memory only) with physical
+///     paths seamlessly.
 ///
 /// ### Usage
 ///
-/// ```dart
-/// final builder = TreeBuilder();
-/// final tree = builder.build(
-///   entries: myFiles,
-///   rootFolderLabel: 'Project',
-///   caseInsensitivePaths: true,
-/// );
-/// ```
+/// Call [build] to generate a snapshot. Since this involves sorting and path
+/// parsing, cache the result if the inputs have not changed.
 class TreeBuilder {
   /// The fixed ID for the absolute root node.
   static const String rootId = 'root';
@@ -43,8 +37,10 @@ class TreeBuilder {
   static final _safeIdChars = RegExp('[^a-zA-Z0-9_-]');
   static final _safeVirtualIdChars = RegExp('[^a-zA-Z0-9/_-]');
 
-  /// Canonicalizes a path to a normalized, POSIX-like form.
-  /// Adds an optional [unicodeNormalize] hook (e.g., NFC).
+  /// Normalizes a path to a standard POSIX-like form to ensure consistent IDs.
+  ///
+  /// This handles Windows drive letters, backslashes, and optional Unicode
+  /// normalization (e.g., NFC) to prevent duplicate nodes for the same file.
   static String _canonicalize(
     String input, {
     String Function(String)? unicodeNormalize,
@@ -89,21 +85,20 @@ class TreeBuilder {
     return normalized.isEmpty ? '/' : normalized;
   }
 
-  /// Generates a [TreeData] snapshot from the provided inputs.
+  /// Generates a new [TreeData] snapshot from the provided inputs.
   ///
-  /// This is a pure function: it does not modify the inputs.
+  /// Use this method to transform a raw list of [entries] into a structured graph.
+  /// This function is pure but computationally intensive for large datasets;
+  /// prefer running it in an isolate if processing thousands of entries.
   ///
-  /// ### Key Parameters
-  ///
-  /// *   [entries]: The raw list of files/items to include in the tree.
-  /// *   [selectedDirectories]: Explicitly included folder paths (TRD "Direct
-  ///     Selections"). These will be rendered even if empty.
-  /// *   [rootFolderLabel]: The display name for the top-level virtual root
-  ///     folder.
-  /// *   [stripPrefixes]: Paths to strip from the beginning of entry paths
-  ///     (e.g., removing the project root path to show relative paths).
-  /// *   [autoComputeAnchors]: If true, automatically calculates the optimal
-  ///     top-level folders based on the input entries.
+  /// ### Behavior
+  /// *   **Anchoring:** If [autoComputeAnchors] is true (default), the tree will
+  ///     automatically find the common ancestors of all files and use them as top-level
+  ///     folders, hiding empty parents.
+  /// *   **Normalization:** All paths are converted to POSIX style ('/') internally
+  ///     to ensure consistent IDs and sorting.
+  /// *   **Filtering:** [stripPrefixes] can be used to remove repetitive parts of
+  ///     paths (like the project root) from the display, making the tree look relative.
   ///
   /// Returns a completely new [TreeData] instance ready for flattening.
   TreeData build({

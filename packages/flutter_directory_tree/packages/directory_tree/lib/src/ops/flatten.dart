@@ -5,14 +5,14 @@ import 'package:directory_tree/src/ops/search_filter.dart';
 import 'package:directory_tree/src/ops/sort_delegate.dart';
 import 'package:directory_tree/src/ops/visible_node.dart';
 
-/// Defines the algorithm for traversing the [TreeData] graph into a linear list.
+/// Determines how the hierarchical tree is converted into a linear list for rendering.
 ///
-/// Implementations determine the order of nodes (e.g., DFS vs. BFS),
-/// handling of expansion state, and applying filters.
+/// Implement this to define the "view" of your tree (e.g., standard Explorer,
+/// search results, or filtered views).
 ///
-/// ### Usage
-/// Override this to implement custom traversal logic (e.g., specific sorting
-/// or grouping requirements).
+/// ### Behavior
+/// *   **Expansion:** Implementations must respect [expandedIds] to decide which children to show.
+/// *   **Filtering:** If [filterQuery] is present, prune the tree to show only matching nodes.
 abstract class FlattenStrategy {
   /// Abstract constant constructor.
   const FlattenStrategy();
@@ -29,19 +29,14 @@ abstract class FlattenStrategy {
   });
 }
 
-/// A standard Depth-First Search (DFS) flattening strategy.
+/// Traverses the tree depth-first, respecting expansion state.
 ///
-/// This strategy simulates a typical file explorer view:
-/// 1.  Starts at the visible root.
-/// 2.  Traverses children if the parent is expanded.
-/// 3.  Applies the optional [filterQuery] to prune unrelated nodes.
+/// Use this for standard file explorer behavior.
 ///
-/// ### Filtering Logic
-/// If a filter is active, this strategy includes:
-/// *   Nodes that match the filter directly.
-/// *   Ancestors of matching nodes (to preserve context).
-/// *   Descendants are *not* automatically included unless they also match
-///     (or if the filter logic changes in a subclass).
+/// ### Behavior
+/// *   **Order:** Visits folders then their children recursively.
+/// *   **Filtering:** If a filter is active, it includes matching nodes AND their
+///     ancestors (to preserve context), even if the ancestors don't match.
 class DefaultFlattenStrategy extends FlattenStrategy {
   /// Creates a default DFS-based flattening strategy.
   const DefaultFlattenStrategy();
@@ -122,10 +117,9 @@ class DefaultFlattenStrategy extends FlattenStrategy {
   }
 }
 
-/// A flattening strategy that enforces a specific sort order on children.
+/// Wraps the default traversal but sorts children using a [SortDelegate] before visiting them.
 ///
-/// Use this when the default "folders first, then files" or simple alphabetical
-/// sort is insufficient, and you need custom logic via a [SortDelegate].
+/// Use this when you need strict ordering (e.g., "Folders first", "Alphabetical").
 class SortedFlattenStrategy extends DefaultFlattenStrategy {
   /// Creates a flattening strategy that sorts children using [delegate].
   const SortedFlattenStrategy(this.delegate);

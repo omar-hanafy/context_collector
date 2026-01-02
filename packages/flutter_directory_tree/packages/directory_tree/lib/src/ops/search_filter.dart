@@ -2,13 +2,11 @@
 /// A function that returns true if a node matches the criteria.
 typedef Predicate = bool Function(String name, String? ext);
 
-/// Parses a raw search string into a structured [Predicate].
+/// Converts a user-typed query string into a testable predicate.
 ///
-/// Supports simple search syntax for power users:
-///
-/// *   `text`: Matches any name containing "text" (case-insensitive).
-/// *   `ext:json`: Matches files ending in `.json`.
-/// *   `!text`: Excludes items containing "text".
+/// ### Behavior
+/// *   **Syntax:** Supports `text`, `ext:json`, and `!exclusion` logic.
+/// *   **Combination:** All terms must match (AND logic).
 ///
 /// ### Example
 /// `compileFilter("src !test ext:dart")` matches Dart files in "src" that are

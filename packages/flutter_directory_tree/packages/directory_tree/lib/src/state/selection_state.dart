@@ -9,15 +9,12 @@ enum SelectionMode {
   multi,
 }
 
-/// Manages the set of currently selected node IDs.
+/// Tracks selected items and enforces selection modes.
 ///
-/// Handles complex selection logic like single vs. multi-select,
-/// range selection (Shift+Click), and toggling.
-///
-/// ### Usage
-/// *   **Click:** Use [toggle] or [selectOnly] based on keyboard modifiers.
-/// *   **Shift+Click:** Use [selectRange] to select a block of items.
-/// *   **Data Binding:** Exposes [selectedIds] for UI rendering.
+/// ### Behavior
+/// *   **Single Mode:** [toggle] replaces the current selection.
+/// *   **Multi Mode:** [toggle] adds/removes individual items.
+/// *   **Range:** [selectRange] fills the gap between two anchors (Shift+Click behavior).
 class SelectionSet {
   /// Creates a new [SelectionSet].
   SelectionSet({this.mode = SelectionMode.single});

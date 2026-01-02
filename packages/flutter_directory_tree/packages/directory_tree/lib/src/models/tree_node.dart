@@ -29,17 +29,16 @@ enum SelectionOrigin {
   direct,
 }
 
-/// A single node in the immutable tree graph.
+/// A vertex in the [TreeData] graph representing a file or folder.
 ///
-/// [TreeNode] represents both directories and files. It contains the structural
-/// links ([childIds], [parentId]) and display properties ([name],
-/// [isExpanded]).
+/// [TreeNode] contains the structural connections (parent/children) and visual
+/// state needed to render the tree.
 ///
-/// ### Virtual vs. Source Paths
-/// *   [sourcePath]: The actual file system path (if applicable). Use this for
-///     file operations (read/write).
-/// *   [virtualPath]: The normalized path within the *virtual* tree. Use this
-///     for UI logic and deterministic ID generation.
+/// ### Behavior
+/// *   **Navigation:** Use [childIds] to traverse down and [parentId] to traverse up.
+/// *   **File IO:** Use [sourcePath] for physical file operations.
+/// *   **UI Logic:** Use [virtualPath] for display logic and finding nodes, as it
+///     is normalized and deterministic.
 class TreeNode extends Equatable {
   /// Creates a new [TreeNode].
   TreeNode({
