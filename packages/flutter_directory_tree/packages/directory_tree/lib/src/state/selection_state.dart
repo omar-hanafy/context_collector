@@ -1,16 +1,35 @@
 // lib/src/state/selection_state.dart
 
-enum SelectionMode { single, multi }
+/// Defines how many items can be selected at once.
+enum SelectionMode {
+  /// Only one item can be selected at a time.
+  single,
 
-/// Framework-agnostic selection model that mirrors the Flutter controller API.
+  /// Multiple items can be selected (e.g., via Shift/Ctrl clicks).
+  multi,
+}
+
+/// Manages the set of currently selected node IDs.
+///
+/// Handles complex selection logic like single vs. multi-select,
+/// range selection (Shift+Click), and toggling.
+///
+/// ### Usage
+/// *   **Click:** Use [toggle] or [selectOnly] based on keyboard modifiers.
+/// *   **Shift+Click:** Use [selectRange] to select a block of items.
+/// *   **Data Binding:** Exposes [selectedIds] for UI rendering.
 class SelectionSet {
+  /// Creates a new [SelectionSet].
   SelectionSet({this.mode = SelectionMode.single});
 
+  /// The current selection mode (single or multi).
   SelectionMode mode;
   final Set<String> _selected = <String>{};
 
+  /// Returns true if [id] is selected.
   bool isSelected(String id) => _selected.contains(id);
 
+  /// Returns a read-only view of the selected IDs.
   Set<String> get selectedIds => Set.unmodifiable(_selected);
 
   /// Keeps only [id] in the selection. Returns true if changed.

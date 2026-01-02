@@ -14,11 +14,7 @@ void main() {
           name: 'main.dart',
           fullPath: '/repo/lib/main.dart',
         ),
-        TreeEntry(
-          id: 'readme',
-          name: 'README.md',
-          fullPath: '/repo/README.md',
-        ),
+        TreeEntry(id: 'readme', name: 'README.md', fullPath: '/repo/README.md'),
         TreeEntry(
           id: 'virtual',
           name: 'Scratch.txt',
@@ -234,10 +230,7 @@ void main() {
       );
 
       expect(hyphenFolder.id, isNot(underscoreFolder.id));
-      expect(
-        data.nodes[hyphenFolder.id]!.childIds,
-        contains('node_hyphen'),
-      );
+      expect(data.nodes[hyphenFolder.id]!.childIds, contains('node_hyphen'));
       expect(
         data.nodes[underscoreFolder.id]!.childIds,
         contains('node_underscore'),
@@ -443,10 +436,7 @@ void main() {
 
       final fileNode = data.nodes['node_network']!;
       expect(fileNode.virtualPath, '/tree/share/lib/file.dart');
-      expect(
-        fileNode.sourcePath,
-        contains(r'\server\share\lib\file.dart'),
-      );
+      expect(fileNode.sourcePath, contains(r'\server\share\lib\file.dart'));
     });
 
     test('two roots with the same basename become unique siblings', () {
@@ -698,16 +688,8 @@ void main() {
     test('handles empty sourceRoots by grouping on directory', () {
       final data = builder.build(
         entries: const [
-          TreeEntry(
-            id: 'a',
-            name: 'a.dart',
-            fullPath: '/x/y/a.dart',
-          ),
-          TreeEntry(
-            id: 'b',
-            name: 'b.dart',
-            fullPath: '/x/z/b.dart',
-          ),
+          TreeEntry(id: 'a', name: 'a.dart', fullPath: '/x/y/a.dart'),
+          TreeEntry(id: 'b', name: 'b.dart', fullPath: '/x/z/b.dart'),
         ],
         sourceRoots: const [],
       );

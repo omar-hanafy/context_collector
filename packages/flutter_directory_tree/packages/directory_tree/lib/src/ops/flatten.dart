@@ -1,4 +1,3 @@
-// lib/src/ops/flatten.dart
 import 'package:directory_tree/src/models/tree_data.dart';
 import 'package:directory_tree/src/models/tree_node.dart';
 import 'package:directory_tree/src/ops/path_utils.dart';
@@ -6,10 +5,23 @@ import 'package:directory_tree/src/ops/search_filter.dart';
 import 'package:directory_tree/src/ops/sort_delegate.dart';
 import 'package:directory_tree/src/ops/visible_node.dart';
 
-/// Strategy interface so downstream users can swap the algorithm later.
+/// Defines the algorithm for traversing the [TreeData] graph into a linear list.
+///
+/// Implementations determine the order of nodes (e.g., DFS vs. BFS),
+/// handling of expansion state, and applying filters.
+///
+/// ### Usage
+/// Override this to implement custom traversal logic (e.g., specific sorting
+/// or grouping requirements).
 abstract class FlattenStrategy {
+  /// Abstract constant constructor.
   const FlattenStrategy();
 
+  /// Transforms the tree into a flat list of visible nodes.
+  ///
+  /// *   [data]: The tree structure to flatten.
+  /// *   [expandedIds]: Set of folder IDs that are currently expanded.
+  /// *   [filterQuery]: Optional search query to filter the tree.
   List<VisibleNode> flatten({
     required TreeData data,
     required Set<String> expandedIds,
@@ -17,11 +29,21 @@ abstract class FlattenStrategy {
   });
 }
 
-/// Default DFS-based flatten:
-/// - Always includes `visibleRootId` as depth 0
-/// - Honors expansion state for folders (visible root is implicitly expanded)
-/// - If filter is provided, shows matching nodes and the ancestors needed
+/// A standard Depth-First Search (DFS) flattening strategy.
+///
+/// This strategy simulates a typical file explorer view:
+/// 1.  Starts at the visible root.
+/// 2.  Traverses children if the parent is expanded.
+/// 3.  Applies the optional [filterQuery] to prune unrelated nodes.
+///
+/// ### Filtering Logic
+/// If a filter is active, this strategy includes:
+/// *   Nodes that match the filter directly.
+/// *   Ancestors of matching nodes (to preserve context).
+/// *   Descendants are *not* automatically included unless they also match
+///     (or if the filter logic changes in a subclass).
 class DefaultFlattenStrategy extends FlattenStrategy {
+  /// Creates a default DFS-based flattening strategy.
   const DefaultFlattenStrategy();
 
   @override
@@ -100,9 +122,15 @@ class DefaultFlattenStrategy extends FlattenStrategy {
   }
 }
 
-/// Same as default flatten but uses a SortDelegate for child ordering.
+/// A flattening strategy that enforces a specific sort order on children.
+///
+/// Use this when the default "folders first, then files" or simple alphabetical
+/// sort is insufficient, and you need custom logic via a [SortDelegate].
 class SortedFlattenStrategy extends DefaultFlattenStrategy {
+  /// Creates a flattening strategy that sorts children using [delegate].
   const SortedFlattenStrategy(this.delegate);
+
+  /// The delegate responsible for sorting children.
   final SortDelegate delegate;
 
   @override

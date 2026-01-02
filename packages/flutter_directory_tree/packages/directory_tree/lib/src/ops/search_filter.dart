@@ -1,10 +1,18 @@
 // lib/src/ops/search_filter.dart
+/// A function that returns true if a node matches the criteria.
 typedef Predicate = bool Function(String name, String? ext);
 
-/// Parse a query like "foo ext:dart !bar" into a predicate:
-/// - plain tokens => substring (case-insensitive)
-/// - ext:xyz       => file extension equals ".xyz"
-/// - !token        => negated substring
+/// Parses a raw search string into a structured [Predicate].
+///
+/// Supports simple search syntax for power users:
+///
+/// *   `text`: Matches any name containing "text" (case-insensitive).
+/// *   `ext:json`: Matches files ending in `.json`.
+/// *   `!text`: Excludes items containing "text".
+///
+/// ### Example
+/// `compileFilter("src !test ext:dart")` matches Dart files in "src" that are
+/// not in "test".
 Predicate compileFilter(String? query) {
   if (query == null) return _alwaysTrue;
   final raw = query.trim();

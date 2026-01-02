@@ -1,12 +1,23 @@
 // lib/src/state/expansion_state.dart
 
-/// Mutable set of expanded node ids without any framework dependencies.
+/// Manages the set of currently expanded folder IDs.
+///
+/// This class is a pure Dart implementation, free of Flutter dependencies,
+/// allowing it to be used in ViewModels or BLoCs that are testable in
+/// isolation.
+///
+/// ### Key Features
+/// *   **Toggle:** [toggle] expansion state of a node.
+/// *   **Bulk Operations:** [expandAll] and [collapseAll].
+/// *   **Query:** Check [isExpanded] status efficiently.
 class ExpansionSet {
+  /// Creates a new [ExpansionSet], optionally with initial IDs.
   ExpansionSet({Set<String>? initiallyExpanded})
     : _expanded = {...?initiallyExpanded};
 
   final Set<String> _expanded;
 
+  /// Returns true if [id] is currently expanded.
   bool isExpanded(String id) => _expanded.contains(id);
 
   /// Adds or removes [id] depending on [expanded]. Returns true if changed.
@@ -42,5 +53,6 @@ class ExpansionSet {
     return before != _expanded.length;
   }
 
+  /// Returns a read-only view of the expanded IDs.
   Set<String> get expandedIds => Set.unmodifiable(_expanded);
 }

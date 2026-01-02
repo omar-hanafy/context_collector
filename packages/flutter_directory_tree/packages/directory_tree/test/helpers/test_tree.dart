@@ -70,9 +70,5 @@ TreeData buildTestTreeData() {
     ),
   };
 
-  return TreeData(
-    nodes: nodes,
-    rootId: 'root',
-    visibleRootId: 'home',
-  );
+  return TreeData(nodes: nodes, rootId: 'root', visibleRootId: 'home');
 }

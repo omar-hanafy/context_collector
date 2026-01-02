@@ -1,7 +1,22 @@
-// Directory tree utilities.
-//
-// Exposes the core data models and `TreeBuilder` for constructing a
-// deterministic virtual tree that can be consumed by Flutter or CLI UIs.
+/// The core entry point for the `directory_tree` package.
+///
+/// This library provides a complete toolkit for building, managing, and
+/// interacting with virtual file system trees. It is designed to be
+/// framework-agnostic, making it suitable for both Flutter UIs and CLI
+/// applications.
+///
+/// ### Core Concepts
+///
+/// *   **Builder:** Use [TreeBuilder] to transform raw file entries into a
+///     structured, deterministic [TreeData] graph.
+/// *   **Models:** [TreeEntry] (input), [TreeNode] (graph node), and [TreeData]
+///     (immutable tree state).
+/// *   **Operations:** Utilities for flattening the tree for display
+///     ([FlattenStrategy]), calculating diffs ([diffVisibleNodes]), and
+///     managing selection/expansion.
+///
+/// ### Usage Example
+library;
 
 export 'src/builder/tree_builder.dart';
 export 'src/models/tree_data.dart';

@@ -5,16 +5,43 @@ import 'package:directory_tree/src/models/tree_entry.dart';
 import 'package:directory_tree/src/models/tree_node.dart';
 import 'package:path/path.dart' as p;
 
-/// Builds a deterministic tree from entries + anchors (TRD-compliant).
-/// Result shape:
-/// root (invisible)
-/// └─ tree/ (visible top-level folder label)
-///    ├─ `topParent1`/...
-///    └─ `topParent2`/...
+/// The engine for constructing a deterministic, normalized directory tree.
+///
+/// [TreeBuilder] transforms a flat list of [TreeEntry]s and configuration
+/// rules into a structured [TreeData] graph. It handles complex logic such as:
+///
+/// 1.  **Path Normalization:** Converting Windows/Posix paths to a standard
+///     format.
+/// 2.  **Anchor Compression:** Grouping files under the shallowest possible
+///     common ancestors (TRD §3).
+/// 3.  **Virtual Merging:** Integrating virtual entities with physical
+///     directories.
+/// 4.  **Deduplication:** Handling casing conflicts and duplicate entries.
+///
+/// ### Usage
+///
+/// ```dart
+/// final builder = TreeBuilder();
+/// final tree = builder.build(
+///   entries: myFiles,
+///   rootFolderLabel: 'Project',
+///   caseInsensitivePaths: true,
+/// );
+/// ```
 class TreeBuilder {
+  /// The fixed ID for the absolute root node.
   static const String rootId = 'root';
+
+  /// The fixed ID for the visible tree root node.
   static const String treeRootId = 'tree_root';
+
   static final p.Context _ctx = p.posix;
+
+  // Optimized RegExps
+  static final _windowsDrivePattern = RegExp(r'^[a-zA-Z]:([/\\])');
+  static final _windowsDriveRoot = RegExp('^[a-zA-Z]:/');
+  static final _safeIdChars = RegExp('[^a-zA-Z0-9_-]');
+  static final _safeVirtualIdChars = RegExp('[^a-zA-Z0-9/_-]');
 
   /// Canonicalizes a path to a normalized, POSIX-like form.
   /// Adds an optional [unicodeNormalize] hook (e.g., NFC).
@@ -38,17 +65,14 @@ class TreeBuilder {
     }
 
     // Windows drive handling
-    sanitized = sanitized.replaceFirstMapped(
-      RegExp(r'^[a-zA-Z]:([/\\])'),
-      (m) {
-        final drive = m[0]![0].toUpperCase();
-        final remainder = m[0]!.substring(1).replaceAll(backslash, '/');
-        return '$drive$remainder';
-      },
-    );
+    sanitized = sanitized.replaceFirstMapped(_windowsDrivePattern, (m) {
+      final drive = m[0]![0].toUpperCase();
+      final remainder = m[0]!.substring(1).replaceAll(backslash, '/');
+      return '$drive$remainder';
+    });
 
     final isWindowsLike =
-        RegExp('^[a-zA-Z]:/').hasMatch(sanitized) || sanitized.startsWith('//');
+        _windowsDriveRoot.hasMatch(sanitized) || sanitized.startsWith('//');
     final uri = Uri.file(sanitized, windows: isWindowsLike);
     var canonical = uri.path.isEmpty ? '/' : uri.path;
     canonical = Uri.decodeComponent(canonical);
@@ -57,7 +81,7 @@ class TreeBuilder {
     if (isWindowsLike &&
         canonical.startsWith('/') &&
         canonical.length > 1 &&
-        RegExp('^[A-Za-z]:/').hasMatch(canonical.substring(1))) {
+        _windowsDriveRoot.hasMatch(canonical.substring(1))) {
       canonical = canonical.substring(1);
     }
 
@@ -65,11 +89,28 @@ class TreeBuilder {
     return normalized.isEmpty ? '/' : normalized;
   }
 
+  /// Generates a [TreeData] snapshot from the provided inputs.
+  ///
+  /// This is a pure function: it does not modify the inputs.
+  ///
+  /// ### Key Parameters
+  ///
+  /// *   [entries]: The raw list of files/items to include in the tree.
+  /// *   [selectedDirectories]: Explicitly included folder paths (TRD "Direct
+  ///     Selections"). These will be rendered even if empty.
+  /// *   [rootFolderLabel]: The display name for the top-level virtual root
+  ///     folder.
+  /// *   [stripPrefixes]: Paths to strip from the beginning of entry paths
+  ///     (e.g., removing the project root path to show relative paths).
+  /// *   [autoComputeAnchors]: If true, automatically calculates the optimal
+  ///     top-level folders based on the input entries.
+  ///
+  /// Returns a completely new [TreeData] instance ready for flattening.
   TreeData build({
     required List<TreeEntry> entries,
 
-    /// Optional legacy roots. If [autoComputeAnchors] is true, these are merged
-    /// into the computed anchor set before compression.
+    /// Optional legacy roots. If [autoComputeAnchors] is true, these are
+    /// merged into the computed anchor set before compression.
     List<String> sourceRoots = const [],
 
     /// TRD: directories the user directly selected (render even if empty).
@@ -176,6 +217,118 @@ class TreeBuilder {
     }
 
     // === 1) Normalize + dedup physical file entries by path (TRD §3.7) ===
+    final fileRecords = _normalizeAndDedupEntries(
+      entries: entries,
+      unicodeNormalize: unicodeNormalize,
+      fold: fold,
+    );
+
+    // === 2) Build anchor universe ===
+    final anchorUniverse = _buildAnchorUniverse(
+      fileRecords: fileRecords,
+      selectedDirectories: selectedDirectories,
+      sourceRoots: sourceRoots,
+      unicodeNormalize: unicodeNormalize,
+      fold: fold,
+      autoComputeAnchors: autoComputeAnchors,
+    );
+
+    // === 3) Compress anchors by ancestry (keep highest / shallowest) ===
+    final topAnchors = _compressAnchors(anchorUniverse, caseInsensitivePaths);
+
+    // === 4) Group files under their single top parent ===
+    final grouped = _groupFilesByTopAnchor(
+      fileRecords: fileRecords,
+      topAnchors: topAnchors,
+      caseInsensitivePaths: caseInsensitivePaths,
+    );
+
+    // === 5) One folder per top anchor under /tree ===
+    final sortedRootPaths = topAnchors.toList()..sort();
+    final rootLabels = _uniqueRootLabels(sortedRootPaths);
+    final rootIds = {
+      for (final canonicalPath in sortedRootPaths)
+        canonicalPath: _stableRootIdFor(canonicalPath),
+    };
+
+    final selectedDirCanonByKey = <String, String>{};
+    for (final dir in selectedDirectories) {
+      final canon = _canonicalize(dir, unicodeNormalize: unicodeNormalize);
+      final key = fold(canon);
+      selectedDirCanonByKey[key] = canon;
+    }
+    final selectedDirKeys = selectedDirCanonByKey.keys.toSet();
+
+    _buildTopLevelFolders(
+      nodes: nodes,
+      folderCanonicalPaths: folderCanonicalPaths,
+      sortedRootPaths: sortedRootPaths,
+      rootLabels: rootLabels,
+      rootIds: rootIds,
+      grouped: grouped,
+      stripPath: stripPath,
+      selectedDirKeys: selectedDirKeys,
+      expandFoldersByDefault: expandFoldersByDefault,
+      mergeVirtualIntoRealFolders: mergeVirtualIntoRealFolders,
+      caseInsensitivePaths: caseInsensitivePaths,
+      selectNewFilesByDefault: selectNewFilesByDefault,
+      fold: fold,
+    );
+
+    // === 6) Materialize chains for directly selected subdirectories ===
+    // (So directory-only selections nested under a top anchor still appear.)
+    _materializeSelectedSubdirectories(
+      nodes: nodes,
+      folderCanonicalPaths: folderCanonicalPaths,
+      selectedDirCanon: selectedDirCanonByKey.values.toSet(),
+      topAnchors: topAnchors,
+      rootIds: rootIds,
+      expandFoldersByDefault: expandFoldersByDefault,
+      mergeVirtualIntoRealFolders: mergeVirtualIntoRealFolders,
+      caseInsensitivePaths: caseInsensitivePaths,
+    );
+
+    // === 7) Place virtual entries ===
+    _processVirtualEntries(
+      nodes: nodes,
+      folderCanonicalPaths: folderCanonicalPaths,
+      entries: entries,
+      selectNewFilesByDefault: selectNewFilesByDefault,
+      expandFoldersByDefault: expandFoldersByDefault,
+      mergeVirtualIntoRealFolders: mergeVirtualIntoRealFolders,
+      caseInsensitivePaths: caseInsensitivePaths,
+    );
+
+    if (sortChildrenByName) {
+      _sortAllChildren(nodes);
+    }
+
+    final visibleRootId = autoPickVisibleRoot
+        ? _autoPickVisibleRoot(
+            nodes: nodes,
+            ignoreVirtualFiles: visibleRootIgnoreVirtualFiles,
+            maxLevels: visibleRootMaxHoistLevels,
+          )
+        : treeRootId;
+
+    assert(() {
+      _assertTree(nodes, rootId);
+      return true;
+    }(), 'Tree structure failed validation.');
+
+    return TreeData(
+      nodes: nodes,
+      rootId: rootId,
+      visibleRootId: visibleRootId,
+      omitContainerRowAtRoot: omitContainerRowAtRoot,
+    );
+  }
+
+  List<_EntryRecord> _normalizeAndDedupEntries({
+    required List<TreeEntry> entries,
+    required String Function(String) fold,
+    String Function(String)? unicodeNormalize,
+  }) {
     final fileRecords = <_EntryRecord>[];
     final seenFileByPath = <String>{};
     for (final e in entries.where((e) => !e.isVirtual)) {
@@ -184,33 +337,44 @@ class TreeBuilder {
       if (!seenFileByPath.add(key)) continue; // drop exact duplicates by path
       fileRecords.add(_EntryRecord(entry: e, canonicalPath: cf));
     }
+    return fileRecords;
+  }
 
-    // === 2) Build anchor universe ===
+  Set<String> _buildAnchorUniverse({
+    required List<_EntryRecord> fileRecords,
+    required List<String> selectedDirectories,
+    required List<String> sourceRoots,
+    required String Function(String) fold,
+    required bool autoComputeAnchors,
+    String Function(String)? unicodeNormalize,
+  }) {
     final fileAnchors = <String>{
       for (final r in fileRecords) _ctx.dirname(r.canonicalPath),
     };
-    final selectedDirCanonByKey = <String, String>{};
+
+    final selectedDirCanon = <String>{};
     for (final dir in selectedDirectories) {
       final canon = _canonicalize(dir, unicodeNormalize: unicodeNormalize);
-      final key = fold(canon);
-      selectedDirCanonByKey[key] = canon;
+      selectedDirCanon.add(canon);
     }
-    final selectedDirCanon = selectedDirCanonByKey.values.toSet();
-    final selectedDirKeys = selectedDirCanonByKey.keys.toSet();
+
     final legacyRoots = <String>{
       for (final r in sourceRoots)
         _canonicalize(r, unicodeNormalize: unicodeNormalize),
     };
 
-    final anchorUniverse = autoComputeAnchors
+    return autoComputeAnchors
         ? {...fileAnchors, ...selectedDirCanon, ...legacyRoots}
         : {...legacyRoots}; // honoring legacy mode if needed
+  }
 
-    // === 3) Compress anchors by ancestry (keep highest / shallowest) ===
-    final topAnchors = _compressAnchors(anchorUniverse, caseInsensitivePaths);
-
-    // === 4) Group files under their single top parent ===
+  Map<String, List<_EntryRecord>> _groupFilesByTopAnchor({
+    required List<_EntryRecord> fileRecords,
+    required List<String> topAnchors,
+    required bool caseInsensitivePaths,
+  }) {
     final grouped = <String, List<_EntryRecord>>{};
+
     String? chooseTopFor(String fullPath) {
       // Find the shallowest top anchor that is an ancestor of [fullPath].
       for (final a in topAnchors) {
@@ -227,18 +391,29 @@ class TreeBuilder {
           _ctx.dirname(r.canonicalPath); // defensive fallback
       (grouped[top] ??= []).add(r);
     }
+
     // Ensure directory-only selections appear, even if they have no files.
     for (final a in topAnchors) {
       grouped.putIfAbsent(a, () => <_EntryRecord>[]);
     }
+    return grouped;
+  }
 
-    // === 5) One folder per top anchor under /tree ===
-    final sortedRootPaths = topAnchors.toList()..sort();
-    final rootLabels = _uniqueRootLabels(sortedRootPaths);
-    final rootIds = {
-      for (final canonicalPath in sortedRootPaths)
-        canonicalPath: _stableRootIdFor(canonicalPath),
-    };
+  void _buildTopLevelFolders({
+    required Map<String, TreeNode> nodes,
+    required Map<String, String> folderCanonicalPaths,
+    required List<String> sortedRootPaths,
+    required Map<String, String> rootLabels,
+    required Map<String, String> rootIds,
+    required Map<String, List<_EntryRecord>> grouped,
+    required String Function(String) stripPath,
+    required Set<String> selectedDirKeys,
+    required bool expandFoldersByDefault,
+    required bool mergeVirtualIntoRealFolders,
+    required bool caseInsensitivePaths,
+    required bool selectNewFilesByDefault,
+    required String Function(String) fold,
+  }) {
     for (final canonicalSourcePath in sortedRootPaths) {
       final folderName =
           rootLabels[canonicalSourcePath] ?? _ctx.basename(canonicalSourcePath);
@@ -281,9 +456,18 @@ class TreeBuilder {
         );
       }
     }
+  }
 
-    // === 6) Materialize chains for directly selected subdirectories ===
-    // (So directory-only selections nested under a top anchor still appear.)
+  void _materializeSelectedSubdirectories({
+    required Map<String, TreeNode> nodes,
+    required Map<String, String> folderCanonicalPaths,
+    required Set<String> selectedDirCanon,
+    required List<String> topAnchors,
+    required Map<String, String> rootIds,
+    required bool expandFoldersByDefault,
+    required bool mergeVirtualIntoRealFolders,
+    required bool caseInsensitivePaths,
+  }) {
     for (final dirCanon in selectedDirCanon) {
       // Find its governing top anchor; if none found (unlikely), treat itself as top.
       final top = topAnchors.firstWhere(
@@ -320,16 +504,23 @@ class TreeBuilder {
           expanded: expandFoldersByDefault,
           mergeVirtualIntoRealFolders: mergeVirtualIntoRealFolders,
           caseInsensitivePaths: caseInsensitivePaths,
-          origin: isLeaf
-              ? SelectionOrigin.direct
-              : SelectionOrigin.inferred,
+          origin: isLeaf ? SelectionOrigin.direct : SelectionOrigin.inferred,
         );
         parentId = folder.id;
         parentVirtualPath = folder.virtualPath;
       }
     }
+  }
 
-    // === 7) Place virtual entries ===
+  void _processVirtualEntries({
+    required Map<String, TreeNode> nodes,
+    required Map<String, String> folderCanonicalPaths,
+    required List<TreeEntry> entries,
+    required bool selectNewFilesByDefault,
+    required bool expandFoldersByDefault,
+    required bool mergeVirtualIntoRealFolders,
+    required bool caseInsensitivePaths,
+  }) {
     for (final e in entries.where((e) => e.isVirtual)) {
       final parentSpec = (e.metadata?['virtualParent'] as String?)?.trim();
       if (parentSpec == null || parentSpec.isEmpty) {
@@ -376,33 +567,6 @@ class TreeBuilder {
         select: selectNewFilesByDefault,
       );
     }
-
-    if (sortChildrenByName) {
-      _sortAllChildren(nodes);
-    }
-
-    final visibleRootId = autoPickVisibleRoot
-        ? _autoPickVisibleRoot(
-            nodes: nodes,
-            ignoreVirtualFiles: visibleRootIgnoreVirtualFiles,
-            maxLevels: visibleRootMaxHoistLevels,
-          )
-        : treeRootId;
-
-    assert(
-      () {
-        _assertTree(nodes, rootId);
-        return true;
-      }(),
-      'Tree structure failed validation.',
-    );
-
-    return TreeData(
-      nodes: nodes,
-      rootId: rootId,
-      visibleRootId: visibleRootId,
-      omitContainerRowAtRoot: omitContainerRowAtRoot,
-    );
   }
 
   void _addFileAndFolders({
@@ -565,8 +729,8 @@ class TreeBuilder {
       final existingKey = existingCanonical == null
           ? null
           : (caseInsensitivePaths
-              ? existingCanonical.toLowerCase()
-              : existingCanonical);
+                ? existingCanonical.toLowerCase()
+                : existingCanonical);
       final bothNull = canonKey == null && existingKey == null;
       final bothEqual =
           canonKey != null && existingKey != null && existingKey == canonKey;
@@ -636,7 +800,7 @@ class TreeBuilder {
         .where((segment) => segment.isNotEmpty)
         .toList();
     final base = segments.isNotEmpty ? segments.last : 'root';
-    final sanitizedBase = base.replaceAll(RegExp('[^a-zA-Z0-9_-]'), '_');
+    final sanitizedBase = base.replaceAll(_safeIdChars, '_');
     final digest = base64Url
         .encode(utf8.encode(canonicalSourcePath))
         .replaceAll('=', '');
@@ -648,7 +812,7 @@ class TreeBuilder {
     final normalized = virtualPath.contains(backslash)
         ? virtualPath.replaceAll(backslash, '/')
         : virtualPath;
-    final sanitized = normalized.replaceAll(RegExp('[^a-zA-Z0-9/_-]'), '_');
+    final sanitized = normalized.replaceAll(_safeVirtualIdChars, '_');
     final label = sanitized.replaceAll('/', '_');
     final digest = base64Url
         .encode(utf8.encode(normalized))
@@ -716,7 +880,7 @@ class TreeBuilder {
         .where((s) => s.isNotEmpty)
         .toList();
     final base = segments.isNotEmpty ? segments.last : 'root';
-    final sanitizedBase = base.replaceAll(RegExp('[^a-zA-Z0-9_-]'), '_');
+    final sanitizedBase = base.replaceAll(_safeIdChars, '_');
     final digest = base64Url
         .encode(utf8.encode(canonicalSourcePath))
         .replaceAll('=', '');
@@ -731,9 +895,7 @@ class TreeBuilder {
       for (final path in canonicalPaths)
         path: _ctx.split(path).where((s) => s.isNotEmpty).toList(),
     };
-    final take = <String, int>{
-      for (final path in canonicalPaths) path: 1,
-    };
+    final take = <String, int>{for (final path in canonicalPaths) path: 1};
 
     String labelFor(String path) {
       final segs = segments[path]!;
@@ -831,7 +993,8 @@ class TreeBuilder {
     SelectionOrigin current,
     SelectionOrigin incoming,
   ) {
-    if (current == SelectionOrigin.direct || incoming == SelectionOrigin.direct) {
+    if (current == SelectionOrigin.direct ||
+        incoming == SelectionOrigin.direct) {
       return SelectionOrigin.direct;
     }
     if (current == SelectionOrigin.inferred ||
@@ -896,10 +1059,7 @@ class TreeBuilder {
 }
 
 class _EntryRecord {
-  const _EntryRecord({
-    required this.entry,
-    required this.canonicalPath,
-  });
+  const _EntryRecord({required this.entry, required this.canonicalPath});
 
   final TreeEntry entry;
   final String canonicalPath;

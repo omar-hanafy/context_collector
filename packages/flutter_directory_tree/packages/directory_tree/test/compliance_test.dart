@@ -29,11 +29,7 @@ void main() {
   }) {
     final entries = <TreeEntry>[
       for (var i = 0; i < files.length; i++)
-        TreeEntry(
-          id: 'f$i',
-          name: p.basename(files[i]),
-          fullPath: files[i],
-        ),
+        TreeEntry(id: 'f$i', name: p.basename(files[i]), fullPath: files[i]),
     ];
 
     return TreeBuilder().build(
@@ -51,10 +47,7 @@ void main() {
   List<VisibleNode> flattenAll(TreeData data) {
     const flattener = SortedFlattenStrategy(AlphaSortDelegate());
     // Expand everything so we can assert structure precisely.
-    return flattener.flatten(
-      data: data,
-      expandedIds: data.nodes.keys.toSet(),
-    );
+    return flattener.flatten(data: data, expandedIds: data.nodes.keys.toSet());
   }
 
   List<String> depthNames(List<VisibleNode> v, int depth) => v
@@ -353,44 +346,46 @@ void main() {
       );
     });
 
-    test('Windows-style paths normalize & dedup to a single top parent (TRD §8.9)', () {
-      final data = TreeBuilder().build(
-        entries: const [
-          TreeEntry(
-            id: 'A',
-            name: 'a.dart',
-            fullPath: r'C:\work\repo\lib\a.dart',
-          ),
-          TreeEntry(
-            id: 'B',
-            name: 'a.dart',
-            fullPath: 'c:/work/repo/lib/a.dart',
-          ),
-        ],
-        stripPrefixes: const ['C:/work/repo'],
-        caseInsensitivePaths: true,
-      );
-      final vis = flattenAll(data);
+    test(
+      'Windows-style paths normalize & dedup to a single top parent (TRD §8.9)',
+      () {
+        final data = TreeBuilder().build(
+          entries: const [
+            TreeEntry(
+              id: 'A',
+              name: 'a.dart',
+              fullPath: r'C:\work\repo\lib\a.dart',
+            ),
+            TreeEntry(
+              id: 'B',
+              name: 'a.dart',
+              fullPath: 'c:/work/repo/lib/a.dart',
+            ),
+          ],
+          stripPrefixes: const ['C:/work/repo'],
+          caseInsensitivePaths: true,
+        );
+        final vis = flattenAll(data);
 
-      expect(depthNames(vis, 0), equals(['lib']), reason: dump(vis));
-      expect(
-        vis.where((n) => n.type == NodeType.file).length,
-        1,
-        reason: dump(vis),
-      );
-    });
+        expect(depthNames(vis, 0), equals(['lib']), reason: dump(vis));
+        expect(
+          vis.where((n) => n.type == NodeType.file).length,
+          1,
+          reason: dump(vis),
+        );
+      },
+    );
 
     test('Symlink-like literals stay distinct top parents (TRD §8.10)', () {
       const symlinkDir = '$repo/link_to_lib';
-      final data = buildTree(
-        files: [
-          '$lib/a.dart',
-          '$symlinkDir/a.dart',
-        ],
-      );
+      final data = buildTree(files: ['$lib/a.dart', '$symlinkDir/a.dart']);
       final vis = flattenAll(data);
 
-      expect(depthNames(vis, 0), equals(['lib', 'link_to_lib']), reason: dump(vis));
+      expect(
+        depthNames(vis, 0),
+        equals(['lib', 'link_to_lib']),
+        reason: dump(vis),
+      );
       expect(
         vis.where((n) => n.type == NodeType.file && n.name == 'a.dart').length,
         2,
@@ -399,13 +394,19 @@ void main() {
     });
 
     test('Hidden dotfiles render the same as normal files (TRD §8.12)', () {
-      final data = buildTree(
-        files: ['$repo/.env', '$repo/app.dart'],
-      );
+      final data = buildTree(files: ['$repo/.env', '$repo/app.dart']);
       final vis = flattenAll(data);
 
-      expect(depthNames(vis, 0), equals(['context_collector']), reason: dump(vis));
-      final names = childrenOf(vis, 'context_collector', 0).map((n) => n.name).toList();
+      expect(
+        depthNames(vis, 0),
+        equals(['context_collector']),
+        reason: dump(vis),
+      );
+      final names = childrenOf(
+        vis,
+        'context_collector',
+        0,
+      ).map((n) => n.name).toList();
       expect(names, equals(['.env', 'app.dart']), reason: dump(vis));
     });
   });
@@ -413,12 +414,7 @@ void main() {
   // ---------- Ordering & UI surface ----------
   group('Ordering & UI surface (TRD §5, §6)', () {
     test('Folders first then files, alpha by name (case-insensitive)', () {
-      final data = buildTree(
-        files: [
-          '$scan/Zeta.md',
-          '$scan/alpha.md',
-        ],
-      );
+      final data = buildTree(files: ['$scan/Zeta.md', '$scan/alpha.md']);
       final vis = flattenAll(data);
       // Top is scan
       expect(depthNames(vis, 0), equals(['scan']), reason: dump(vis));
@@ -465,12 +461,20 @@ void main() {
       () {
         final before = buildTree(files: [], selectedDirs: [scan, models]);
         final visBefore = flattenAll(before);
-        expect(depthNames(visBefore, 0), equals(['scan']), reason: dump(visBefore));
+        expect(
+          depthNames(visBefore, 0),
+          equals(['scan']),
+          reason: dump(visBefore),
+        );
 
         final after = buildTree(files: [], selectedDirs: [models]);
         final visAfter = flattenAll(after);
 
-        expect(depthNames(visAfter, 0), equals(['models']), reason: dump(visAfter));
+        expect(
+          depthNames(visAfter, 0),
+          equals(['models']),
+          reason: dump(visAfter),
+        );
         expect(
           nodeAt(visAfter, 0, 'models').origin,
           SelectionOrigin.direct,

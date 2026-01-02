@@ -2,17 +2,23 @@
 import 'package:directory_tree/src/models/tree_data.dart';
 import 'package:directory_tree/src/models/tree_node.dart';
 
-/// Lets apps override child ordering under a parent node.
-/// Use with `SortedFlattenStrategy` (see ops/flatten.dart).
+/// Controls how children of a folder are ordered.
+///
+/// Implement this interface to define custom sorting logic (e.g., sort by date,
+/// size, or file type priority). Pass it to [SortedFlattenStrategy].
 abstract class SortDelegate {
+  /// Abstract constant constructor.
   const SortDelegate();
 
   /// Return an ordered list of child ids for `parentId`.
   List<String> sortChildIds(TreeData data, String parentId);
 }
 
-/// Default: Folders first, then files; both case-insensitive by name, then id.
+/// A standard sorter: Folders first, then files, sorted alphabetically.
+///
+/// Comparison is case-insensitive. Ties are broken by node ID.
 class AlphaSortDelegate extends SortDelegate {
+  /// Creates a standard alphabetical sort delegate.
   const AlphaSortDelegate();
 
   @override

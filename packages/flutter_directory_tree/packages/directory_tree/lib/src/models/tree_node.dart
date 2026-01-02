@@ -1,13 +1,47 @@
 import 'package:equatable/equatable.dart';
 import 'package:uuid/uuid.dart';
 
-enum NodeType { root, folder, file }
+/// Describes the type of a node in the tree graph.
+enum NodeType {
+  /// The hidden top-level container for the entire tree structure.
+  root,
 
-/// Marks whether a directory is directly selected by the user (TRD) or
-/// materialized as an inferred intermediate.
-enum SelectionOrigin { none, inferred, direct }
+  /// A container node that can hold other folders or files.
+  folder,
 
+  /// A leaf node representing a specific [TreeEntry].
+  file,
+}
+
+/// Indicates how a folder came to exist in the tree.
+///
+/// This is crucial for "TRD" (Tree Representation Definition) compliance,
+/// allowing the UI to distinguish between folders the user explicitly added
+/// vs. folders created automatically to hold files.
+enum SelectionOrigin {
+  /// Not a folder or unknown origin.
+  none,
+
+  /// Created automatically because it is an ancestor of a file.
+  inferred,
+
+  /// Explicitly added by the user (e.g., "Open Folder").
+  direct,
+}
+
+/// A single node in the immutable tree graph.
+///
+/// [TreeNode] represents both directories and files. It contains the structural
+/// links ([childIds], [parentId]) and display properties ([name],
+/// [isExpanded]).
+///
+/// ### Virtual vs. Source Paths
+/// *   [sourcePath]: The actual file system path (if applicable). Use this for
+///     file operations (read/write).
+/// *   [virtualPath]: The normalized path within the *virtual* tree. Use this
+///     for UI logic and deterministic ID generation.
 class TreeNode extends Equatable {
+  /// Creates a new [TreeNode].
   TreeNode({
     required this.name,
     required this.type,
@@ -21,24 +55,46 @@ class TreeNode extends Equatable {
     this.isSelected = false,
     List<String>? childIds,
     this.origin = SelectionOrigin.none,
-  })  : id = id ?? const Uuid().v4(),
-        childIds = childIds ?? const [];
+  }) : id = id ?? const Uuid().v4(),
+       childIds = childIds ?? const [];
 
+  /// Unique identifier for this node in the graph.
   final String id;
+
+  /// Display name of the node.
   final String name;
+
+  /// The type of node (root, folder, or file).
   final NodeType type;
+
+  /// The ID of the parent node.
   final String parentId;
+
+  /// IDs of the children nodes.
   final List<String> childIds;
 
-  final String? sourcePath; // original path if any
-  final String virtualPath; // path inside the virtual tree
-  final String? entryId; // links to TreeEntry.id (for file nodes)
+  /// Original path if this node corresponds to a real file/folder.
+  final String? sourcePath;
+
+  /// Normalized path inside the virtual tree.
+  final String virtualPath;
+
+  /// Links to [TreeEntry.id] for file nodes.
+  final String? entryId;
+
+  /// Whether this node was created virtually (not on disk).
   final bool isVirtual;
 
-  final bool isExpanded; // default visual state on first build
-  final bool isSelected; // default selection state on first build
-  final SelectionOrigin origin; // differentiates direct vs inferred folders
+  /// Whether the folder is currently expanded in the UI.
+  final bool isExpanded;
 
+  /// Whether the node is selected in the UI.
+  final bool isSelected;
+
+  /// How this node was added to the tree (direct selection vs inferred).
+  final SelectionOrigin origin;
+
+  /// Creates a copy of this node with the given fields replaced.
   TreeNode copyWith({
     String? name,
     bool? isExpanded,

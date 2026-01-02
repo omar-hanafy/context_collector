@@ -1,22 +1,39 @@
 import 'package:directory_tree/src/ops/visible_node.dart';
 
-/// A compact diff: remove indices (from 'before', DESC) + insert indices (for 'after', ASC).
+/// Represents the delta required to transform one list of nodes into another.
+///
+/// This is used for efficient UI updates (e.g., Flutter's `AnimatedList`).
+/// It provides indices to remove (in descending order) and indices to insert
+/// (in ascending order).
 class ListDiff {
+  /// Creates a diff describing changes between two lists.
   const ListDiff({
     required this.removeIndicesDesc,
     required this.insertIndicesAsc,
   });
 
+  /// Indices to remove from the previous list, sorted descending.
   final List<int> removeIndicesDesc;
+
+  /// Indices to insert into the new list, sorted ascending.
   final List<int> insertIndicesAsc;
 
+  /// Returns true if no changes are required.
   bool get isNoop => removeIndicesDesc.isEmpty && insertIndicesAsc.isEmpty;
 }
 
-/// Compute a stable diff between [before] and [after] using item ids.
-/// Keeps the Longest Increasing Subsequence (LIS) of shared ids, removes the rest,
-/// and inserts the “after-only” ids.
-/// Complexity ~ O(n log n) for typical cases.
+/// Calculates the minimal set of operations to transform [before] into [after].
+///
+/// This function uses the Longest Increasing Subsequence (LIS) algorithm to
+/// preserve as many existing items as possible, ensuring stable and smooth
+/// UI animations.
+///
+/// ### Performance
+/// Time Complexity: O(N log N)
+///
+/// ### Usage
+/// Call this when the flattened tree changes (e.g., after expansion or
+/// filtering) to determine exactly which rows to animate in or out.
 ListDiff diffVisibleNodes(List<VisibleNode> before, List<VisibleNode> after) {
   if (identical(before, after) ||
       (before.length == after.length && _sameIds(before, after))) {
@@ -41,9 +58,7 @@ ListDiff diffVisibleNodes(List<VisibleNode> before, List<VisibleNode> after) {
 
   // Longest Increasing Subsequence over 'seq' (classic patience algorithm).
   final lisPositions = _lisIndices(seq); // positions within 'seq'
-  final keptAfterIndexSet = <int>{
-    for (final pos in lisPositions) seq[pos],
-  };
+  final keptAfterIndexSet = <int>{for (final pos in lisPositions) seq[pos]};
 
   // Removes = items from 'before' not in LIS.
   final removeIndices = <int>[];

@@ -2,9 +2,25 @@
 import 'package:directory_tree/src/models/tree_data.dart';
 import 'package:directory_tree/src/models/tree_node.dart';
 
-/// Aggregated folder selection state considering all descendant files.
-enum FolderSelection { none, partial, all }
+/// Represents the tri-state selection status of a folder.
+enum FolderSelection {
+  /// No descendants are selected.
+  none,
 
+  /// Some (but not all) descendants are selected.
+  partial,
+
+  /// All descendants are selected.
+  all,
+}
+
+/// Calculates the selection state of a folder based on its descendants.
+///
+/// This is used to render "tri-state" checkboxes for directories (checked,
+/// unchecked, or indeterminate).
+///
+/// **Note:** This traverses the subtree of [folderId], so use with caution
+/// on very large deep trees in tight loops.
 FolderSelection folderSelection({
   required TreeData data,
   required Set<String> selectedIds,

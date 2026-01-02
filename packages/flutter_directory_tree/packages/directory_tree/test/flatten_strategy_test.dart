@@ -18,10 +18,7 @@ void main() {
         visible.map((n) => n.id).toList(),
         equals(['home', 'docs', 'notes', 'draft', 'pictures', 'readme']),
       );
-      expect(
-        visible.map((n) => n.depth).toList(),
-        equals([0, 1, 2, 2, 1, 1]),
-      );
+      expect(visible.map((n) => n.depth).toList(), equals([0, 1, 2, 2, 1, 1]));
     });
 
     test('includes matches and ancestors when filtering', () {

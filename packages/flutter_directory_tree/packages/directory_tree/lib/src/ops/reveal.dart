@@ -2,7 +2,13 @@
 import 'package:directory_tree/src/models/tree_data.dart';
 import 'package:directory_tree/src/models/tree_node.dart';
 
-/// Returns a chain of ancestor ids from root->...->node (inclusive).
+/// Computes the path from the root to the target [nodeId].
+///
+/// Returns a list of node IDs starting with the root and ending with [nodeId].
+///
+/// ### Usage
+/// Use this to auto-expand all parents of a specific node so that it becomes
+/// visible in the UI.
 List<String> ancestorChain(TreeData data, String nodeId) {
   final chain = <String>[];
   TreeNode? current = data.nodes[nodeId];
@@ -16,7 +22,9 @@ List<String> ancestorChain(TreeData data, String nodeId) {
   return chain;
 }
 
-/// Finds the first node whose virtualPath equals [virtualPath].
+/// Locates a node ID by its virtual path in the tree.
+///
+/// Returns `null` if no node matches the exact [virtualPath].
 String? findByVirtualPath(TreeData data, String virtualPath) {
   if (virtualPath.isEmpty) return null;
   for (final entry in data.nodes.entries) {
