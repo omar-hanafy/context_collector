@@ -83,7 +83,7 @@ class SessionPersistenceService {
             }
             // Re-throw so the catchError below can log; the queue will continue
             // because the catchError handler returns normally.
-            throw error;
+            rethrow;
           }
         })
         .catchError((Object error, StackTrace stackTrace) {
@@ -220,7 +220,7 @@ class SessionPersistenceService {
                   (!selection.viewingAll &&
                       liveEditorText != null &&
                       file.id == currentActiveId)
-                  ? liveEditorText!
+                  ? liveEditorText
                   : file.effectiveContent,
               virtualPath: file.relativePath.isEmpty ? null : file.relativePath,
             ),
@@ -244,7 +244,7 @@ class SessionPersistenceService {
         if (!selection.viewingAll &&
             liveEditorText != null &&
             file.id == currentActiveId) {
-          overrides[file.fullPath] = liveEditorText!;
+          overrides[file.fullPath] = liveEditorText;
           continue;
         }
         final edited = file.editedContent;

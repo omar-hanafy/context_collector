@@ -1,7 +1,7 @@
 name: context_collector
 description: A desktop app for collecting and combining text from multiple files.
 publish_to: 'none'
-version: 3.2.0+7
+version: 3.3.0+8
 
 environment:
   sdk: '>=3.8.1 <4.0.0'
@@ -10,7 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_monaco: ^1.0.0
+  flutter_monaco: ^1.1.1
   flutter_directory_tree:
     path: ./packages/flutter_directory_tree
   cupertino_icons: ^1.0.8
@@ -23,19 +23,19 @@ dependencies:
     git:
       url: https://github.com/omar-hanafy/flutter-plugins.git
       path: packages/desktop_drop
-  file_selector: ^1.0.4
+  file_selector: ^1.1.0
   window_manager: ^0.5.1
   flutter_helper_utils: ^8.5.0
   resizable_splitter: ^1.1.0
-  dart_helper_utils: ^5.4.0
+  dart_helper_utils: ^5.4.1
   intl: ^0.20.2
   path: ^1.9.1
   path_provider: ^2.1.5
   shared_preferences: ^2.5.3
   url_launcher: ^6.3.2
-  file_picker: ^10.3.3
+  file_picker: ^10.3.7
   diff_match_patch: ^0.4.1
-  flutter_svg: ^2.2.1
+  flutter_svg: ^2.2.3
   synchronized: ^3.4.0
   enefty_icons: ^1.0.9
   equatable: ^2.0.7
@@ -48,14 +48,14 @@ dependencies:
   xml: ^6.6.1
   collection: ^1.19.1
   cross_file: any
-  uuid: ^4.5.1
+  uuid: ^4.5.2
 dev_dependencies:
   flutter_test:
     sdk: flutter
   msix: ^3.16.12
   very_good_analysis: ^10.0.0
   build_runner: ^2.8.0
-  json_serializable: ^6.11.1
+
 flutter:
   uses-material-design: true
   assets:

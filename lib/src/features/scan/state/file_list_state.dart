@@ -178,8 +178,8 @@ class FileListNotifier extends StateNotifier<SelectionState> {
           state = state.copyWith(
             scanHistory: [...state.scanHistory, scanMetadata],
           );
-          // Ensure a Prompt virtual file exists in any active session
-          _ensurePromptFilePresent();
+          // Ensure Header/Footer virtual files exist in any active session
+          _ensureSpecialFilesPresent();
           // Final rebuild to ensure everything is in sync
           _rebuildTreeFromState();
           _rebuildCombinedContent();
@@ -400,7 +400,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
       virtualPath: candidate,
     );
     _addFileToState(file);
-    _ensurePromptFilePresent();
+    _ensureSpecialFilesPresent();
     state = state.copyWith(
       activeFileId: file.id,
       // If requested, trigger the rename prompt flow in the editor route.
@@ -437,19 +437,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
   //============================================================================
 
   void _rebuildCombinedContent() {
-    // Find the special Prompt virtual file (if any), regardless of selection.
-    ScannedFile? promptFile;
-    for (final f in state.fileMap.values) {
-      if (f.isVirtual && f.name == 'Prompt') {
-        promptFile = f;
-        break;
-      }
-    }
-
-    final content = markdownBuilder.buildMarkdown(
-      state.selectedFiles,
-      prompt: promptFile,
-    );
+    final content = markdownBuilder.buildMarkdown(state.selectedFiles);
     if (mounted) {
       state = state.copyWith(combinedContent: content);
     }
@@ -596,46 +584,57 @@ class FileListNotifier extends StateNotifier<SelectionState> {
 
     // Add to state and rebuild everything. This is simpler and more robust.
     _addFileToState(virtualFile);
-    // Ensure Prompt exists in the session (does not steal focus if already set)
-    _ensurePromptFilePresent();
+    // Ensure Header/Footer exist in the session (does not steal focus if already set)
+    _ensureSpecialFilesPresent();
     // Make it the active file for editing in Monaco
     state = state.copyWith(
       activeFileId: virtualFile.id,
     );
   }
 
-  /// Opens the special Prompt file, creating it if not present.
-  void openPrompt() {
-    // If Prompt exists, just activate it.
+  /// Opens the special Header file, creating it if not present.
+  void openHeader() {
+    // If Header exists, just activate it.
     for (final f in state.fileMap.values) {
-      if (f.isVirtual && f.name == 'Prompt') {
+      if (f.isVirtual && f.name == 'Header') {
         setActiveFile(f.id);
         return;
       }
     }
-    // Otherwise, create an empty Prompt and focus it.
-    createVirtualFile('Prompt', '');
+    // Otherwise, create an empty Header and focus it.
+    createVirtualFile('Header', '');
   }
 
-  /// Ensures a virtual file named 'Prompt' exists in the current session.
-  void _ensurePromptFilePresent() {
+  /// Ensures virtual files named 'Header' and 'Footer' exist in the current session.
+  void _ensureSpecialFilesPresent() {
     // If no session yet, do nothing (keeps home screen clean).
     if (!state.hasFiles) return;
-    final hasPrompt = state.fileMap.values.any(
-      (f) => f.isVirtual && f.name == 'Prompt',
-    );
-    if (hasPrompt) return;
 
-    final prompt = UnifiedFileService.createVirtualFile(
-      name: 'Prompt',
-      content: '',
-      virtualPath: 'Prompt',
+    final hasHeader = state.fileMap.values.any(
+      (f) => f.isVirtual && f.name == 'Header',
     );
-    // Add without stealing focus if one is already set
-    final active = state.activeFileId;
-    _addFileToState(prompt);
-    if (active != null) {
-      state = state.copyWith(activeFileId: active);
+    final hasFooter = state.fileMap.values.any(
+      (f) => f.isVirtual && f.name == 'Footer',
+    );
+
+    if (hasHeader && hasFooter) return;
+
+    if (!hasHeader) {
+      final header = UnifiedFileService.createVirtualFile(
+        name: 'Header',
+        content: '',
+        virtualPath: 'Header',
+      );
+      _addFileToState(header);
+    }
+
+    if (!hasFooter) {
+      final footer = UnifiedFileService.createVirtualFile(
+        name: 'Footer',
+        content: '',
+        virtualPath: 'Footer',
+      );
+      _addFileToState(footer);
     }
   }
 

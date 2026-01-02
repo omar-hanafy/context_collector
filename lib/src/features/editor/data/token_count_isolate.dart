@@ -5,7 +5,7 @@ import 'dart:isolate';
 import 'package:context_collector/src/features/editor/data/token_utils.dart';
 
 /// Messages sent to the worker are simple Maps to stay isolate‑safe.
-/// {type: 'compute', id: int, model: String, chunks: List<String>}
+/// `{type: 'compute', id: int, model: String, chunks: List<String>}`
 void tokenCountWorker(SendPort mainPort) {
   final commandPort = ReceivePort();
   // Tell main how to send commands to this worker.

@@ -12,6 +12,7 @@ import '../../../../app/route_observers.dart';
 import '../../../../context_collector.dart';
 import '../../../../shared/dialogs/name_prompt.dart';
 import '../../../scan/ui/file_display_helper.dart';
+import '../../data/workspace_completion_provider.dart';
 import '../widgets/editor_top_bar.dart';
 import '../widgets/info_bar/copy_feedback.dart';
 // Route focus restorer not needed with push/pop lifecycle.
@@ -436,6 +437,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     final selectionState = ref.watch(selectionProvider);
     final selectionNotifier = ref.read(selectionProvider.notifier);
     final editorStatus = ref.watch(monacoEditorStatusProvider);
+    ref.watch(workspaceCompletionProvider);
     // On first frame after entering the editor route, ensure editor focus.
     if (!_requestedInitialFocus && editorStatus.isReady) {
       _requestedInitialFocus = true;

@@ -133,7 +133,7 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     // HERO (clickable drop zone)
-                    _HeroDropZone(onTap: selection.openPrompt),
+                    _HeroDropZone(onTap: selection.openHeader),
                     const SizedBox(height: 20),
 
                     // HORIZONTAL ACTION BAR (consistent secondary buttons)

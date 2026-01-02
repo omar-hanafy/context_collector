@@ -39,17 +39,18 @@ class DirectoryTreeAdapter extends ChangeNotifier {
   ValueChanged<Set<String>>? _selectionRelay;
   bool _suppressSelectionRelay = false;
   bool _suppressBubble = false;
-  tree.TreeNode? _promptNode;
+  tree.TreeNode? _headerNode;
+  tree.TreeNode? _footerNode;
   final Set<String> _hiddenNodeIds = <String>{};
   bool _isDisposed = false;
 
   tree.DirectoryTreeController get controller => _controller;
 
-  tree.TreeNode? get promptNode => _promptNode;
+  tree.TreeNode? get headerNode => _headerNode;
+  tree.TreeNode? get footerNode => _footerNode;
 
-  String? get promptEntryId => _promptNode?.entryId;
-
-  String? get promptNodeId => _promptNode?.id;
+  String? get headerEntryId => _headerNode?.entryId;
+  String? get footerEntryId => _footerNode?.entryId;
 
   /// Hook the scanner selection callback after the adapter is constructed.
   set selectionRelay(ValueChanged<Set<String>>? callback) {
@@ -99,16 +100,21 @@ class DirectoryTreeAdapter extends ChangeNotifier {
       mergeVirtualIntoRealFolders: true,
     );
 
-    _promptNode = null;
+    _headerNode = null;
+    _footerNode = null;
     _hiddenNodeIds.clear();
+
     for (final node in data.nodes.values) {
       if (node.entryId != null &&
           node.isVirtual &&
-          node.name == 'Prompt' &&
           node.parentId == tree.TreeBuilder.treeRootId) {
-        _promptNode = node;
-        _hiddenNodeIds.add(node.id);
-        break;
+        if (node.name == 'Header') {
+          _headerNode = node;
+          _hiddenNodeIds.add(node.id);
+        } else if (node.name == 'Footer') {
+          _footerNode = node;
+          _hiddenNodeIds.add(node.id);
+        }
       }
     }
 
@@ -158,7 +164,8 @@ class DirectoryTreeAdapter extends ChangeNotifier {
   /// Clear all tree data (e.g. when the session resets).
   void clear() {
     _hiddenNodeIds.clear();
-    _promptNode = null;
+    _headerNode = null;
+    _footerNode = null;
     _controller.rebuild(
       const tree.TreeData(
         nodes: {},
@@ -290,8 +297,6 @@ class _CollectorFlattenStrategy extends tree.SortedFlattenStrategy {
   }
 }
 
-const String _promptNodeName = 'Prompt';
-
 class CollectorSortDelegate extends tree.SortDelegate {
   const CollectorSortDelegate([this._alpha = const tree.AlphaSortDelegate()]);
 
@@ -301,17 +306,21 @@ class CollectorSortDelegate extends tree.SortDelegate {
   List<String> sortChildIds(tree.TreeData data, String parentId) {
     final ordered = _alpha.sortChildIds(data, parentId);
     if (parentId == tree.TreeBuilder.treeRootId) {
-      final index = ordered.indexWhere((id) {
+      // Float Header to top
+      final headerIdx = ordered.indexWhere((id) {
         final node = data.nodes[id];
         return node != null &&
-            node.entryId != null &&
             node.isVirtual &&
-            node.name == _promptNodeName;
+            node.name == 'Header';
       });
-      if (index > 0) {
-        final promptId = ordered.removeAt(index);
-        ordered.insert(0, promptId);
+      if (headerIdx > 0) {
+        final id = ordered.removeAt(headerIdx);
+        ordered.insert(0, id);
       }
+
+      // Float Footer to top (under header) or bottom?
+      // Since they are hidden, this only matters if hiding fails.
+      // Let's keep them stable.
     }
     return ordered;
   }

@@ -15,6 +15,7 @@ import '../features/editor/ui/dialogs/settings_dialog.dart';
 import '../features/scan/state/file_list_state.dart';
 import '../features/settings/presentation/state/theme_notifier.dart';
 import '../shared/services/drop_payload_splitter.dart';
+import '../shared/utils/debug_logger.dart';
 import 'global_hotkeys.dart';
 import 'persistence/saved_session.dart';
 import 'persistence/session_persistence_service.dart';
@@ -176,6 +177,7 @@ class _TabShellState extends ConsumerState<TabShell> {
             _updateHoverTab(details.globalPosition, sessions);
           },
           onDragDone: (details) async {
+            logDropDetails(details, source: 'TabShell/DropTarget');
             await _handleDrop(details, sessions, activeId);
           },
           child: Column(

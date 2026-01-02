@@ -110,11 +110,12 @@ class SessionManager extends StateNotifier<List<SessionEntry>> {
     }
 
     entry.autoSaveTimer?.cancel();
-    entry.autoSaveTimer = null;
-    entry.autoSavePeriodic?.cancel();
-    entry.autoSavePeriodic = null;
-    entry.autoSaveSubscription?.close();
-    entry.autoSaveSubscription = null;
+    entry
+      ..autoSaveTimer = null
+      ..autoSavePeriodic?.cancel()
+      ..autoSavePeriodic = null
+      ..autoSaveSubscription?.close()
+      ..autoSaveSubscription = null;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       entry.container.dispose();
@@ -123,13 +124,14 @@ class SessionManager extends StateNotifier<List<SessionEntry>> {
 
   void _disposeAllSessions() {
     for (final entry in state) {
-      entry.autoSaveTimer?.cancel();
-      entry.autoSavePeriodic?.cancel();
-      entry.autoSaveSubscription?.close();
-      entry.autoSaveTimer = null;
-      entry.autoSavePeriodic = null;
-      entry.autoSaveSubscription = null;
-      entry.container.dispose();
+      entry
+        ..autoSaveTimer?.cancel()
+        ..autoSavePeriodic?.cancel()
+        ..autoSaveSubscription?.close()
+        ..autoSaveTimer = null
+        ..autoSavePeriodic = null
+        ..autoSaveSubscription = null
+        ..container.dispose();
     }
   }
 
@@ -142,12 +144,13 @@ class SessionManager extends StateNotifier<List<SessionEntry>> {
   void _attachAutoSave(SessionEntry entry) {
     final container = entry.container;
     final persistence = container.read(sessionPersistenceProvider);
-    entry.autoSaveTimer?.cancel();
-    entry.autoSaveTimer = null;
-    entry.autoSavePeriodic?.cancel();
-    entry.autoSavePeriodic = null;
-    entry.autoSaveSubscription?.close();
-    entry.autoSaveSubscription = container.listen<SelectionState>(
+    entry
+      ..autoSaveTimer?.cancel()
+      ..autoSaveTimer = null
+      ..autoSavePeriodic?.cancel()
+      ..autoSavePeriodic = null
+      ..autoSaveSubscription?.close()
+      ..autoSaveSubscription = container.listen<SelectionState>(
       selectionProvider,
       (previous, next) {
         if (!(next.sessionStarted ||
@@ -161,11 +164,10 @@ class SessionManager extends StateNotifier<List<SessionEntry>> {
         });
       },
       fireImmediately: false,
-    );
-
-    entry.autoSavePeriodic = Timer.periodic(const Duration(seconds: 30), (_) {
-      unawaited(persistence.saveSession(entry, isActive: true));
-    });
+    )
+      ..autoSavePeriodic = Timer.periodic(const Duration(seconds: 30), (_) {
+        unawaited(persistence.saveSession(entry, isActive: true));
+      });
   }
 }
 

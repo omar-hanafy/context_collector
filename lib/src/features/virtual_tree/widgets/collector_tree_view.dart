@@ -8,7 +8,7 @@ import '../../scan/state/file_list_state.dart';
 import '../directory_tree_adapter.dart';
 import '../providers/virtual_tree_provider.dart';
 import 'collector_node_row.dart';
-import 'prompt_row.dart';
+import 'special_file_row.dart';
 
 /// Main tree view composited from the shared DirectoryTreeAdapter.
 class CollectorTreeView extends ConsumerWidget {
@@ -29,28 +29,35 @@ class CollectorTreeView extends ConsumerWidget {
     final hasRootExtras = rootChildren.any(
       (id) => id != tree.TreeBuilder.treeRootId,
     );
-    final hasNodes =
-        hasTreeChildren || hasRootExtras || adapter.promptNode != null;
+    final hasNodes = hasTreeChildren ||
+        hasRootExtras ||
+        adapter.headerNode != null ||
+        adapter.footerNode != null;
 
     if (!hasNodes) {
       return _EmptyTreePlaceholder(colorScheme: Theme.of(context).colorScheme);
     }
 
-    final promptFile = adapter.promptEntryId == null
+    final headerFile = adapter.headerEntryId == null
         ? null
-        : selection.fileMap[adapter.promptEntryId!];
+        : selection.fileMap[adapter.headerEntryId!];
+
+    final footerFile = adapter.footerEntryId == null
+        ? null
+        : selection.fileMap[adapter.footerEntryId!];
 
     return Padding(
       padding: const EdgeInsetsDirectional.only(start: 8, top: 8, bottom: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (adapter.promptNode != null)
+          if (adapter.headerNode != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 4),
-              child: PromptRow(
+              child: SpecialFileRow(
                 adapter: adapter,
-                file: promptFile,
+                node: adapter.headerNode,
+                file: headerFile,
                 activeFileId: selection.activeFileId,
                 onFileActivated: (fileId) {
                   notifier
@@ -119,6 +126,21 @@ class CollectorTreeView extends ConsumerWidget {
               ),
             ),
           ),
+          if (adapter.footerNode != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: SpecialFileRow(
+                adapter: adapter,
+                node: adapter.footerNode,
+                file: footerFile,
+                activeFileId: selection.activeFileId,
+                onFileActivated: (fileId) {
+                  notifier
+                    ..setActiveFile(fileId)
+                    ..exitCombinedPreview();
+                },
+              ),
+            ),
         ],
       ),
     );

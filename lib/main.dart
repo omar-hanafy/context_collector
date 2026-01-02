@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:context_collector/context_collector.dart';
+import 'package:context_collector/src/shared/utils/debug_logger.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -46,6 +47,9 @@ void main() async {
   // DropTargets (without catchAppWideDrops).
   DesktopDrop.instance.addRawDropEventListener((event) async {
     if (event is! DropDoneEvent) return;
+
+    logDropEvent(event, source: 'Main/GlobalListener');
+
     // Only treat Dock/Finder (application-level) drops here to avoid duplicate
     // handling with in-window DropTargets.
     final cameFromDockOrFinder = event.location == Offset.zero;

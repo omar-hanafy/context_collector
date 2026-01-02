@@ -29,8 +29,6 @@ class VirtualFileSnapshot {
 
 @immutable
 class SavedSession {
-  static const int currentSchemaVersion = 1;
-
   const SavedSession({
     required this.sessionId,
     required this.title,
@@ -75,6 +73,8 @@ class SavedSession {
               ),
     );
   }
+
+  static const int currentSchemaVersion = 1;
 
   final String sessionId;
   final String title;

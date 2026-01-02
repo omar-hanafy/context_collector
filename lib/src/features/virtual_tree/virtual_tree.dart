@@ -3,4 +3,4 @@
 export 'directory_tree_adapter.dart';
 export 'providers/virtual_tree_provider.dart';
 export 'widgets/collector_tree_view.dart';
-export 'widgets/prompt_row.dart';
+export 'widgets/special_file_row.dart';
