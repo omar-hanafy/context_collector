@@ -6,6 +6,53 @@
     <description>Most recent changes with links to updates.</description>
     <language>en</language>
     <item>
+      <title>Version 3.3.0</title>
+      <pubDate>Fri, 02 Jan 2026 16:39:00 -0000</pubDate>
+      <description><![CDATA[  🚀 Release Notes: Context Collector v3.3.0
+
+  This major update represents a complete transformation of the application, featuring a rebuilt UI, enhanced performance, and powerful new features for managing code
+  context.
+
+  🌟 Major Highlights
+
+  🆕 Multi-Tab Support & Session Persistence
+   * Multiple Workspaces: You can now open multiple collection sessions in tabs, allowing you to work on different parts of a project or different projects simultaneously.
+   * Auto-Save & Persistence: All sessions are now automatically saved and persisted across app restarts. Never lose your carefully curated file lists or virtual edits
+     again.
+   * Keyboard Navigation: Switch between tabs and perform actions quickly with a comprehensive set of new keyboard shortcuts.
+
+  📝 Enhanced Content Management (Header & Footer)
+   * Flexible Templates: Replaced the single "Prompt" file with dedicated Header and Footer virtual files.
+   * Verbatim Insertion: Content in Header and Footer files is inserted exactly as-is at the start and end of your markdown, perfect for custom instructions or formatting
+     requirements.
+
+  🌲 Rebuilt Virtual Tree
+   * Native-Feel Directory Tree: Integrated a high-performance directory tree (via flutter_directory_tree) for navigating large codebases.
+   * Advanced Selection: Improved logic for selecting/deselecting folders and nested files with real-time state synchronization.
+   * Floating Specials: Header and Footer files are pinned to the top and bottom of the tree for instant access.
+
+  💻 Professional Editor Experience
+   * Monaco Integration: Upgraded to the latest Monaco Editor for a true IDE-like experience (IntelliSense, robust syntax highlighting).
+   * Workspace Completion: A new completion provider understands your workspace context to help you write prompts and headers faster.
+   * Improved Focus Handling: Smoother transitions between the file list and the editor, with focus restoration after dialogs.
+
+  📊 Accurate Token Calculation
+   * Isolate-Based Counting: Token calculation now runs in a background thread (Isolate), ensuring the UI remains perfectly fluid even when processing massive collections.
+   * Model Selection: Support for different tokenization models to match your target AI (GPT-4, Claude, etc.).
+
+  🛠 Improvements & Refinements
+   * UI Redesign: A modern, polished layout featuring a resizable sidebar, better theme support (Dark/Light/System), and enhanced visual feedback.
+   * Drop Handler: More robust drag-and-drop support for files and folders directly from Finder/Explorer.
+   * Performance: Drastic reduction in binary size by optimizing internal assets and cleaning up legacy dependencies.
+   * Windows Store Prep: Updated Windows resources and MSIX build workflows for easier distribution.
+   * Pandoc Support: Added specialized documentation and support for Pandoc-compatible markdown generation.
+
+  📦 Maintenance
+   * Version: 3.3.0+8
+   * Privacy Policy: Added a comprehensive privacy policy document.
+   * Dependency Audit: Significant cleanup of unused packages and updates to core libraries (flutter_riverpod, flutter_monaco, etc.).]]></description>
+    </item>
+    <item>
       <title>Version untagged-0eb025062ab86254d79c</title>
       <pubDate>Tue, 22 Jul 2025 17:46:31 -0000</pubDate>
       <description><![CDATA[### A Major Overhaul for a Better Experience
