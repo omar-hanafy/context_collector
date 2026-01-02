@@ -11,8 +11,8 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_monaco: ^1.1.1
-  flutter_directory_tree:
-    path: ./packages/flutter_directory_tree
+  flutter_directory_tree: ^1.0.0
+  directory_tree: ^1.0.0
   cupertino_icons: ^1.0.8
   flutter_riverpod: ^2.6.1
   freezed: ^3.2.0

@@ -29,7 +29,8 @@ class CollectorTreeView extends ConsumerWidget {
     final hasRootExtras = rootChildren.any(
       (id) => id != tree.TreeBuilder.treeRootId,
     );
-    final hasNodes = hasTreeChildren ||
+    final hasNodes =
+        hasTreeChildren ||
         hasRootExtras ||
         adapter.headerNode != null ||
         adapter.footerNode != null;

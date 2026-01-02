@@ -37,8 +37,7 @@ class MarkdownBuilder {
     final contextFiles = List<ScannedFile>.from(selectedFiles)
       ..removeWhere(
         (f) =>
-            f.isVirtual &&
-            (f.id == headerFile?.id || f.id == footerFile?.id),
+            f.isVirtual && (f.id == headerFile?.id || f.id == footerFile?.id),
       )
       ..sort((a, b) => a.fullPath.compareTo(b.fullPath));
 
@@ -64,8 +63,10 @@ class MarkdownBuilder {
     }
 
     // Normalize extra blank lines in the CONTEXT section only
-    final contextNormalized =
-        context.toString().replaceAll(RegExp(r'\n{3,}'), '\n\n');
+    final contextNormalized = context.toString().replaceAll(
+      RegExp(r'\n{3,}'),
+      '\n\n',
+    );
 
     output.write(contextNormalized);
 

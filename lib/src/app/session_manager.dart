@@ -151,20 +151,20 @@ class SessionManager extends StateNotifier<List<SessionEntry>> {
       ..autoSavePeriodic = null
       ..autoSaveSubscription?.close()
       ..autoSaveSubscription = container.listen<SelectionState>(
-      selectionProvider,
-      (previous, next) {
-        if (!(next.sessionStarted ||
-            next.hasFiles ||
-            next.scanHistory.isNotEmpty)) {
-          return;
-        }
-        entry.autoSaveTimer?.cancel();
-        entry.autoSaveTimer = Timer(const Duration(seconds: 2), () {
-          unawaited(persistence.saveSession(entry, isActive: true));
-        });
-      },
-      fireImmediately: false,
-    )
+        selectionProvider,
+        (previous, next) {
+          if (!(next.sessionStarted ||
+              next.hasFiles ||
+              next.scanHistory.isNotEmpty)) {
+            return;
+          }
+          entry.autoSaveTimer?.cancel();
+          entry.autoSaveTimer = Timer(const Duration(seconds: 2), () {
+            unawaited(persistence.saveSession(entry, isActive: true));
+          });
+        },
+        fireImmediately: false,
+      )
       ..autoSavePeriodic = Timer.periodic(const Duration(seconds: 30), (_) {
         unawaited(persistence.saveSession(entry, isActive: true));
       });

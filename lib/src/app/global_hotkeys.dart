@@ -56,12 +56,12 @@ class _GlobalHotkeysState extends State<GlobalHotkeys> {
     return true;
   }
 
-  static const Set<TabShortcutCommand> _macMenuReservedCommands = <
-      TabShortcutCommand>{
-    TabShortcutCommand.paste,
-    TabShortcutCommand.pastePaths,
-    TabShortcutCommand.copyCombined,
-  };
+  static const Set<TabShortcutCommand> _macMenuReservedCommands =
+      <TabShortcutCommand>{
+        TabShortcutCommand.paste,
+        TabShortcutCommand.pastePaths,
+        TabShortcutCommand.copyCombined,
+      };
 
   @override
   Widget build(BuildContext context) => widget.child;

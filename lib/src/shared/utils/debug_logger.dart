@@ -13,15 +13,19 @@ void logDropDetails(DropDoneDetails details, {String source = 'Unknown'}) {
 }
 
 void _logDropGeneric(Offset location, List<DropItem> files, String source) {
-  debugPrint('==================================================================');
+  debugPrint(
+    '==================================================================',
+  );
   debugPrint('🛠️ DEBUG [$source]: Drop received');
   debugPrint('📍 Location: $location');
   debugPrint('📦 Items count: ${files.length}');
-  
+
   for (var i = 0; i < files.length; i++) {
     _logDropItem(files[i], 0, index: i);
   }
-  debugPrint('==================================================================');
+  debugPrint(
+    '==================================================================',
+  );
 }
 
 void _logDropItem(DropItem item, int depth, {int? index}) {
@@ -29,14 +33,14 @@ void _logDropItem(DropItem item, int depth, {int? index}) {
   final prefix = index != null ? '$index. ' : '- ';
   final typeIcon = item is DropItemDirectory ? '📁' : '📄';
   final typeName = item is DropItemDirectory ? 'Directory' : 'File';
-  
+
   debugPrint('$indent$prefix$typeIcon $typeName: "${item.name}"');
   debugPrint('$indent    Path: ${item.path}');
   debugPrint('$indent    MIME: ${item.mimeType}');
-  
+
   if (item is DropItemDirectory) {
     if (item.children.isEmpty) {
-       debugPrint('$indent    (Empty Directory)');
+      debugPrint('$indent    (Empty Directory)');
     } else {
       for (var i = 0; i < item.children.length; i++) {
         _logDropItem(item.children[i], depth + 1, index: i);

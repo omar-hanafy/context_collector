@@ -309,9 +309,7 @@ class CollectorSortDelegate extends tree.SortDelegate {
       // Float Header to top
       final headerIdx = ordered.indexWhere((id) {
         final node = data.nodes[id];
-        return node != null &&
-            node.isVirtual &&
-            node.name == 'Header';
+        return node != null && node.isVirtual && node.name == 'Header';
       });
       if (headerIdx > 0) {
         final id = ordered.removeAt(headerIdx);
