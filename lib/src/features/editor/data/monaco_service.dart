@@ -8,6 +8,43 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'settings_service.dart';
 
+/// Whether the Monaco editor may claim the OS keyboard, given Flutter's
+/// current [primary] focus and the editor's own [platformView] focus node.
+///
+/// This is the single gate every focus path in [MonacoService] passes
+/// through, so background maintenance (content sync, option changes,
+/// route/lifecycle recovery) can only ever KEEP focus the editor already
+/// owns - never claim it from a dialog's `TextField`, a button, a menu, or
+/// another route. On Windows, claiming focus moves real Win32 keyboard focus
+/// into the WebView, so an unguarded nudge silently steals typing from an
+/// open popup; this makes that impossible regardless of which path nudges.
+///
+/// Returns true only when the keyboard is genuinely unclaimed:
+/// - nothing is focused ([primary] is null),
+/// - the editor's own platform view owns focus, or
+/// - focus rests on a [FocusScopeNode] that the editor lives under (an idle
+///   route scope with no concrete child focused), or the editor is not yet
+///   mounted (startup, [platformView] has no context).
+///
+/// A dialog's scope is a sibling overlay entry, not an ancestor of the
+/// editor's node, so it correctly reads as foreign and the editor stands
+/// down.
+@visibleForTesting
+bool editorMayClaimKeyboard(FocusNode? primary, FocusNode platformView) {
+  if (primary == null) return true;
+  if (primary == platformView) return true;
+  if (primary is FocusScopeNode) {
+    // Editor not mounted yet (startup): an idle scope means nobody has
+    // claimed the keyboard.
+    if (platformView.context == null) return true;
+    // A bare scope claims nothing itself, but a foreign scope (a dialog's)
+    // is about to focus its own child - only scopes the editor itself lives
+    // under count as idle.
+    return platformView.ancestors.contains(primary);
+  }
+  return false;
+}
+
 /// Simplified Monaco service using the flutter_monaco package
 class MonacoService extends StateNotifier<EditorStatus> {
   MonacoService()
@@ -244,25 +281,38 @@ class MonacoService extends StateNotifier<EditorStatus> {
     super.dispose();
   }
 
-  /// Whether a Flutter text input (e.g. a dialog's TextField) currently owns
-  /// Flutter's primary focus.
+  /// Whether the editor may take the keyboard right now.
   ///
-  /// Focus nudges fired by background work (content updates, option changes)
-  /// must never steal the keyboard from one: on Windows the native grab moves
-  /// real Win32 focus to the WebView, so typing would land in Monaco instead
-  /// of the field. [recoverKeyboardFocus] unfocuses first, so an intentional
-  /// handoff still works.
-  static bool _flutterTextInputHasFocus() {
-    final context = FocusManager.instance.primaryFocus?.context;
-    if (context == null) return false;
-    return context.findAncestorStateOfType<EditableTextState>() != null;
-  }
+  /// True only while the keyboard is unclaimed: the editor's own platform
+  /// view node owns Flutter focus, or focus rests on a bare scope along the
+  /// editor's own route (nothing concrete focused). Any other focused node -
+  /// a dialog's TextField, a button, a menu, a foreign route's scope - owns
+  /// the keyboard, and every focus path in this service stands down,
+  /// including [recoverKeyboardFocus]: its unfocus-first behavior is exactly
+  /// how open dialogs lost their keyboard to Monaco on Windows, where
+  /// focusing Monaco moves real Win32 focus into the WebView.
+  ///
+  /// This is an allow-list by intent: maintenance work (content sync, option
+  /// changes, route/lifecycle recovery) can only KEEP focus the editor
+  /// already owns, never claim it from another surface. Clicking the editor
+  /// requests [_platformViewFocus] before nudging, so user-driven focus
+  /// passes; the yield at each call site lets that request settle first.
+  bool _editorOwnsKeyboard() => editorMayClaimKeyboard(
+    FocusManager.instance.primaryFocus,
+    _platformViewFocus,
+  );
 
   /// Ensures the native WebView grabs platform focus (first responder),
   /// then the JS Monaco instance can accept keyboard input.
+  ///
+  /// Stands down unless the editor already owns the keyboard (or nobody
+  /// does); see [_editorOwnsKeyboard].
   Future<void> ensureNativeFocus() async {
     if (_controller == null || !state.isReady) return;
-    if (_flutterTextInputHasFocus()) return;
+    // Let a focus request from this same event (e.g. the editor's own
+    // pointer-down handler) apply before deciding ownership.
+    await Future<void>.delayed(Duration.zero);
+    if (!_editorOwnsKeyboard()) return;
     // Ask Flutter to focus the platform view's FocusNode.
     if (_platformViewFocus.canRequestFocus) {
       _platformViewFocus.requestFocus();
@@ -277,9 +327,13 @@ class MonacoService extends StateNotifier<EditorStatus> {
 
   /// Ensures the Monaco DOM input area gets focus reliably.
   /// Uses the controller's robust helper with layout + retries.
+  ///
+  /// Stands down unless the editor already owns the keyboard (or nobody
+  /// does); see [_editorOwnsKeyboard].
   Future<void> ensureEditorFocus({int attempts = 3}) async {
     if (_controller == null || !state.isReady) return;
-    if (_flutterTextInputHasFocus()) return;
+    await Future<void>.delayed(Duration.zero);
+    if (!_editorOwnsKeyboard()) return;
     await ensureNativeFocus();
     try {
       await _controller!.ensureEditorFocus(attempts: attempts);
@@ -301,8 +355,17 @@ class MonacoService extends StateNotifier<EditorStatus> {
 
   /// Stronger focus recovery used after dialogs with TextFields close.
   /// Releases Flutter's TextInput client, then reacquires platform + DOM focus.
+  ///
+  /// This is the intentional editor-return path (route popped back to the
+  /// editor, tab/session activation, window re-activation). It refuses to
+  /// run while another surface owns the keyboard: it is wired to events that
+  /// also fire with popups still open (any route popping, every window
+  /// activation), and unfocusing a live dialog's TextField to claim Win32
+  /// focus for Monaco was the focus-stealing bug on Windows.
   Future<void> recoverKeyboardFocus({int attempts = 6}) async {
     if (_controller == null || !state.isReady) return;
+    await Future<void>.delayed(Duration.zero);
+    if (!_editorOwnsKeyboard()) return;
     try {
       FocusManager.instance.primaryFocus?.unfocus();
     } catch (_) {}
