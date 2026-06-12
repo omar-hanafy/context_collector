@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 
 import '../models/scan_result.dart';
 import '../models/scanned_file.dart';
+import '../ui/file_display_helper.dart';
 
 /// Unified service for all file operations - scanning, dropping, and file operations
 /// Consolidates FileScanner, DropHandler, and FileOperationsService
@@ -18,51 +19,97 @@ class UnifiedFileService {
   // FILE SCANNING (from FileScanner)
   //============================================================================
 
-  /// Scans a directory incrementally
+  /// Scans a directory incrementally and efficiently, skipping heavy folders.
   static Future<void> scanDirectory({
     required String directoryPath,
     required Set<String> blacklist,
-    required void Function(ScannedFile file) onFileFound,
+    required void Function(List<ScannedFile> files) onBatchFound,
     required ScanSource source,
   }) async {
-    final directory = Directory(directoryPath);
-    if (!directory.existsSync()) {
-      throw FileSystemException('Directory not found: $directoryPath');
+    final rootDir = Directory(directoryPath);
+    if (!rootDir.existsSync()) {
+      return;
     }
 
-    await for (final entity in directory.list(
-      recursive: true,
-      followLinks: false,
-    )) {
-      if (entity is! File) {
-        continue;
-      }
+    // Folders to completely ignore during traversal
+    const ignoredDirs = {
+      'build',
+      '.dart_tool',
+      '.git',
+      '.idea',
+      'ios',
+      'android',
+      'node_modules',
+      'linux',
+      'macos',
+      'windows',
+      'web',
+      'coverage',
+      '.gradle',
+      '.vscode',
+      'Pods',
+      '.symlinks',
+      'DerivedData',
+      'dist',
+      'out',
+    };
 
-      final fileName = p.basename(entity.path);
+    final List<Directory> stack = [rootDir];
+    final List<ScannedFile> batch = [];
 
-      // Skip hidden files
-      if (fileName.startsWith('.')) {
-        continue;
-      }
-
-      // Check blacklist
-      if (blacklist.any(
-        (pattern) => fileName.toLowerCase().endsWith(pattern.toLowerCase()),
-      )) {
-        continue;
-      }
+    while (stack.isNotEmpty) {
+      final current = stack.removeLast();
 
       try {
-        final relativePath = p.relative(entity.path, from: directoryPath);
-        final scannedFile = ScannedFile.fromFile(
-          entity,
-          relativePath: relativePath,
-          source: source,
-        );
-        onFileFound(scannedFile);
+        // List non-recursively
+        final entities = current.list(recursive: false, followLinks: false);
+
+        await for (final entity in entities) {
+          final name = p.basename(entity.path);
+
+          if (entity is Directory) {
+            // Skip ignored dirs
+            if (!name.startsWith('.') && !ignoredDirs.contains(name)) {
+              stack.add(entity);
+            }
+          } else if (entity is File) {
+            // Skip hidden files
+            if (name.startsWith('.')) continue;
+
+            // Check blacklist
+            if (blacklist.any(
+              (ext) => name.toLowerCase().endsWith(ext.toLowerCase()),
+            )) {
+              continue;
+            }
+
+            try {
+              final relativePath = p.relative(entity.path, from: directoryPath);
+              batch.add(
+                ScannedFile.fromFile(
+                  entity,
+                  relativePath: relativePath,
+                  source: source,
+                ),
+              );
+
+              // Emit batch every 200 items
+              if (batch.length >= 200) {
+                onBatchFound(List.from(batch));
+                batch.clear();
+              }
+            } catch (_) {
+              // Skip problematic files
+            }
+          }
+        }
       } catch (_) {
-        // Skip problematic files
+        // Access denied or other fs errors
       }
+    }
+
+    if (batch.isNotEmpty) {
+      onBatchFound(batch);
     }
   }
 
@@ -101,6 +148,16 @@ class UnifiedFileService {
       if (!fileEntity.existsSync()) {
         return file.copyWith(error: 'File not found on disk');
       }
+
+      // Basic size check to prevent OOM on massive files
+      // 10MB limit for loading into string
+      final stat = await fileEntity.stat();
+      if (stat.size > 10 * 1024 * 1024) {
+        return file.copyWith(
+          error: 'File too large to read (>${stat.size ~/ (1024 * 1024)}MB)',
+        );
+      }
+
       final content = await fileEntity.readAsString();
       return file.copyWith(content: content);
     } catch (e) {
@@ -119,7 +176,7 @@ class UnifiedFileService {
     required List<XFile> items,
     required Set<String> blacklist,
     required ScanSource source,
-    required void Function(ScannedFile file) onFileFound,
+    required void Function(List<ScannedFile> files) onBatchFound,
     required void Function(List<String> sourcePaths) onScanComplete,
   }) async {
     final processedPaths = <String>{};
@@ -168,17 +225,26 @@ class UnifiedFileService {
         directoryPath: dirPath,
         blacklist: blacklist,
         source: source,
-        onFileFound: (file) {
-          if (processedPaths.add(file.fullPath)) {
-            onFileFound(file);
+        onBatchFound: (batch) {
+          final newFiles = <ScannedFile>[];
+          for (final file in batch) {
+            if (processedPaths.add(file.fullPath)) {
+              newFiles.add(file);
+            }
+          }
+          if (newFiles.isNotEmpty) {
+            onBatchFound(newFiles);
           }
         },
       );
     }
 
     // Process individual files
+    // We treat these as a batch per directory
     for (final entry in filesByDirectory.entries) {
       sourcePaths.add(entry.key);
+      final batch = <ScannedFile>[];
+
       for (final filePath in entry.value) {
         if (!processedPaths.add(filePath)) {
           continue;
@@ -197,8 +263,12 @@ class UnifiedFileService {
             relativePath: fileName,
             source: source,
           );
-          onFileFound(file);
+          batch.add(file);
         } catch (_) {}
+      }
+
+      if (batch.isNotEmpty) {
+        onBatchFound(batch);
       }
     }
 
@@ -219,7 +289,7 @@ class UnifiedFileService {
     try {
       final content = await File(filePath).readAsString();
       final match = RegExp(
-        r'<script>start\("([^"]+)"\);</script>',
+        r'<script>start\("([^\"]+)"\);</script>',
       ).firstMatch(content);
       final dirPath = match?.group(1);
       if (dirPath != null && Directory(dirPath).existsSync()) {
@@ -233,7 +303,7 @@ class UnifiedFileService {
   // FILE OPERATIONS (from FileOperationsService)
   //============================================================================
 
-  /// Saves content to file
+  /// Saves content to file (Legacy string based)
   static Future<void> saveToFile(String content) async {
     if (content.isEmpty) {
       throw ArgumentError('No content to save');
@@ -244,6 +314,181 @@ class UnifiedFileService {
     final filePath = await getSaveLocation(suggestedName: fileName);
     if (filePath != null) {
       await File(filePath.path).writeAsString(content);
+    }
+  }
+
+  /// Builds the combined markdown content for "View All" mode.
+  /// Reads files from disk if their content is not currently loaded in memory.
+  static Future<String> buildCombinedContent(List<ScannedFile> selectedFiles) async {
+    final output = StringBuffer();
+
+    final headerFile = selectedFiles
+        .where((f) => f.isVirtual && f.name == 'Header')
+        .firstOrNull;
+
+    final footerFile = selectedFiles
+        .where((f) => f.isVirtual && f.name == 'Footer')
+        .firstOrNull;
+
+    // --- Header (verbatim) ---
+    if (headerFile != null) {
+      final text = headerFile.effectiveContent;
+      if (text.trim().isNotEmpty) {
+        output.write(text);
+        if (!text.endsWith('\n')) output.writeln();
+        output.writeln();
+      }
+    }
+
+    // --- Build Context Collection ---
+    final context = StringBuffer()
+      ..writeln('# Context Collection')
+      ..writeln();
+
+    final contextFiles = List<ScannedFile>.from(selectedFiles)
+      ..removeWhere(
+        (f) =>
+            f.isVirtual && (f.id == headerFile?.id || f.id == footerFile?.id),
+      )
+      ..sort((a, b) => a.fullPath.compareTo(b.fullPath));
+
+    for (final file in contextFiles) {
+      context
+        ..writeln('## ${file.name}')
+        ..writeln(file.generateReference())
+        ..writeln();
+
+      String content = '';
+      bool isLoaded = false;
+      String? error = file.error;
+
+      // Determine content source
+      if (file.isVirtual || file.editedContent != null || file.content != null) {
+         content = file.effectiveContent;
+         isLoaded = true;
+      } else {
+         // Try reading from disk
+         try {
+           final f = File(file.fullPath);
+           if (f.existsSync()) {
+             final len = await f.length();
+             if (len < 5 * 1024 * 1024) { // 5MB limit per file for view all
+                content = await f.readAsString();
+                isLoaded = true;
+             } else {
+                error = 'File too large to preview (${(len / 1024 / 1024).toStringAsFixed(1)} MB)';
+             }
+           } else {
+             error = 'File not found on disk';
+           }
+         } catch (e) {
+           error = 'Error reading file: $e';
+         }
+      }
+
+      if (isLoaded && error == null) {
+        context
+          ..writeln('```${FileDisplayHelper.getLanguageFromFile(file)}')
+          ..writeln(content)
+          ..writeln('```')
+          ..writeln('\n---\n');
+      } else if (error != null) {
+        context.writeln('```\nERROR: $error\n```');
+      } else {
+         context.writeln('```\n// Content not loaded (Unknown error)\n```');
+      }
+
+      context.writeln();
+    }
+
+    // Normalize extra blank lines
+    final contextNormalized = context.toString().replaceAll(
+      RegExp(r'\n{3,}'),
+      '\n\n',
+    );
+
+    output.write(contextNormalized);
+
+    // --- Footer (verbatim) ---
+    if (footerFile != null) {
+      final text = footerFile.effectiveContent;
+      if (text.trim().isNotEmpty) {
+        if (!output.toString().endsWith('\n\n')) output.writeln();
+        output.write(text);
+        if (!text.endsWith('\n')) output.writeln();
+      }
+    }
+
+    return output.toString();
+  }
+
+  /// Safe export that streams content from disk to disk.
+  /// Handles large projects without using RAM for the whole content.
+  static Future<void> streamSaveToFile(List<ScannedFile> files) async {
+    final fileName =
+        'context_collection_${DateTime.now().millisecondsSinceEpoch}.md';
+    final savePath = await getSaveLocation(suggestedName: fileName);
+    if (savePath == null) return;
+
+    // Open a write stream directly to the file
+    final sink = File(savePath.path).openWrite();
+
+    try {
+      // --- Header ---
+      final headerFile = files
+          .where((f) => f.isVirtual && f.name == 'Header')
+          .firstOrNull;
+      if (headerFile != null) {
+        sink.writeln(headerFile.effectiveContent);
+        sink.writeln();
+      }
+
+      sink.writeln('# Context Collection\n');
+
+      final contextFiles =
+          files
+              .where(
+                (f) =>
+                    !(f.isVirtual &&
+                        (f.name == 'Header' || f.name == 'Footer')),
+              )
+              .toList()
+            ..sort((a, b) => a.fullPath.compareTo(b.fullPath));
+
+      for (final file in contextFiles) {
+        sink.writeln('## ${file.name}');
+        sink.writeln('> **Path:** ${file.fullPath}\n');
+
+        final ext = file.extension.replaceAll('.', '');
+        sink.writeln('```$ext');
+
+        if (file.isVirtual) {
+          sink.write(file.effectiveContent);
+        } else {
+          // REAL FILES: Stream directly from disk!
+          final f = File(file.fullPath);
+          if (f.existsSync()) {
+            await sink.addStream(f.openRead());
+          } else {
+            sink.writeln('// Error: File not found');
+          }
+        }
+
+        sink.writeln('\n```\n');
+        sink.writeln('---\n');
+      }
+
+      // --- Footer ---
+      final footerFile = files
+          .where((f) => f.isVirtual && f.name == 'Footer')
+          .firstOrNull;
+      if (footerFile != null) {
+        sink.writeln();
+        sink.writeln(footerFile.effectiveContent);
+      }
+    } finally {
+      await sink.flush();
+      await sink.close();
     }
   }
 

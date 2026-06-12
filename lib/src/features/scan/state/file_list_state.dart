@@ -1,4 +1,6 @@
-// import 'dart:io'; // Unused
+// lib/src/features/scan/state/file_list_state.dart
+
+import 'dart:async';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -11,7 +13,6 @@ import '../../settings/presentation/state/preferences_notifier.dart';
 import '../../virtual_tree/directory_tree_adapter.dart';
 import '../models/scan_result.dart';
 import '../models/scanned_file.dart';
-import '../services/markdown_builder.dart';
 import '../services/path_parser_service.dart';
 import '../services/unified_file_service.dart';
 
@@ -23,7 +24,7 @@ class SelectionState {
     this.selectedFileIds = const {},
     this.scanHistory = const [],
     this.isProcessing = false,
-    this.sessionStarted = false, // New: Tracks if an editor session is active
+    this.sessionStarted = false,
     this.error,
     this.combinedContent = '',
     this.activeFileId,
@@ -31,43 +32,31 @@ class SelectionState {
     this.pendingRenameFileId,
   });
 
-  final Map<String, ScannedFile>
-  fileMap; // Quick lookup by ID - single source of truth
-  final Set<String> selectedFileIds; // Now using IDs instead of paths
+  final Map<String, ScannedFile> fileMap;
+  final Set<String> selectedFileIds;
   final List<ScanMetadata> scanHistory;
   final bool isProcessing;
   final bool sessionStarted;
   final String? error;
   final String combinedContent;
   final String? activeFileId;
-
-  // When true, Monaco shows ephemeral combined content and should not
-  // be flushed back into any single file.
   final bool viewingAll;
-
-  // When set (e.g., from Dock/global text drop), UI should prompt to rename
-  // the indicated file id.
   final String? pendingRenameFileId;
 
   // Backward compatible getters
   Set<String> get selectedFilePaths =>
       selectedFiles.map((f) => f.fullPath).toSet();
 
-  // New getters using IDs
   List<ScannedFile> get selectedFiles => selectedFileIds
       .map((id) => fileMap[id])
       .whereType<ScannedFile>()
       .toList();
 
   int get selectedFilesCount => selectedFiles.length;
-
   int get totalFilesCount => fileMap.length;
-
   bool get hasFiles => fileMap.isNotEmpty;
-
   bool get hasSelectedFiles => selectedFileIds.isNotEmpty;
 
-  // Helper methods
   ScannedFile? getFileById(String id) => fileMap[id];
 
   List<ScannedFile> getFilesByIds(List<String> ids) =>
@@ -100,50 +89,42 @@ class SelectionState {
     );
   }
 
-  // Convenience
   ScannedFile? get activeFile =>
       activeFileId == null ? null : fileMap[activeFileId];
 }
 
-/// Provider for path parser service
 final pathParserServiceProvider = Provider<PathParserService>(
   (ref) => PathParserService(),
 );
 
-/// Provider - same API
 final selectionProvider =
     StateNotifierProvider<FileListNotifier, SelectionState>((ref) {
-      final markdownBuilder = MarkdownBuilder();
       return FileListNotifier(
         ref: ref,
-        markdownBuilder: markdownBuilder,
       );
     });
 
-/// Enhanced notifier with virtual tree integration.
 class FileListNotifier extends StateNotifier<SelectionState> {
   FileListNotifier({
     required this.ref,
-    required this.markdownBuilder,
   }) : super(const SelectionState());
 
   final Ref ref;
-  final MarkdownBuilder markdownBuilder;
 
   DirectoryTreeAdapter? treeAdapter;
+  Timer? _treeRebuildTimer;
 
   void initializeDirectoryTree(DirectoryTreeAdapter adapter) {
     treeAdapter?.selectionRelay = null;
     treeAdapter = adapter;
     treeAdapter!.selectionRelay = onTreeSelectionChanged;
-    _rebuildTreeFromState();
+    _rebuildTreeFromState(force: true);
   }
 
   //============================================================================
   // MAIN PROCESSING METHOD
   //============================================================================
 
-  /// The single master method for processing all new files/directories.
   Future<void> _processNewItems(
     List<XFile> items, {
     required ScanSource source,
@@ -163,11 +144,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
         items: items,
         blacklist: blacklist,
         source: source,
-        onFileFound: (file) {
-          _addFileToState(file);
-          // Fire-and-forget content load
-          _loadFileContent(file);
-        },
+        onBatchFound: _addBatchToState,
         onScanComplete: (paths) {
           sourcePaths.addAll(paths);
           final scanMetadata = ScanMetadata(
@@ -178,11 +155,12 @@ class FileListNotifier extends StateNotifier<SelectionState> {
           state = state.copyWith(
             scanHistory: [...state.scanHistory, scanMetadata],
           );
-          // Ensure Header/Footer virtual files exist in any active session
           _ensureSpecialFilesPresent();
-          // Final rebuild to ensure everything is in sync
-          _rebuildTreeFromState();
-          _rebuildCombinedContent();
+          _rebuildTreeFromState(force: true);
+          // Only rebuild combined content if absolutely necessary (viewing all)
+          if (state.viewingAll) {
+                  unawaited(_rebuildCombinedContent());
+          }
         },
       );
     } catch (e) {
@@ -192,36 +170,33 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     }
   }
 
-  /// Add a single file to the state and update UI immediately
-  void _addFileToState(ScannedFile file) {
-    final newFileMap = Map<String, ScannedFile>.from(state.fileMap);
-    newFileMap[file.id] = file;
+  /// Efficiently adds a batch of files to the state
+  void _addBatchToState(List<ScannedFile> files) {
+    if (files.isEmpty) return;
 
-    final updatedSelection = Set<String>.from(state.selectedFileIds)
-      ..add(file.id);
+    final newFileMap = Map<String, ScannedFile>.from(state.fileMap);
+    final updatedSelection = Set<String>.from(state.selectedFileIds);
+
+    for (final file in files) {
+      newFileMap[file.id] = file;
+      updatedSelection.add(file.id);
+    }
 
     state = state.copyWith(
       fileMap: newFileMap,
       selectedFileIds: updatedSelection,
-      sessionStarted: true, // Adding any file starts the session
-      // If no active file yet, open this file immediately
-      activeFileId: state.activeFileId ?? file.id,
+      sessionStarted: true,
+      // Only set active file if none exists
+      activeFileId: state.activeFileId ?? files.first.id,
     );
 
-    // INSTANT UI UPDATE - No debouncing!
+    // Update tree incrementally so user sees progress
     _rebuildTreeFromState();
   }
 
-  /// Loads content for a single file and updates the state.
-  Future<void> _loadFileContent(ScannedFile file) async {
-    final loadedFile = await UnifiedFileService.loadFileContent(file);
-    if (mounted && state.fileMap.containsKey(loadedFile.id)) {
-      final newFileMap = Map<String, ScannedFile>.from(state.fileMap);
-      newFileMap[loadedFile.id] = loadedFile;
-      state = state.copyWith(fileMap: newFileMap);
-      // Update combined content when file content is loaded
-      _rebuildCombinedContent();
-    }
+  /// Add a single file (helper for virtual files)
+  void _addFileToState(ScannedFile file) {
+    _addBatchToState([file]);
   }
 
   //============================================================================
@@ -229,27 +204,56 @@ class FileListNotifier extends StateNotifier<SelectionState> {
   //============================================================================
 
   /// Set active file for viewing/editing in Monaco.
+  /// Implements LAZY LOADING of content.
   void setActiveFile(String fileId) {
     if (!state.fileMap.containsKey(fileId)) return;
-    if (state.activeFileId == fileId) return;
-    state = state.copyWith(activeFileId: fileId);
+
+    // Update active ID immediately
+    if (state.activeFileId != fileId) {
+      state = state.copyWith(activeFileId: fileId);
+    }
+
+    // Lazy Load: Check if content is missing and needs loading
+    final file = state.fileMap[fileId]!;
+    if (file.content == null && !file.isVirtual && file.error == null) {
+      _loadSingleFileContent(file);
+    }
   }
 
-  /// Persist the editor's current text into the given file
-  /// (call before switching away or before copy/save).
+  /// Loads content for a single file safely
+  Future<void> _loadSingleFileContent(ScannedFile file) async {
+    try {
+      final loadedFile = await UnifiedFileService.loadFileContent(file);
+
+      if (mounted && state.fileMap.containsKey(loadedFile.id)) {
+        final newFileMap = Map<String, ScannedFile>.from(state.fileMap);
+        newFileMap[loadedFile.id] = loadedFile;
+        state = state.copyWith(fileMap: newFileMap);
+
+        // If we are viewing all, we might need to update the combined view
+        if (state.viewingAll) {
+                unawaited(_rebuildCombinedContent());
+        }
+      }
+    } catch (e) {
+      // Handle read errors gracefully, maybe update file with error state
+    }
+  }
+
   void saveEditorTextFor(String fileId, String text) {
-    // Safety guard: never persist when showing combined "View All" content.
     if (state.viewingAll) return;
     final file = state.fileMap[fileId];
     if (file == null) return;
-    if (text == file.effectiveContent) return; // No change
+    if (text == file.effectiveContent) return;
     final newFileMap = Map<String, ScannedFile>.from(state.fileMap);
     newFileMap[fileId] = file.copyWith(editedContent: text);
     state = state.copyWith(fileMap: newFileMap);
-    _rebuildCombinedContent();
+
+    if (state.viewingAll) {
+            unawaited(_rebuildCombinedContent());
+    }
   }
 
-  /// New: Refreshes the content of all non-virtual files from disk.
   Future<void> refreshAllContents() async {
     state = state.copyWith(isProcessing: true);
     final filesToRefresh = state.fileMap.values.where((f) => !f.isVirtual);
@@ -257,21 +261,18 @@ class FileListNotifier extends StateNotifier<SelectionState> {
 
     for (final file in filesToRefresh) {
       try {
-        // Reload content from disk
         final reloadedFile = await UnifiedFileService.loadFileContent(file);
-        // Overwrite the file in the map, discarding any edits
         newFileMap[reloadedFile.id] = reloadedFile.copyWith(
           editedContent: null,
         );
-      } catch (_) {
-        // Ignore errors for single file reloads
-      }
+      } catch (_) {}
     }
 
     state = state.copyWith(fileMap: newFileMap, isProcessing: false);
-    // Trigger UI rebuilds
-    _rebuildCombinedContent();
-    _rebuildTreeFromState();
+    if (state.viewingAll) {
+            unawaited(_rebuildCombinedContent());
+    }
+    _rebuildTreeFromState(force: true);
   }
 
   Future<void> pickFiles(BuildContext context) async {
@@ -310,7 +311,6 @@ class FileListNotifier extends StateNotifier<SelectionState> {
         existingPaths,
       );
 
-      // Process the validated items
       if (validationResult.hasValidFiles) {
         await _processNewItems(
           validationResult.validFiles,
@@ -318,7 +318,6 @@ class FileListNotifier extends StateNotifier<SelectionState> {
         );
       }
 
-      // Build summary notification
       if (context.mounted && !validationResult.isEmpty) {
         final summary = UnifiedFileService.buildPasteSummary(validationResult);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -335,7 +334,6 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     }
   }
 
-  /// Reads plain-text paths from the clipboard and processes them directly.
   Future<void> pastePathsFromClipboard(BuildContext context) async {
     try {
       final data = await Clipboard.getData(Clipboard.kTextPlain);
@@ -354,6 +352,9 @@ class FileListNotifier extends StateNotifier<SelectionState> {
 
   void setViewingAll(bool v) {
     state = state.copyWith(viewingAll: v);
+    if (v) {
+            unawaited(_rebuildCombinedContent());
+    }
   }
 
   void exitCombinedPreview() => setViewingAll(false);
@@ -374,19 +375,16 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     final newMap = Map<String, ScannedFile>.from(state.fileMap)
       ..[fileId] = updated;
     state = state.copyWith(fileMap: newMap, pendingRenameFileId: null);
-    _rebuildTreeFromState();
+    _rebuildTreeFromState(force: true);
   }
 
-  /// Creates a virtual file with an auto-generated unique name under the tree root.
   void createVirtualFileWithAutoName(
     String content, {
     String base = 'pasted',
     String ext = '.txt',
     bool promptForName = false,
   }) {
-    // Collect existing file names to avoid collisions for the auto name.
     final names = state.fileMap.values.map((f) => f.name).toSet();
-
     String candidate = '$base$ext';
     int i = 2;
     while (names.contains(candidate)) {
@@ -401,15 +399,10 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     );
     _addFileToState(file);
     _ensureSpecialFilesPresent();
-    state = state.copyWith(
-      activeFileId: file.id,
-      // If requested, trigger the rename prompt flow in the editor route.
-      pendingRenameFileId: promptForName ? file.id : state.pendingRenameFileId,
-    );
+    // Setting active file will trigger lazy load check (which does nothing for virtual)
+    setActiveFile(file.id);
   }
 
-  /// Process plain text received via drop (Dock/Finder text drop) or other channels.
-  /// Paths-only: if it parses as paths, they are validated and added; otherwise ignored.
   Future<void> processDroppedText(String text) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
@@ -428,76 +421,89 @@ class FileListNotifier extends StateNotifier<SelectionState> {
       }
       return;
     }
-
-    // Not paths → do nothing (no auto detection/content creation)
   }
 
   //============================================================================
-  // UI REBUILD HELPERS - INSTANT, NO DEBOUNCING
+  // UI REBUILD HELPERS
   //============================================================================
 
-  void _rebuildCombinedContent() {
-    final content = markdownBuilder.buildMarkdown(state.selectedFiles);
+  Future<void> _rebuildCombinedContent() async {
+    if (!state.viewingAll) return; // Lazy rebuild
+    final content = await UnifiedFileService.buildCombinedContent(state.selectedFiles);
     if (mounted) {
       state = state.copyWith(combinedContent: content);
     }
   }
 
-  void _rebuildTreeFromState() {
+  void _rebuildTreeFromState({bool force = false}) {
     final adapter = treeAdapter;
-    if (adapter != null && mounted) {
-      adapter.rebuildFromScanner(
-        files: state.fileMap.values,
-        metadata: state.scanHistory,
-        selectedFileIds: state.selectedFileIds,
+    if (adapter == null || !mounted) return;
+
+    if (!force && (_treeRebuildTimer?.isActive ?? false)) return;
+    _treeRebuildTimer?.cancel();
+
+    if (force) {
+      _performTreeRebuild();
+    } else {
+      _treeRebuildTimer = Timer(
+        const Duration(milliseconds: 200),
+        _performTreeRebuild,
       );
     }
+  }
+
+  void _performTreeRebuild() {
+    final adapter = treeAdapter;
+    if (adapter == null || !mounted) return;
+    adapter.rebuildFromScanner(
+      files: state.fileMap.values,
+      metadata: state.scanHistory,
+      selectedFileIds: state.selectedFileIds,
+    );
   }
 
   //============================================================================
   // STANDARD STATE MANAGEMENT METHODS
   //============================================================================
 
-  /// Saves the combined content of all selected files to a new text file.
   Future<void> saveToFile() async {
     try {
-      await UnifiedFileService.saveToFile(state.combinedContent);
+      state = state.copyWith(isProcessing: true);
+      // Use streaming save to handle large projects
+      await UnifiedFileService.streamSaveToFile(state.selectedFiles);
     } catch (e) {
       state = state.copyWith(error: e.toString());
+    } finally {
+      state = state.copyWith(isProcessing: false);
     }
   }
 
-  /// Copies the combined markdown context to the system clipboard.
   Future<void> copyContextToClipboard() async {
     try {
-      await UnifiedFileService.copyToClipboard(state.combinedContent);
-      // NOTE: The calling UI should show a confirmation SnackBar.
+      // Build content on demand for clipboard
+      final content = await UnifiedFileService.buildCombinedContent(state.selectedFiles);
+      await UnifiedFileService.copyToClipboard(content);
     } catch (e) {
       state = state.copyWith(error: e.toString());
     }
   }
 
-  /// Copies the full paths of selected files to the clipboard.
   Future<void> copyFullPathsToClipboard() async {
     try {
       await UnifiedFileService.copyFullPaths(state.selectedFiles);
-      // NOTE: The calling UI should show a confirmation SnackBar.
     } catch (e) {
       state = state.copyWith(error: e.toString());
     }
   }
 
-  /// Copies the AI-formatted relative paths of selected files to the clipboard.
   Future<void> copyAiPathsToClipboard() async {
     try {
       await UnifiedFileService.copyAiPaths(state.selectedFiles);
-      // NOTE: The calling UI should show a confirmation SnackBar.
     } catch (e) {
       state = state.copyWith(error: e.toString());
     }
   }
 
-  /// Clears the current error message from the state.
   void clearError() {
     state = state.copyWith(clearError: true);
   }
@@ -527,8 +533,12 @@ class FileListNotifier extends StateNotifier<SelectionState> {
   void _updateSelectionAndContent(Set<String> newSelection) {
     if (!mounted) return;
     state = state.copyWith(selectedFileIds: newSelection);
-    // Instant update - no debouncing
-    _rebuildCombinedContent();
+
+    // Only rebuild combined content if we are viewing it
+    if (state.viewingAll) {
+            unawaited(_rebuildCombinedContent());
+    }
+
     treeAdapter?.setSelectedEntryIds(newSelection);
   }
 
@@ -541,8 +551,10 @@ class FileListNotifier extends StateNotifier<SelectionState> {
       fileMap: newFileMap,
       selectedFileIds: newSelectedIds,
     );
-    _rebuildTreeFromState();
-    _rebuildCombinedContent();
+    _rebuildTreeFromState(force: true);
+    if (state.viewingAll) {
+            unawaited(_rebuildCombinedContent());
+    }
   }
 
   void clearFiles() {
@@ -556,18 +568,19 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     final newFileMap = Map<String, ScannedFile>.from(state.fileMap);
     newFileMap[fileId] = file.copyWith(editedContent: newContent);
     state = state.copyWith(fileMap: newFileMap);
-    _rebuildCombinedContent();
+
+    if (state.viewingAll) {
+            unawaited(_rebuildCombinedContent());
+    }
   }
 
   @override
   void dispose() {
+    _treeRebuildTimer?.cancel();
     treeAdapter?.selectionRelay = null;
     super.dispose();
   }
 
-  /// New: Called from UI to create a virtual file.
-  /// This creates the data object and triggers a tree rebuild.
-  /// If [virtualPath] is omitted, the file name is used as its virtual path.
   void createVirtualFile(
     String fileName,
     String content, {
@@ -582,32 +595,23 @@ class FileListNotifier extends StateNotifier<SelectionState> {
       virtualPath: effectivePath,
     );
 
-    // Add to state and rebuild everything. This is simpler and more robust.
     _addFileToState(virtualFile);
-    // Ensure Header/Footer exist in the session (does not steal focus if already set)
     _ensureSpecialFilesPresent();
-    // Make it the active file for editing in Monaco
-    state = state.copyWith(
-      activeFileId: virtualFile.id,
-    );
+    // Setting active file will trigger lazy load check (which does nothing for virtual)
+    setActiveFile(virtualFile.id);
   }
 
-  /// Opens the special Header file, creating it if not present.
   void openHeader() {
-    // If Header exists, just activate it.
     for (final f in state.fileMap.values) {
       if (f.isVirtual && f.name == 'Header') {
         setActiveFile(f.id);
         return;
       }
     }
-    // Otherwise, create an empty Header and focus it.
     createVirtualFile('Header', '');
   }
 
-  /// Ensures virtual files named 'Header' and 'Footer' exist in the current session.
   void _ensureSpecialFilesPresent() {
-    // If no session yet, do nothing (keeps home screen clean).
     if (!state.hasFiles) return;
 
     final hasHeader = state.fileMap.values.any(
@@ -638,17 +642,6 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     }
   }
 
-  /// Removes a set of nodes and all their descendants from the state.
-  /// This is the ONLY way to remove items to ensure proper cleanup.
-  ///
-  /// CRITICAL: This method performs three essential operations:
-  /// 1. Removes files from the master file map
-  /// 2. Updates the selection state
-  /// 3. CLEANS the scanHistory to prevent false duplicate detection
-  ///
-  /// The scanHistory cleanup (step 3) is CRITICAL. Without it, removing files
-  /// and then re-adding the same directory will incorrectly trigger the duplicate
-  /// detection dialog, even though the files are no longer in the tree.
   void removeNodes(Set<String> topLevelNodeIds) {
     final adapter = treeAdapter;
     if (adapter == null) return;
@@ -683,14 +676,11 @@ class FileListNotifier extends StateNotifier<SelectionState> {
 
     final newScanHistory = _removePathsFromScanHistory(sourcePathsToRemove);
 
-    // --- Step 4: Update state and trigger a full tree rebuild ---
     final shouldResetSession =
         newFileMap.isEmpty && state.sessionStarted && !state.hasFiles;
 
-    // Adjust active file if it was removed
     String? newActiveFileId = state.activeFileId;
     if (newActiveFileId != null && !newFileMap.containsKey(newActiveFileId)) {
-      // Prefer any still-selected file, else any remaining file, else null
       final stillSelected = state.selectedFileIds
           .where(newFileMap.containsKey)
           .toList();
@@ -707,18 +697,16 @@ class FileListNotifier extends StateNotifier<SelectionState> {
       fileMap: newFileMap,
       selectedFileIds: newSelectedFileIds,
       scanHistory: newScanHistory,
-      // If all files are removed, end the session to return to home screen
       sessionStarted: state.sessionStarted && !shouldResetSession,
       activeFileId: newActiveFileId,
     );
 
-    // This rebuilds the tree from the now-clean master state
-    _rebuildTreeFromState();
-    _rebuildCombinedContent();
+    _rebuildTreeFromState(force: true);
+    if (state.viewingAll) {
+            unawaited(_rebuildCombinedContent());
+    }
   }
 
-  /// Removes a set of source paths from the scan history and returns the
-  /// clean history. This is critical for preventing incorrect duplicate detection.
   List<ScanMetadata> _removePathsFromScanHistory(
     Iterable<String> pathsToRemove,
   ) {
@@ -726,12 +714,10 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     final newScanHistory = <ScanMetadata>[];
 
     for (final scanMetadata in state.scanHistory) {
-      // Get the source paths from this metadata entry that are NOT being removed.
       final remainingSourcePaths = scanMetadata.sourcePaths
           .where((p) => !pathsToRemoveSet.contains(p))
           .toList();
 
-      // If there are any paths left, create a new metadata object for them.
       if (remainingSourcePaths.isNotEmpty) {
         newScanHistory.add(
           ScanMetadata(

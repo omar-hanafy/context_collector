@@ -7,7 +7,6 @@ import 'package:uuid/uuid.dart';
 
 import '../features/editor/data/monaco_service.dart';
 import '../features/editor/data/providers.dart';
-import '../features/scan/services/markdown_builder.dart';
 import '../features/scan/state/file_list_state.dart';
 import '../features/virtual_tree/directory_tree_adapter.dart';
 import '../features/virtual_tree/providers/virtual_tree_provider.dart';
@@ -49,10 +48,8 @@ class SessionManager extends StateNotifier<List<SessionEntry>> {
           RouteObserver<PageRoute<dynamic>>(),
         ),
         selectionProvider.overrideWith((overrideRef) {
-          final markdownBuilder = MarkdownBuilder();
           return FileListNotifier(
             ref: overrideRef,
-            markdownBuilder: markdownBuilder,
           );
         }),
         directoryTreeAdapterProvider.overrideWith((overrideRef) {

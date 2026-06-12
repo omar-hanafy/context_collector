@@ -83,7 +83,15 @@ class WorkspaceCompletionService {
   void _handleSelectionChanged(SelectionState? previous, SelectionState next) {
     if (_isDisposed) return;
     _pruneMissingFiles(next);
-    for (final file in next.fileMap.values) {
+
+    for (final entry in next.fileMap.entries) {
+      final file = entry.value;
+      // Optimization: Skip re-indexing if the file object instance hasn't changed.
+      // ScannedFile is immutable, so identical instance means identical content.
+      if (previous != null) {
+        final prevFile = previous.fileMap[file.id];
+        if (identical(prevFile, file)) continue;
+      }
       _indexFileIfNeeded(file);
     }
   }
