@@ -244,10 +244,25 @@ class MonacoService extends StateNotifier<EditorStatus> {
     super.dispose();
   }
 
+  /// Whether a Flutter text input (e.g. a dialog's TextField) currently owns
+  /// Flutter's primary focus.
+  ///
+  /// Focus nudges fired by background work (content updates, option changes)
+  /// must never steal the keyboard from one: on Windows the native grab moves
+  /// real Win32 focus to the WebView, so typing would land in Monaco instead
+  /// of the field. [recoverKeyboardFocus] unfocuses first, so an intentional
+  /// handoff still works.
+  static bool _flutterTextInputHasFocus() {
+    final context = FocusManager.instance.primaryFocus?.context;
+    if (context == null) return false;
+    return context.findAncestorStateOfType<EditableTextState>() != null;
+  }
+
   /// Ensures the native WebView grabs platform focus (first responder),
   /// then the JS Monaco instance can accept keyboard input.
   Future<void> ensureNativeFocus() async {
     if (_controller == null || !state.isReady) return;
+    if (_flutterTextInputHasFocus()) return;
     // Ask Flutter to focus the platform view's FocusNode.
     if (_platformViewFocus.canRequestFocus) {
       _platformViewFocus.requestFocus();
@@ -264,6 +279,7 @@ class MonacoService extends StateNotifier<EditorStatus> {
   /// Uses the controller's robust helper with layout + retries.
   Future<void> ensureEditorFocus({int attempts = 3}) async {
     if (_controller == null || !state.isReady) return;
+    if (_flutterTextInputHasFocus()) return;
     await ensureNativeFocus();
     try {
       await _controller!.ensureEditorFocus(attempts: attempts);
