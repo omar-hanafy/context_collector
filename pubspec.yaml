@@ -10,7 +10,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_monaco: ^1.1.1
+  flutter_monaco:
+    git:
+      url: https://github.com/omar-hanafy/flutter_monaco.git
+      ref: fix-#11
   flutter_directory_tree: ^1.0.0
   directory_tree: ^1.0.0
   cupertino_icons: ^1.0.8
@@ -41,7 +44,10 @@ dependencies:
   equatable: ^2.0.7
   # Cross-platform WebView dependencies
   webview_flutter: ^4.13.0        # For macOS, iOS, Android
-  webview_windows: ^0.4.0         # For Windows (keep your existing version)
+  webview_windows:
+    git:
+      url: https://github.com/omar-hanafy/flutter-webview-windows.git
+      ref: main
   auto_updater: ^1.0.0
   package_info_plus: ^9.0.0
   archive: ^4.0.7
