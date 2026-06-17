@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:desktop_drop/desktop_drop.dart';
+import 'package:docx_to_markdown/docx_to_markdown.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
@@ -14,6 +15,21 @@ import '../ui/file_display_helper.dart';
 /// Consolidates FileScanner, DropHandler, and FileOperationsService
 class UnifiedFileService {
   UnifiedFileService._();
+
+  static bool _isDocx(ScannedFile file) =>
+      file.extension.toLowerCase() == '.docx';
+
+  static Future<String> _readDocxAsMarkdown(File file) async {
+    try {
+      final bytes = await file.readAsBytes();
+      return await DocxConverter(bytes).convert();
+    } on DocxPackageException catch (e) {
+      throw FileSystemException(
+        'Cannot read .docx file: ${e.message}',
+        file.path,
+      );
+    }
+  }
 
   //============================================================================
   // FILE SCANNING (from FileScanner)
@@ -151,16 +167,23 @@ class UnifiedFileService {
 
       // Basic size check to prevent OOM on massive files
       // 10MB limit for loading into string
-      final stat = await fileEntity.stat();
+      final stat = fileEntity.statSync();
       if (stat.size > 10 * 1024 * 1024) {
         return file.copyWith(
           error: 'File too large to read (>${stat.size ~/ (1024 * 1024)}MB)',
         );
       }
 
+      if (_isDocx(file)) {
+        final content = await _readDocxAsMarkdown(fileEntity);
+        return file.copyWith(content: content);
+      }
+
       final content = await fileEntity.readAsString();
       return file.copyWith(content: content);
-    } catch (e) {
+    } on FileSystemException catch (e) {
+      return file.copyWith(error: e.message);
+    } catch (_) {
       return file.copyWith(
         error: 'Cannot read file: Likely binary or unsupported format',
       );
@@ -319,7 +342,9 @@ class UnifiedFileService {
 
   /// Builds the combined markdown content for "View All" mode.
   /// Reads files from disk if their content is not currently loaded in memory.
-  static Future<String> buildCombinedContent(List<ScannedFile> selectedFiles) async {
+  static Future<String> buildCombinedContent(
+    List<ScannedFile> selectedFiles,
+  ) async {
     final output = StringBuffer();
 
     final headerFile = selectedFiles
@@ -363,27 +388,36 @@ class UnifiedFileService {
       String? error = file.error;
 
       // Determine content source
-      if (file.isVirtual || file.editedContent != null || file.content != null) {
-         content = file.effectiveContent;
-         isLoaded = true;
+      if (file.isVirtual ||
+          file.editedContent != null ||
+          file.content != null) {
+        content = file.effectiveContent;
+        isLoaded = true;
       } else {
-         // Try reading from disk
-         try {
-           final f = File(file.fullPath);
-           if (f.existsSync()) {
-             final len = await f.length();
-             if (len < 5 * 1024 * 1024) { // 5MB limit per file for view all
+        // Try reading from disk
+        try {
+          final f = File(file.fullPath);
+          if (f.existsSync()) {
+            final len = await f.length();
+            if (len < 5 * 1024 * 1024) {
+              // 5MB limit per file for view all
+              if (_isDocx(file)) {
+                content = await _readDocxAsMarkdown(f);
+                isLoaded = true;
+              } else {
                 content = await f.readAsString();
                 isLoaded = true;
-             } else {
-                error = 'File too large to preview (${(len / 1024 / 1024).toStringAsFixed(1)} MB)';
-             }
-           } else {
-             error = 'File not found on disk';
-           }
-         } catch (e) {
-           error = 'Error reading file: $e';
-         }
+              }
+            } else {
+              error =
+                  'File too large to preview (${(len / 1024 / 1024).toStringAsFixed(1)} MB)';
+            }
+          } else {
+            error = 'File not found on disk';
+          }
+        } catch (e) {
+          error = 'Error reading file: $e';
+        }
       }
 
       if (isLoaded && error == null) {
@@ -395,7 +429,7 @@ class UnifiedFileService {
       } else if (error != null) {
         context.writeln('```\nERROR: $error\n```');
       } else {
-         context.writeln('```\n// Content not loaded (Unknown error)\n```');
+        context.writeln('```\n// Content not loaded (Unknown error)\n```');
       }
 
       context.writeln();
@@ -439,8 +473,9 @@ class UnifiedFileService {
           .where((f) => f.isVirtual && f.name == 'Header')
           .firstOrNull;
       if (headerFile != null) {
-        sink.writeln(headerFile.effectiveContent);
-        sink.writeln();
+        sink
+          ..writeln(headerFile.effectiveContent)
+          ..writeln();
       }
 
       sink.writeln('# Context Collection\n');
@@ -456,11 +491,14 @@ class UnifiedFileService {
             ..sort((a, b) => a.fullPath.compareTo(b.fullPath));
 
       for (final file in contextFiles) {
-        sink.writeln('## ${file.name}');
-        sink.writeln('> **Path:** ${file.fullPath}\n');
+        sink
+          ..writeln('## ${file.name}')
+          ..writeln('> **Path:** ${file.fullPath}\n');
 
-        final ext = file.extension.replaceAll('.', '');
-        sink.writeln('```$ext');
+        final fenceLanguage = _isDocx(file)
+            ? 'markdown'
+            : file.extension.replaceAll('.', '');
+        sink.writeln('```$fenceLanguage');
 
         if (file.isVirtual) {
           sink.write(file.effectiveContent);
@@ -468,14 +506,23 @@ class UnifiedFileService {
           // REAL FILES: Stream directly from disk!
           final f = File(file.fullPath);
           if (f.existsSync()) {
-            await sink.addStream(f.openRead());
+            if (_isDocx(file)) {
+              try {
+                sink.write(await _readDocxAsMarkdown(f));
+              } catch (e) {
+                sink.writeln('// Error converting .docx to text: $e');
+              }
+            } else {
+              await sink.addStream(f.openRead());
+            }
           } else {
             sink.writeln('// Error: File not found');
           }
         }
 
-        sink.writeln('\n```\n');
-        sink.writeln('---\n');
+        sink
+          ..writeln('\n```\n')
+          ..writeln('---\n');
       }
 
       // --- Footer ---
@@ -483,8 +530,9 @@ class UnifiedFileService {
           .where((f) => f.isVirtual && f.name == 'Footer')
           .firstOrNull;
       if (footerFile != null) {
-        sink.writeln();
-        sink.writeln(footerFile.effectiveContent);
+        sink
+          ..writeln()
+          ..writeln(footerFile.effectiveContent);
       }
     } finally {
       await sink.flush();

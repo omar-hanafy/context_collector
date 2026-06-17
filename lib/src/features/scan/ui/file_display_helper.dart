@@ -81,6 +81,7 @@ class FileDisplayHelper {
       '.yml': 'yaml',
       '.xml': 'xml',
       '.md': 'markdown',
+      '.docx': 'markdown',
       '.sql': 'sql',
       '.sh': 'shell',
       '.bash': 'shell',
