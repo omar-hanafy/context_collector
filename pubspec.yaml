@@ -90,7 +90,7 @@ msix_config:
   publisher_display_name: Omar Hanafy
 
   # Store requires revision=0; keep 4-part, monotonic. Next releases: 3.0.1.0, 3.0.2.0, ...
-  msix_version: 3.2.0.0
+  msix_version: 3.3.0.0
 
   # Use original high-res source so MSIX can downscale cleanly
   logo_path: icons/ContextCollector.png
