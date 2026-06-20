@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:context_collector/src/features/editor/data/monaco_service.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -137,6 +138,131 @@ void main() {
         editorMayClaimKeyboard(
           FocusManager.instance.primaryFocus,
           platformView,
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('editorPointerMayClaimKeyboard', () {
+    test('allows primary mouse clicks to claim typing focus', () {
+      expect(
+        editorPointerMayClaimKeyboard(
+          const PointerDownEvent(
+            kind: PointerDeviceKind.mouse,
+            buttons: kPrimaryMouseButton,
+          ),
+        ),
+        isTrue,
+      );
+    });
+
+    test(
+      'does not turn secondary or middle mouse clicks into focus nudges',
+      () {
+        expect(
+          editorPointerMayClaimKeyboard(
+            const PointerDownEvent(
+              kind: PointerDeviceKind.mouse,
+              buttons: kSecondaryMouseButton,
+            ),
+          ),
+          isFalse,
+        );
+        expect(
+          editorPointerMayClaimKeyboard(
+            const PointerDownEvent(
+              kind: PointerDeviceKind.mouse,
+              buttons: kMiddleMouseButton,
+            ),
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test('keeps touch taps eligible for editor focus', () {
+      expect(
+        editorPointerMayClaimKeyboard(
+          const PointerDownEvent(
+            kind: PointerDeviceKind.touch,
+            buttons: kPrimaryButton,
+          ),
+        ),
+        isTrue,
+      );
+    });
+  });
+
+  group('editorPointerShouldNudgeFocus', () {
+    test('allows primary clicks to enter focus when fully unfocused', () {
+      expect(
+        editorPointerShouldNudgeFocus(
+          const PointerDownEvent(
+            kind: PointerDeviceKind.mouse,
+            buttons: kPrimaryMouseButton,
+          ),
+          editorHasFlutterFocus: false,
+          editorReportsFocused: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('does not replay focus when the editor is already fully focused', () {
+      expect(
+        editorPointerShouldNudgeFocus(
+          const PointerDownEvent(
+            kind: PointerDeviceKind.mouse,
+            buttons: kPrimaryMouseButton,
+          ),
+          editorHasFlutterFocus: true,
+          editorReportsFocused: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test(
+        're-asserts focus when Monaco reports unfocused despite Flutter focus '
+        '(alt-tab/dialog desync)', () {
+      expect(
+        editorPointerShouldNudgeFocus(
+          const PointerDownEvent(
+            kind: PointerDeviceKind.mouse,
+            buttons: kPrimaryMouseButton,
+          ),
+          editorHasFlutterFocus: true,
+          editorReportsFocused: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('re-asserts focus when Flutter focus is missing despite Monaco focus',
+        () {
+      expect(
+        editorPointerShouldNudgeFocus(
+          const PointerDownEvent(
+            kind: PointerDeviceKind.mouse,
+            buttons: kPrimaryMouseButton,
+          ),
+          editorHasFlutterFocus: false,
+          editorReportsFocused: true,
+        ),
+        isTrue,
+      );
+    });
+
+    test('never nudges for secondary clicks, even when fully unfocused', () {
+      expect(
+        editorPointerShouldNudgeFocus(
+          const PointerDownEvent(
+            kind: PointerDeviceKind.mouse,
+            buttons: kSecondaryMouseButton,
+          ),
+          editorHasFlutterFocus: false,
+          editorReportsFocused: false,
         ),
         isFalse,
       );

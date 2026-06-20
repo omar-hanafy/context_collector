@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
@@ -45,6 +46,32 @@ bool editorMayClaimKeyboard(FocusNode? primary, FocusNode platformView) {
   return false;
 }
 
+@visibleForTesting
+bool editorPointerMayClaimKeyboard(PointerDownEvent event) {
+  if (event.kind == PointerDeviceKind.mouse ||
+      event.kind == PointerDeviceKind.trackpad) {
+    return event.buttons == kPrimaryMouseButton;
+  }
+  return true;
+}
+
+@visibleForTesting
+bool editorPointerShouldNudgeFocus(
+  PointerDownEvent event, {
+  required bool editorHasFlutterFocus,
+  required bool editorReportsFocused,
+}) {
+  // Re-assert focus only when the editor is not already fully focused: it
+  // lacks Flutter focus (Flutter key routing) OR Monaco itself reports
+  // unfocused (its input cannot receive keystrokes). Gating on Monaco's own
+  // focus signal - not just the Flutter focus proxy - is what lets a click
+  // recover typing after the editor silently lost native focus (alt-tab, a
+  // dialog, a tab switch), while an already-focused editor is still left
+  // alone so repeated clicks never replay focus.
+  if (!editorPointerMayClaimKeyboard(event)) return false;
+  return !editorHasFlutterFocus || !editorReportsFocused;
+}
+
 /// Simplified Monaco service using the flutter_monaco package
 class MonacoService extends StateNotifier<EditorStatus> {
   MonacoService()
@@ -59,6 +86,15 @@ class MonacoService extends StateNotifier<EditorStatus> {
     debugLabel: 'MonacoPlatformView',
   );
   Completer<void>? _initCompleter;
+
+  // Tracks whether Monaco itself reports the editor focused (its input can
+  // receive keystrokes), driven by the controller's focus/blur stream. Lets a
+  // pointer-down tell "already focused, leave it alone" apart from "Flutter
+  // thinks it's focused but Monaco lost it" (the alt-tab/dialog desync), so the
+  // latter still re-asserts focus on click. See editorPointerShouldNudgeFocus.
+  bool _editorReportsFocused = false;
+  StreamSubscription<void>? _focusSub;
+  StreamSubscription<void>? _blurSub;
 
   // Ensures only the latest updateContent() call wins.
   int _setEpoch = 0;
@@ -98,10 +134,15 @@ class MonacoService extends StateNotifier<EditorStatus> {
     return Listener(
       // Important on macOS: don't claim the primary click; let WKWebView win it.
       behavior: HitTestBehavior.translucent,
-      onPointerDown: (_) {
-        if (!_platformViewFocus.hasFocus) {
-          _platformViewFocus.requestFocus();
+      onPointerDown: (event) {
+        if (!editorPointerShouldNudgeFocus(
+          event,
+          editorHasFlutterFocus: _platformViewFocus.hasFocus,
+          editorReportsFocused: _editorReportsFocused,
+        )) {
+          return;
         }
+        _platformViewFocus.requestFocus();
         // Nudge Monaco input focus without blocking the event pipeline.
         unawaited(ensureEditorFocus(attempts: 1));
       },
@@ -169,6 +210,15 @@ class MonacoService extends StateNotifier<EditorStatus> {
       _controller = await MonacoController.create(
         options: options,
       );
+
+      // Track Monaco's own focus state so a pointer-down only re-asserts focus
+      // when the editor actually needs it (see editorPointerShouldNudgeFocus).
+      _focusSub = _controller!.onFocus.listen((_) {
+        _editorReportsFocused = true;
+      });
+      _blurSub = _controller!.onBlur.listen((_) {
+        _editorReportsFocused = false;
+      });
 
       // Apply queued content if any (language first; then sticky commit)
       if (_queuedContent != null) {
@@ -276,6 +326,8 @@ class MonacoService extends StateNotifier<EditorStatus> {
 
   @override
   void dispose() {
+    _focusSub?.cancel();
+    _blurSub?.cancel();
     _platformViewFocus.dispose();
     _controller?.dispose();
     super.dispose();
@@ -302,6 +354,13 @@ class MonacoService extends StateNotifier<EditorStatus> {
     _platformViewFocus,
   );
 
+  Future<void> _ensureFlutterPlatformFocus() async {
+    if (_platformViewFocus.canRequestFocus) {
+      _platformViewFocus.requestFocus();
+    }
+    await Future<void>.delayed(Duration.zero);
+  }
+
   /// Ensures the native WebView grabs platform focus (first responder),
   /// then the JS Monaco instance can accept keyboard input.
   ///
@@ -314,9 +373,7 @@ class MonacoService extends StateNotifier<EditorStatus> {
     await Future<void>.delayed(Duration.zero);
     if (!_editorOwnsKeyboard()) return;
     // Ask Flutter to focus the platform view's FocusNode.
-    if (_platformViewFocus.canRequestFocus) {
-      _platformViewFocus.requestFocus();
-    }
+    await _ensureFlutterPlatformFocus();
     // Also nudge the native view to become first responder.
     try {
       await _controller!.focus();
@@ -334,7 +391,7 @@ class MonacoService extends StateNotifier<EditorStatus> {
     if (_controller == null || !state.isReady) return;
     await Future<void>.delayed(Duration.zero);
     if (!_editorOwnsKeyboard()) return;
-    await ensureNativeFocus();
+    await _ensureFlutterPlatformFocus();
     try {
       await _controller!.ensureEditorFocus(attempts: attempts);
     } catch (_) {
