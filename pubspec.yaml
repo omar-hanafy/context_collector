@@ -13,7 +13,7 @@ dependencies:
   flutter_monaco:
     git:
       url: https://github.com/omar-hanafy/flutter_monaco.git
-      ref: fix-#11
+      ref: fix/focus-and-input-handling
   flutter_directory_tree: ^1.0.0
   directory_tree: ^1.0.0
   cupertino_icons: ^1.0.8
