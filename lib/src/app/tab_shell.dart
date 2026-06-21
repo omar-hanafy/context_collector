@@ -1195,17 +1195,16 @@ class _TabShellState extends ConsumerState<TabShell> {
 
   Future<void> _copyCombinedContent(SessionEntry session) async {
     await _syncActiveEditorContent(session);
-    final content = session.container.read(selectionProvider).combinedContent;
-    if (content.trim().isEmpty) {
-      _showSnackBar('Nothing to copy.');
-      unawaited(_restoreSessionFocus(session));
-      return;
-    }
 
     try {
-      await session.container
+      final copied = await session.container
           .read(selectionProvider.notifier)
           .copyContextToClipboard();
+      if (!copied) {
+        _showSnackBar('Nothing to copy.');
+        unawaited(_restoreSessionFocus(session));
+        return;
+      }
       _showSnackBar('Combined content copied!');
     } catch (e) {
       _showSnackBar('Copy failed: $e');

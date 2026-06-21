@@ -159,7 +159,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
           _rebuildTreeFromState(force: true);
           // Only rebuild combined content if absolutely necessary (viewing all)
           if (state.viewingAll) {
-                  unawaited(_rebuildCombinedContent());
+            unawaited(_rebuildCombinedContent());
           }
         },
       );
@@ -232,7 +232,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
 
         // If we are viewing all, we might need to update the combined view
         if (state.viewingAll) {
-                unawaited(_rebuildCombinedContent());
+          unawaited(_rebuildCombinedContent());
         }
       }
     } catch (e) {
@@ -250,7 +250,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     state = state.copyWith(fileMap: newFileMap);
 
     if (state.viewingAll) {
-            unawaited(_rebuildCombinedContent());
+      unawaited(_rebuildCombinedContent());
     }
   }
 
@@ -270,7 +270,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
 
     state = state.copyWith(fileMap: newFileMap, isProcessing: false);
     if (state.viewingAll) {
-            unawaited(_rebuildCombinedContent());
+      unawaited(_rebuildCombinedContent());
     }
     _rebuildTreeFromState(force: true);
   }
@@ -353,7 +353,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
   void setViewingAll(bool v) {
     state = state.copyWith(viewingAll: v);
     if (v) {
-            unawaited(_rebuildCombinedContent());
+      unawaited(_rebuildCombinedContent());
     }
   }
 
@@ -429,7 +429,9 @@ class FileListNotifier extends StateNotifier<SelectionState> {
 
   Future<void> _rebuildCombinedContent() async {
     if (!state.viewingAll) return; // Lazy rebuild
-    final content = await UnifiedFileService.buildCombinedContent(state.selectedFiles);
+    final content = await UnifiedFileService.buildCombinedContent(
+      state.selectedFiles,
+    );
     if (mounted) {
       state = state.copyWith(combinedContent: content);
     }
@@ -478,13 +480,21 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     }
   }
 
-  Future<void> copyContextToClipboard() async {
+  Future<String> buildSelectedContextContent() async {
+    final selectedFiles = state.selectedFiles;
+    if (selectedFiles.isEmpty) return '';
+    return UnifiedFileService.buildCombinedContent(selectedFiles);
+  }
+
+  Future<bool> copyContextToClipboard() async {
     try {
-      // Build content on demand for clipboard
-      final content = await UnifiedFileService.buildCombinedContent(state.selectedFiles);
+      final content = await buildSelectedContextContent();
+      if (content.trim().isEmpty) return false;
       await UnifiedFileService.copyToClipboard(content);
+      return true;
     } catch (e) {
       state = state.copyWith(error: e.toString());
+      rethrow;
     }
   }
 
@@ -493,6 +503,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
       await UnifiedFileService.copyFullPaths(state.selectedFiles);
     } catch (e) {
       state = state.copyWith(error: e.toString());
+      rethrow;
     }
   }
 
@@ -501,6 +512,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
       await UnifiedFileService.copyAiPaths(state.selectedFiles);
     } catch (e) {
       state = state.copyWith(error: e.toString());
+      rethrow;
     }
   }
 
@@ -536,7 +548,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
 
     // Only rebuild combined content if we are viewing it
     if (state.viewingAll) {
-            unawaited(_rebuildCombinedContent());
+      unawaited(_rebuildCombinedContent());
     }
 
     treeAdapter?.setSelectedEntryIds(newSelection);
@@ -553,7 +565,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     );
     _rebuildTreeFromState(force: true);
     if (state.viewingAll) {
-            unawaited(_rebuildCombinedContent());
+      unawaited(_rebuildCombinedContent());
     }
   }
 
@@ -570,7 +582,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     state = state.copyWith(fileMap: newFileMap);
 
     if (state.viewingAll) {
-            unawaited(_rebuildCombinedContent());
+      unawaited(_rebuildCombinedContent());
     }
   }
 
@@ -703,7 +715,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
 
     _rebuildTreeFromState(force: true);
     if (state.viewingAll) {
-            unawaited(_rebuildCombinedContent());
+      unawaited(_rebuildCombinedContent());
     }
   }
 

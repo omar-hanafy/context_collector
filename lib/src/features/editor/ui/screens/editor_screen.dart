@@ -418,12 +418,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       }
     }
 
-    final content = ref.read(selectionProvider).combinedContent;
-    if (content.isEmpty) {
-      return CopyFeedback.empty;
-    }
-
     try {
+      final content = await ref
+          .read(selectionProvider.notifier)
+          .buildSelectedContextContent();
+      if (content.trim().isEmpty) {
+        return CopyFeedback.empty;
+      }
+
       await Clipboard.setData(ClipboardData(text: content));
       return CopyFeedback.success;
     } catch (e) {
