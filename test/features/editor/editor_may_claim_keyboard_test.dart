@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:context_collector/src/features/editor/data/monaco_service.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Locks the single invariant that makes Windows focus-stealing impossible:
@@ -194,10 +195,10 @@ void main() {
     });
   });
 
-  group('editorPointerShouldNudgeFocus', () {
-    test('allows primary clicks to enter focus when fully unfocused', () {
+  group('editorPointerFocusIntent', () {
+    test('marks primary clicks as user focus when fully unfocused', () {
       expect(
-        editorPointerShouldNudgeFocus(
+        editorPointerFocusIntent(
           const PointerDownEvent(
             kind: PointerDeviceKind.mouse,
             buttons: kPrimaryMouseButton,
@@ -206,15 +207,15 @@ void main() {
           editorReportsFocused: false,
           platform: TargetPlatform.windows,
         ),
-        isTrue,
+        MonacoFocusIntent.user,
       );
     });
 
     test(
-      'does not replay focus on Windows when the editor is fully focused',
+      'does not replay user focus on Windows when the editor is fully focused',
       () {
         expect(
-          editorPointerShouldNudgeFocus(
+          editorPointerFocusIntent(
             const PointerDownEvent(
               kind: PointerDeviceKind.mouse,
               buttons: kPrimaryMouseButton,
@@ -223,14 +224,14 @@ void main() {
             editorReportsFocused: true,
             platform: TargetPlatform.windows,
           ),
-          isFalse,
+          isNull,
         );
       },
     );
 
-    test('re-asserts focus on macOS even when focus signals are stale', () {
+    test('uses user intent on macOS even when focus signals are stale', () {
       expect(
-        editorPointerShouldNudgeFocus(
+        editorPointerFocusIntent(
           const PointerDownEvent(
             kind: PointerDeviceKind.mouse,
             buttons: kPrimaryMouseButton,
@@ -239,14 +240,14 @@ void main() {
           editorReportsFocused: true,
           platform: TargetPlatform.macOS,
         ),
-        isTrue,
+        MonacoFocusIntent.user,
       );
     });
 
-    test('re-asserts focus when Monaco reports unfocused despite Flutter focus '
+    test('uses user intent when Monaco reports unfocused despite Flutter focus '
         '(alt-tab/dialog desync)', () {
       expect(
-        editorPointerShouldNudgeFocus(
+        editorPointerFocusIntent(
           const PointerDownEvent(
             kind: PointerDeviceKind.mouse,
             buttons: kPrimaryMouseButton,
@@ -255,15 +256,15 @@ void main() {
           editorReportsFocused: false,
           platform: TargetPlatform.windows,
         ),
-        isTrue,
+        MonacoFocusIntent.user,
       );
     });
 
     test(
-      're-asserts focus when Flutter focus is missing despite Monaco focus',
+      'uses user intent when Flutter focus is missing despite Monaco focus',
       () {
         expect(
-          editorPointerShouldNudgeFocus(
+          editorPointerFocusIntent(
             const PointerDownEvent(
               kind: PointerDeviceKind.mouse,
               buttons: kPrimaryMouseButton,
@@ -272,14 +273,14 @@ void main() {
             editorReportsFocused: true,
             platform: TargetPlatform.windows,
           ),
-          isTrue,
+          MonacoFocusIntent.user,
         );
       },
     );
 
-    test('never nudges for secondary clicks, even when fully unfocused', () {
+    test('never creates focus intent for secondary clicks', () {
       expect(
-        editorPointerShouldNudgeFocus(
+        editorPointerFocusIntent(
           const PointerDownEvent(
             kind: PointerDeviceKind.mouse,
             buttons: kSecondaryMouseButton,
@@ -288,7 +289,7 @@ void main() {
           editorReportsFocused: false,
           platform: TargetPlatform.macOS,
         ),
-        isFalse,
+        isNull,
       );
     });
   });

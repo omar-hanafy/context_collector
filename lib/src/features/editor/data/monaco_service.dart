@@ -56,27 +56,23 @@ bool editorPointerMayClaimKeyboard(PointerDownEvent event) {
 }
 
 @visibleForTesting
-bool editorPointerShouldNudgeFocus(
+MonacoFocusIntent? editorPointerFocusIntent(
   PointerDownEvent event, {
   required bool editorHasFlutterFocus,
   required bool editorReportsFocused,
   TargetPlatform? platform,
 }) {
   final targetPlatform = platform ?? defaultTargetPlatform;
-  // Re-assert focus only when the editor is not already fully focused: it
-  // lacks Flutter focus (Flutter key routing) OR Monaco itself reports
-  // unfocused (its input cannot receive keystrokes). Gating on Monaco's own
-  // focus signal - not just the Flutter focus proxy - is what lets a click
-  // recover typing after the editor silently lost native focus (alt-tab, a
-  // dialog, a tab switch), while an already-focused editor is still left
-  // alone so repeated clicks never replay focus.
-  if (!editorPointerMayClaimKeyboard(event)) return false;
-  // On macOS, WKWebView can lose native first-responder status without Flutter's
-  // focus node or Monaco's blur stream reflecting it. A primary click into the
-  // editor is explicit user intent, so reassert the in-page focus each time.
-  // Windows stays on the stricter gate below to avoid WebView2 focus replay.
-  if (targetPlatform == TargetPlatform.macOS) return true;
-  return !editorHasFlutterFocus || !editorReportsFocused;
+  if (!editorPointerMayClaimKeyboard(event)) return null;
+  // Context Collector renders the package controller's raw WebView so it must
+  // keep the same pointer-entry gate that MonacoEditor uses around it:
+  // macOS user clicks always re-run input readiness recovery, while Windows
+  // avoids replaying focus when both focus signals are already current.
+  if (targetPlatform == TargetPlatform.macOS) return MonacoFocusIntent.user;
+  if (!editorHasFlutterFocus || !editorReportsFocused) {
+    return MonacoFocusIntent.user;
+  }
+  return null;
 }
 
 /// Simplified Monaco service using the flutter_monaco package
@@ -98,7 +94,7 @@ class MonacoService extends StateNotifier<EditorStatus> {
   // receive keystrokes), driven by the controller's focus/blur stream. Lets a
   // pointer-down tell "already focused, leave it alone" apart from "Flutter
   // thinks it's focused but Monaco lost it" (the alt-tab/dialog desync), so the
-  // latter still re-asserts focus on click. See editorPointerShouldNudgeFocus.
+  // latter still re-asserts focus on click. See editorPointerFocusIntent.
   bool _editorReportsFocused = false;
   StreamSubscription<void>? _focusSub;
   StreamSubscription<void>? _blurSub;
@@ -142,17 +138,22 @@ class MonacoService extends StateNotifier<EditorStatus> {
       // Important on macOS: don't claim the primary click; let WKWebView win it.
       behavior: HitTestBehavior.translucent,
       onPointerDown: (event) {
-        if (!editorPointerShouldNudgeFocus(
+        final intent = editorPointerFocusIntent(
           event,
           editorHasFlutterFocus: _platformViewFocus.hasFocus,
           editorReportsFocused: _editorReportsFocused,
           platform: defaultTargetPlatform,
-        )) {
+        );
+        if (intent == null) {
           return;
         }
         _platformViewFocus.requestFocus();
-        // Nudge Monaco input focus without blocking the event pipeline.
-        unawaited(ensureEditorFocus(attempts: 1));
+        unawaited(
+          ensureEditorFocus(
+            attempts: 1,
+            intent: intent,
+          ),
+        );
       },
       child: Focus(
         focusNode: _platformViewFocus,
@@ -220,7 +221,7 @@ class MonacoService extends StateNotifier<EditorStatus> {
       );
 
       // Track Monaco's own focus state so a pointer-down only re-asserts focus
-      // when the editor actually needs it (see editorPointerShouldNudgeFocus).
+      // when the editor actually needs it (see editorPointerFocusIntent).
       _focusSub = _controller!.onFocus.listen((_) {
         _editorReportsFocused = true;
       });
@@ -395,13 +396,21 @@ class MonacoService extends StateNotifier<EditorStatus> {
   ///
   /// Stands down unless the editor already owns the keyboard (or nobody
   /// does); see [_editorOwnsKeyboard].
-  Future<void> ensureEditorFocus({int attempts = 3}) async {
+  Future<void> ensureEditorFocus({
+    int attempts = 3,
+    MonacoFocusIntent intent = MonacoFocusIntent.maintenance,
+  }) async {
     if (_controller == null || !state.isReady) return;
     await Future<void>.delayed(Duration.zero);
-    if (!_editorOwnsKeyboard()) return;
+    if (intent == MonacoFocusIntent.maintenance && !_editorOwnsKeyboard()) {
+      return;
+    }
     await _ensureFlutterPlatformFocus();
     try {
-      await _controller!.ensureEditorFocus(attempts: attempts);
+      await _controller!.ensureEditorFocus(
+        attempts: attempts,
+        intent: intent,
+      );
     } catch (_) {
       // Fallback for older builds: best-effort focus.
       try {
@@ -441,7 +450,10 @@ class MonacoService extends StateNotifier<EditorStatus> {
     await Future<void>.delayed(const Duration(milliseconds: 16));
     await ensureNativeFocus();
     try {
-      await _controller!.ensureEditorFocus(attempts: attempts);
+      await _controller!.ensureEditorFocus(
+        attempts: attempts,
+        intent: MonacoFocusIntent.maintenance,
+      );
     } catch (_) {
       try {
         await _controller!.focus();
