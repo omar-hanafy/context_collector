@@ -204,12 +204,31 @@ void main() {
           ),
           editorHasFlutterFocus: false,
           editorReportsFocused: false,
+          platform: TargetPlatform.windows,
         ),
         isTrue,
       );
     });
 
-    test('does not replay focus when the editor is already fully focused', () {
+    test(
+      'does not replay focus on Windows when the editor is fully focused',
+      () {
+        expect(
+          editorPointerShouldNudgeFocus(
+            const PointerDownEvent(
+              kind: PointerDeviceKind.mouse,
+              buttons: kPrimaryMouseButton,
+            ),
+            editorHasFlutterFocus: true,
+            editorReportsFocused: true,
+            platform: TargetPlatform.windows,
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test('re-asserts focus on macOS even when focus signals are stale', () {
       expect(
         editorPointerShouldNudgeFocus(
           const PointerDownEvent(
@@ -218,13 +237,13 @@ void main() {
           ),
           editorHasFlutterFocus: true,
           editorReportsFocused: true,
+          platform: TargetPlatform.macOS,
         ),
-        isFalse,
+        isTrue,
       );
     });
 
-    test(
-        're-asserts focus when Monaco reports unfocused despite Flutter focus '
+    test('re-asserts focus when Monaco reports unfocused despite Flutter focus '
         '(alt-tab/dialog desync)', () {
       expect(
         editorPointerShouldNudgeFocus(
@@ -234,25 +253,29 @@ void main() {
           ),
           editorHasFlutterFocus: true,
           editorReportsFocused: false,
+          platform: TargetPlatform.windows,
         ),
         isTrue,
       );
     });
 
-    test('re-asserts focus when Flutter focus is missing despite Monaco focus',
-        () {
-      expect(
-        editorPointerShouldNudgeFocus(
-          const PointerDownEvent(
-            kind: PointerDeviceKind.mouse,
-            buttons: kPrimaryMouseButton,
+    test(
+      're-asserts focus when Flutter focus is missing despite Monaco focus',
+      () {
+        expect(
+          editorPointerShouldNudgeFocus(
+            const PointerDownEvent(
+              kind: PointerDeviceKind.mouse,
+              buttons: kPrimaryMouseButton,
+            ),
+            editorHasFlutterFocus: false,
+            editorReportsFocused: true,
+            platform: TargetPlatform.windows,
           ),
-          editorHasFlutterFocus: false,
-          editorReportsFocused: true,
-        ),
-        isTrue,
-      );
-    });
+          isTrue,
+        );
+      },
+    );
 
     test('never nudges for secondary clicks, even when fully unfocused', () {
       expect(
@@ -263,6 +286,7 @@ void main() {
           ),
           editorHasFlutterFocus: false,
           editorReportsFocused: false,
+          platform: TargetPlatform.macOS,
         ),
         isFalse,
       );

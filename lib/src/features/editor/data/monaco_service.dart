@@ -60,7 +60,9 @@ bool editorPointerShouldNudgeFocus(
   PointerDownEvent event, {
   required bool editorHasFlutterFocus,
   required bool editorReportsFocused,
+  TargetPlatform? platform,
 }) {
+  final targetPlatform = platform ?? defaultTargetPlatform;
   // Re-assert focus only when the editor is not already fully focused: it
   // lacks Flutter focus (Flutter key routing) OR Monaco itself reports
   // unfocused (its input cannot receive keystrokes). Gating on Monaco's own
@@ -69,6 +71,11 @@ bool editorPointerShouldNudgeFocus(
   // dialog, a tab switch), while an already-focused editor is still left
   // alone so repeated clicks never replay focus.
   if (!editorPointerMayClaimKeyboard(event)) return false;
+  // On macOS, WKWebView can lose native first-responder status without Flutter's
+  // focus node or Monaco's blur stream reflecting it. A primary click into the
+  // editor is explicit user intent, so reassert the in-page focus each time.
+  // Windows stays on the stricter gate below to avoid WebView2 focus replay.
+  if (targetPlatform == TargetPlatform.macOS) return true;
   return !editorHasFlutterFocus || !editorReportsFocused;
 }
 
@@ -139,6 +146,7 @@ class MonacoService extends StateNotifier<EditorStatus> {
           event,
           editorHasFlutterFocus: _platformViewFocus.hasFocus,
           editorReportsFocused: _editorReportsFocused,
+          platform: defaultTargetPlatform,
         )) {
           return;
         }
