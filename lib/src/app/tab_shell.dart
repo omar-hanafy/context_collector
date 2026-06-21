@@ -6,6 +6,7 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/gestures.dart' show kMiddleMouseButton;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -82,6 +83,8 @@ class _TabShellState extends ConsumerState<TabShell> {
   bool _isDragging = false;
   String? _editingSessionId;
   bool _isAddTabDropTarget = false;
+  GlobalEditCommand? _lastDirectEditCommand;
+  DateTime? _lastDirectEditAt;
   final Uuid _uuid = const Uuid();
 
   void _activateSession(SessionEntry session) {
@@ -157,6 +160,8 @@ class _TabShellState extends ConsumerState<TabShell> {
     Widget body = GlobalHotkeys(
       registry: shortcuts,
       onCommand: _handleShortcut,
+      canHandleEditCommand: _canHandleGlobalEditCommand,
+      onEditCommand: _handleGlobalEditCommand,
       child: Scaffold(
         body: DropTarget(
           onDragEntered: (_) {
@@ -518,6 +523,14 @@ class _TabShellState extends ConsumerState<TabShell> {
       return;
     }
 
+    final editCommand = _globalCommandForMacEditCommand(command);
+    if (_wasDirectEditCommandJustHandled(editCommand)) {
+      return;
+    }
+    if (await _performActiveMonacoEditCommand(editCommand)) {
+      return;
+    }
+
     final String commandName = switch (command) {
       _MacEditCommand.undo => 'undo',
       _MacEditCommand.redo => 'redo',
@@ -543,6 +556,126 @@ class _TabShellState extends ConsumerState<TabShell> {
         ),
       );
     }
+  }
+
+  GlobalEditCommand _globalCommandForMacEditCommand(_MacEditCommand command) {
+    return switch (command) {
+      _MacEditCommand.undo => GlobalEditCommand.undo,
+      _MacEditCommand.redo => GlobalEditCommand.redo,
+      _MacEditCommand.cut => GlobalEditCommand.cut,
+      _MacEditCommand.copy => GlobalEditCommand.copy,
+      _MacEditCommand.paste => GlobalEditCommand.paste,
+      _MacEditCommand.selectAll => GlobalEditCommand.selectAll,
+    };
+  }
+
+  bool _canHandleGlobalEditCommand(GlobalEditCommand command) {
+    final sessions = ref.read(sessionManagerProvider);
+    final activeId = ref.read(activeSessionIdProvider);
+    final session = _resolveActiveSession(sessions, activeId);
+    if (session == null) return false;
+
+    final service = session.container.read(monacoEditorStatusProvider.notifier);
+    return service.canHandleNativeEditCommand;
+  }
+
+  Future<void> _handleGlobalEditCommand(GlobalEditCommand command) async {
+    if (await _performActiveMonacoEditCommand(command)) {
+      _lastDirectEditCommand = command;
+      _lastDirectEditAt = DateTime.now();
+    }
+  }
+
+  bool _wasDirectEditCommandJustHandled(GlobalEditCommand command) {
+    final handledAt = _lastDirectEditAt;
+    if (_lastDirectEditCommand != command || handledAt == null) return false;
+    return DateTime.now().difference(handledAt) <
+        const Duration(milliseconds: 250);
+  }
+
+  Future<bool> _performActiveMonacoEditCommand(
+    GlobalEditCommand command,
+  ) async {
+    final sessions = ref.read(sessionManagerProvider);
+    final activeId = ref.read(activeSessionIdProvider);
+    final session = _resolveActiveSession(sessions, activeId);
+    if (session == null) return false;
+
+    final service = session.container.read(monacoEditorStatusProvider.notifier);
+    if (!service.canHandleNativeEditCommand) return false;
+
+    final controller = session.container.read(monacoControllerProvider);
+    if (controller == null) return false;
+
+    try {
+      switch (command) {
+        case GlobalEditCommand.undo:
+          await controller.undo();
+        case GlobalEditCommand.redo:
+          await controller.redo();
+        case GlobalEditCommand.cut:
+          await controller.cut();
+        case GlobalEditCommand.copy:
+          await controller.copy();
+        case GlobalEditCommand.paste:
+          await _pasteClipboardIntoMonaco(controller);
+        case GlobalEditCommand.selectAll:
+          await controller.selectAll();
+      }
+      return true;
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'tab_shell.dart',
+          context: ErrorDescription(
+            'while performing Monaco edit command "$command"',
+          ),
+        ),
+      );
+      return false;
+    }
+  }
+
+  Future<void> _pasteClipboardIntoMonaco(MonacoController controller) async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text;
+    if (text == null || text.isEmpty) return;
+
+    final selection = await controller.getSelection();
+    if (selection != null) {
+      await controller.replaceRange(selection, text);
+      await controller.setCursorPosition(_positionAfterInsert(selection, text));
+      return;
+    }
+
+    final position = await controller.getCursorPosition();
+    if (position != null) {
+      await controller.insertText(position, text);
+      await controller.setCursorPosition(
+        _positionAfterInsert(Range.fromPositions(position, position), text),
+      );
+      return;
+    }
+
+    final value = await controller.getValue();
+    await controller.setValue('$value$text');
+  }
+
+  Position _positionAfterInsert(Range range, String text) {
+    final lines = text.split(RegExp(r'\r\n|\r|\n'));
+    if (lines.length == 1) {
+      return Position(
+        line: range.startLine,
+        column: range.startColumn + lines.single.length,
+      );
+    }
+
+    return Position(
+      line: range.startLine + lines.length - 1,
+      column: lines.last.length + 1,
+    );
   }
 
   void _updateHoverTab(Offset globalPosition, List<SessionEntry> sessions) {

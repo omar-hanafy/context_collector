@@ -126,6 +126,12 @@ class MonacoService extends StateNotifier<EditorStatus> {
 
   MonacoController? get controller => _controller;
 
+  bool get canHandleNativeEditCommand {
+    if (_controller == null || !state.isReady) return false;
+    if (!_platformViewFocus.hasFocus && !_editorReportsFocused) return false;
+    return _editorOwnsKeyboard();
+  }
+
   Widget get webviewWidget {
     if (_controller == null || !state.isReady) {
       return const Center(child: CircularProgressIndicator());
