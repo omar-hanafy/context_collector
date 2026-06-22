@@ -6,6 +6,7 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/gestures.dart' show kMiddleMouseButton;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -608,7 +609,9 @@ class _TabShellState extends ConsumerState<TabShell> {
       case TabShortcutCommand.newFile:
         final current = session!;
         await _createNewFileInSession(current);
-        unawaited(_restoreSessionFocus(current));
+        unawaited(
+          _restoreSessionFocus(current, intent: MonacoFocusIntent.user),
+        );
         return;
       case TabShortcutCommand.paste:
         final current = session!;
@@ -769,10 +772,13 @@ class _TabShellState extends ConsumerState<TabShell> {
     return null;
   }
 
-  Future<void> _restoreSessionFocus(SessionEntry session) async {
+  Future<void> _restoreSessionFocus(
+    SessionEntry session, {
+    MonacoFocusIntent intent = MonacoFocusIntent.maintenance,
+  }) async {
     final service = session.container.read(monacoEditorStatusProvider.notifier);
     await service.layout();
-    await service.recoverKeyboardFocus();
+    await service.recoverKeyboardFocus(intent: intent);
   }
 
   Future<void> _syncActiveEditorContent(SessionEntry session) async {
@@ -1252,7 +1258,9 @@ class _TabShellState extends ConsumerState<TabShell> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        unawaited(_restoreSessionFocus(session));
+        unawaited(
+          _restoreSessionFocus(session, intent: MonacoFocusIntent.user),
+        );
       }
     });
   }
@@ -1298,33 +1306,37 @@ class _TabShellState extends ConsumerState<TabShell> {
     String label = 'Name',
   }) async {
     final controller = TextEditingController(text: initial);
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(label),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(
-            labelText: label,
-            border: const OutlineInputBorder(),
-            isDense: true,
+    try {
+      final result = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(label),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: label,
+              border: const OutlineInputBorder(),
+              isDense: true,
+            ),
+            onSubmitted: (value) => Navigator.of(ctx).pop(value),
           ),
-          onSubmitted: (value) => Navigator.of(ctx).pop(value),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(controller.text),
+              child: const Text('OK'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(controller.text),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-    return result?.trim();
+      );
+      return result?.trim();
+    } finally {
+      controller.dispose();
+    }
   }
 
   void _handleSelectTab(SessionEntry session) {

@@ -293,4 +293,96 @@ void main() {
       );
     });
   });
+
+  group('editorInputReadinessForFocusSignals', () {
+    test(
+      'treats stale native readiness as not ready even if focus says yes',
+      () {
+        expect(
+          editorInputReadinessForFocusSignals(
+            editorMayClaimKeyboard: true,
+            editorWasLastKeyboardTarget: true,
+            editorHasFlutterFocus: true,
+            editorReportsFocused: true,
+            nativeInputReadinessStale: true,
+          ),
+          MonacoInputReadiness.stale,
+        );
+      },
+    );
+
+    test('foreign Flutter focus wins over stale editor signals', () {
+      expect(
+        editorInputReadinessForFocusSignals(
+          editorMayClaimKeyboard: false,
+          editorWasLastKeyboardTarget: true,
+          editorHasFlutterFocus: true,
+          editorReportsFocused: true,
+          nativeInputReadinessStale: true,
+        ),
+        MonacoInputReadiness.foreignKeyboardOwner,
+      );
+    });
+
+    test(
+      'reports ready only when editor is the target and readiness is fresh',
+      () {
+        expect(
+          editorInputReadinessForFocusSignals(
+            editorMayClaimKeyboard: true,
+            editorWasLastKeyboardTarget: false,
+            editorHasFlutterFocus: true,
+            editorReportsFocused: false,
+            nativeInputReadinessStale: false,
+          ),
+          MonacoInputReadiness.ready,
+        );
+      },
+    );
+
+    test('reports no target when nobody points at Monaco', () {
+      expect(
+        editorInputReadinessForFocusSignals(
+          editorMayClaimKeyboard: true,
+          editorWasLastKeyboardTarget: false,
+          editorHasFlutterFocus: false,
+          editorReportsFocused: false,
+          nativeInputReadinessStale: false,
+        ),
+        MonacoInputReadiness.noEditorTarget,
+      );
+    });
+  });
+
+  group('editorInputReadinessFocusIntent', () {
+    test('uses user intent only when native input readiness is stale', () {
+      expect(
+        editorInputReadinessFocusIntent(MonacoInputReadiness.stale),
+        MonacoFocusIntent.user,
+      );
+    });
+
+    test('keeps maintenance intent when editor input is fresh', () {
+      expect(
+        editorInputReadinessFocusIntent(MonacoInputReadiness.ready),
+        MonacoFocusIntent.maintenance,
+      );
+    });
+
+    test('keeps maintenance intent when another surface owns the keyboard', () {
+      expect(
+        editorInputReadinessFocusIntent(
+          MonacoInputReadiness.foreignKeyboardOwner,
+        ),
+        MonacoFocusIntent.maintenance,
+      );
+    });
+
+    test('keeps maintenance intent when Monaco was not the focus target', () {
+      expect(
+        editorInputReadinessFocusIntent(MonacoInputReadiness.noEditorTarget),
+        MonacoFocusIntent.maintenance,
+      );
+    });
+  });
 }

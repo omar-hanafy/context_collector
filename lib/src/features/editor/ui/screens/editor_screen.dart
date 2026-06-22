@@ -156,7 +156,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           _renameDialogOpen = false;
           // After rename dialog closes, recover focus.
           if (mounted) {
-            unawaited(_recoverEditorFocus());
+            unawaited(
+              _recoverEditorFocus(intent: MonacoFocusIntent.user),
+            );
           }
         });
       }
@@ -304,15 +306,27 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   // WindowListener: regain focus when window is focused
   @override
   void onWindowFocus() {
-    unawaited(_recoverEditorFocus());
+    unawaited(_recoverEditorFocusAfterNativeFocusBoundary());
+  }
+
+  @override
+  void onWindowBlur() {
+    _invalidateEditorInputReadinessAfterNativeFocusBoundary();
   }
 
   // WidgetsBindingObserver: regain focus when app resumes
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      unawaited(_recoverEditorFocus());
+      unawaited(_recoverEditorFocusAfterNativeFocusBoundary());
+    } else {
+      _invalidateEditorInputReadinessAfterNativeFocusBoundary();
     }
+  }
+
+  @override
+  void didPushNext() {
+    _invalidateEditorInputReadinessAfterNativeFocusBoundary();
   }
 
   // RouteAware: called when a route above this one has been popped (e.g., a dialog closed)
@@ -321,13 +335,26 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     // Defer to next frame to allow focus to settle after dialog teardown.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      unawaited(_recoverEditorFocus());
+      unawaited(_recoverEditorFocusAfterNativeFocusBoundary());
     });
   }
 
-  Future<void> _recoverEditorFocus() async {
+  Future<void> _recoverEditorFocus({
+    MonacoFocusIntent intent = MonacoFocusIntent.maintenance,
+  }) async {
     final svc = ref.read(monacoEditorStatusProvider.notifier);
-    await svc.recoverKeyboardFocus();
+    await svc.recoverKeyboardFocus(intent: intent);
+  }
+
+  void _invalidateEditorInputReadinessAfterNativeFocusBoundary() {
+    ref
+        .read(monacoEditorStatusProvider.notifier)
+        .invalidateInputReadinessAfterNativeFocusBoundary();
+  }
+
+  Future<void> _recoverEditorFocusAfterNativeFocusBoundary() async {
+    final svc = ref.read(monacoEditorStatusProvider.notifier);
+    await svc.recoverKeyboardFocusAfterNativeFocusBoundary();
   }
 
   Future<void> _saveSplitRatio(double ratio) async {
@@ -377,7 +404,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     if (newOptions != null && mounted) {
       await _saveAndApplyOptions(newOptions);
       // Strong recovery after dialog containing TextFields
-      unawaited(_recoverEditorFocus());
+      unawaited(_recoverEditorFocus(intent: MonacoFocusIntent.user));
     }
   }
 
@@ -561,7 +588,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     if (name != null && name.trim().isNotEmpty) {
       ref.read(selectionProvider.notifier).createVirtualFile(name.trim(), '');
     }
-    unawaited(_recoverEditorFocus());
+    unawaited(_recoverEditorFocus(intent: MonacoFocusIntent.user));
   }
 
   Future<void> _handlePastePaths(BuildContext context) async {
@@ -594,7 +621,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
   Future<void> _handleOpenSettings(BuildContext context) async {
     await _showEnhancedEditorSettings(context);
-    unawaited(_recoverEditorFocus());
+    unawaited(_recoverEditorFocus(intent: MonacoFocusIntent.user));
   }
 
   Future<void> _pasteClipboardAsContent() async {
@@ -624,7 +651,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       if (mounted) context.showErr('Paste failed: $e');
     } finally {
       // Always recover after this flow, even if canceled or errored.
-      unawaited(_recoverEditorFocus());
+      unawaited(_recoverEditorFocus(intent: MonacoFocusIntent.user));
     }
   }
 

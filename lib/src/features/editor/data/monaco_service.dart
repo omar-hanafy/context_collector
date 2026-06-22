@@ -75,6 +75,48 @@ MonacoFocusIntent? editorPointerFocusIntent(
   return null;
 }
 
+enum MonacoInputReadiness {
+  noEditorTarget,
+  foreignKeyboardOwner,
+  ready,
+  stale,
+}
+
+@visibleForTesting
+MonacoInputReadiness editorInputReadinessForFocusSignals({
+  required bool editorMayClaimKeyboard,
+  required bool editorWasLastKeyboardTarget,
+  required bool editorHasFlutterFocus,
+  required bool editorReportsFocused,
+  required bool nativeInputReadinessStale,
+}) {
+  if (!editorMayClaimKeyboard) {
+    return MonacoInputReadiness.foreignKeyboardOwner;
+  }
+
+  final editorIsFocusTarget =
+      editorWasLastKeyboardTarget ||
+      editorHasFlutterFocus ||
+      editorReportsFocused;
+  if (!editorIsFocusTarget) {
+    return MonacoInputReadiness.noEditorTarget;
+  }
+
+  if (nativeInputReadinessStale) {
+    return MonacoInputReadiness.stale;
+  }
+
+  return MonacoInputReadiness.ready;
+}
+
+MonacoFocusIntent editorInputReadinessFocusIntent(
+  MonacoInputReadiness readiness,
+) {
+  return readiness == MonacoInputReadiness.stale
+      ? MonacoFocusIntent.user
+      : MonacoFocusIntent.maintenance;
+}
+
 /// Simplified Monaco service using the flutter_monaco package
 class MonacoService extends StateNotifier<EditorStatus> {
   MonacoService()
@@ -96,6 +138,8 @@ class MonacoService extends StateNotifier<EditorStatus> {
   // thinks it's focused but Monaco lost it" (the alt-tab/dialog desync), so the
   // latter still re-asserts focus on click. See editorPointerFocusIntent.
   bool _editorReportsFocused = false;
+  bool _editorWasLastKeyboardTarget = false;
+  bool _nativeInputReadinessStale = false;
   StreamSubscription<void>? _focusSub;
   StreamSubscription<void>? _blurSub;
 
@@ -147,7 +191,7 @@ class MonacoService extends StateNotifier<EditorStatus> {
         if (intent == null) {
           return;
         }
-        _platformViewFocus.requestFocus();
+        _editorWasLastKeyboardTarget = true;
         unawaited(
           ensureEditorFocus(
             attempts: 1,
@@ -224,9 +268,13 @@ class MonacoService extends StateNotifier<EditorStatus> {
       // when the editor actually needs it (see editorPointerFocusIntent).
       _focusSub = _controller!.onFocus.listen((_) {
         _editorReportsFocused = true;
+        _editorWasLastKeyboardTarget = true;
       });
       _blurSub = _controller!.onBlur.listen((_) {
         _editorReportsFocused = false;
+        if (!_editorOwnsKeyboard()) {
+          _editorWasLastKeyboardTarget = false;
+        }
       });
 
       // Apply queued content if any (language first; then sticky commit)
@@ -348,20 +396,65 @@ class MonacoService extends StateNotifier<EditorStatus> {
   /// view node owns Flutter focus, or focus rests on a bare scope along the
   /// editor's own route (nothing concrete focused). Any other focused node -
   /// a dialog's TextField, a button, a menu, a foreign route's scope - owns
-  /// the keyboard, and every focus path in this service stands down,
-  /// including [recoverKeyboardFocus]: its unfocus-first behavior is exactly
-  /// how open dialogs lost their keyboard to Monaco on Windows, where
-  /// focusing Monaco moves real Win32 focus into the WebView.
+  /// the keyboard, and maintenance focus paths in this service stand down.
   ///
   /// This is an allow-list by intent: maintenance work (content sync, option
   /// changes, route/lifecycle recovery) can only KEEP focus the editor
   /// already owns, never claim it from another surface. Clicking the editor
-  /// requests [_platformViewFocus] before nudging, so user-driven focus
-  /// passes; the yield at each call site lets that request settle first.
+  /// goes through [MonacoFocusIntent.user], letting flutter_monaco perform
+  /// package-owned input handoff before this wrapper aligns Flutter focus.
   bool _editorOwnsKeyboard() => editorMayClaimKeyboard(
     FocusManager.instance.primaryFocus,
     _platformViewFocus,
   );
+
+  bool get _tracksNativeInputReadinessStaleness =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
+
+  bool get _editorIsFocusTargetForRestore {
+    return _editorWasLastKeyboardTarget ||
+        _platformViewFocus.hasFocus ||
+        _editorReportsFocused;
+  }
+
+  bool _maintenanceMayUseEditorInput() {
+    if (!_editorOwnsKeyboard()) {
+      _editorWasLastKeyboardTarget = false;
+      return false;
+    }
+    return !_nativeInputReadinessStale;
+  }
+
+  MonacoInputReadiness get inputReadinessForFocusRestore {
+    return editorInputReadinessForFocusSignals(
+      editorMayClaimKeyboard: _editorOwnsKeyboard(),
+      editorWasLastKeyboardTarget: _editorWasLastKeyboardTarget,
+      editorHasFlutterFocus: _platformViewFocus.hasFocus,
+      editorReportsFocused: _editorReportsFocused,
+      nativeInputReadinessStale: _nativeInputReadinessStale,
+    );
+  }
+
+  void invalidateInputReadinessAfterNativeFocusBoundary() {
+    if (!_tracksNativeInputReadinessStaleness) {
+      return;
+    }
+    if (!_editorOwnsKeyboard()) {
+      _editorWasLastKeyboardTarget = false;
+      _nativeInputReadinessStale = false;
+      return;
+    }
+    _nativeInputReadinessStale = _editorIsFocusTargetForRestore;
+  }
+
+  Future<void> recoverKeyboardFocusAfterNativeFocusBoundary({
+    int attempts = 6,
+  }) async {
+    await recoverKeyboardFocus(
+      attempts: attempts,
+      intent: editorInputReadinessFocusIntent(inputReadinessForFocusRestore),
+    );
+  }
 
   Future<void> _ensureFlutterPlatformFocus() async {
     if (_platformViewFocus.canRequestFocus) {
@@ -380,7 +473,7 @@ class MonacoService extends StateNotifier<EditorStatus> {
     // Let a focus request from this same event (e.g. the editor's own
     // pointer-down handler) apply before deciding ownership.
     await Future<void>.delayed(Duration.zero);
-    if (!_editorOwnsKeyboard()) return;
+    if (!_maintenanceMayUseEditorInput()) return;
     // Ask Flutter to focus the platform view's FocusNode.
     await _ensureFlutterPlatformFocus();
     // Also nudge the native view to become first responder.
@@ -402,10 +495,22 @@ class MonacoService extends StateNotifier<EditorStatus> {
   }) async {
     if (_controller == null || !state.isReady) return;
     await Future<void>.delayed(Duration.zero);
-    if (intent == MonacoFocusIntent.maintenance && !_editorOwnsKeyboard()) {
+    if (intent == MonacoFocusIntent.user) {
+      _editorWasLastKeyboardTarget = true;
+      await _ensureEditorFocusWithPackageIntent(attempts, intent);
+      await _ensureFlutterPlatformFocus();
+      _nativeInputReadinessStale = false;
       return;
     }
+    if (!_maintenanceMayUseEditorInput()) return;
     await _ensureFlutterPlatformFocus();
+    await _ensureEditorFocusWithPackageIntent(attempts, intent);
+  }
+
+  Future<void> _ensureEditorFocusWithPackageIntent(
+    int attempts,
+    MonacoFocusIntent intent,
+  ) async {
     try {
       await _controller!.ensureEditorFocus(
         attempts: attempts,
@@ -428,26 +533,24 @@ class MonacoService extends StateNotifier<EditorStatus> {
   }
 
   /// Stronger focus recovery used after dialogs with TextFields close.
-  /// Releases Flutter's TextInput client, then reacquires platform + DOM focus.
   ///
   /// This is the intentional editor-return path (route popped back to the
   /// editor, tab/session activation, window re-activation). It refuses to
   /// run while another surface owns the keyboard: it is wired to events that
   /// also fire with popups still open (any route popping, every window
-  /// activation), and unfocusing a live dialog's TextField to claim Win32
-  /// focus for Monaco was the focus-stealing bug on Windows.
-  Future<void> recoverKeyboardFocus({int attempts = 6}) async {
+  /// activation). User-initiated handoff is delegated to flutter_monaco via
+  /// [MonacoFocusIntent.user], so stale text-input cleanup stays package-owned.
+  Future<void> recoverKeyboardFocus({
+    int attempts = 6,
+    MonacoFocusIntent intent = MonacoFocusIntent.maintenance,
+  }) async {
     if (_controller == null || !state.isReady) return;
     await Future<void>.delayed(Duration.zero);
-    if (!_editorOwnsKeyboard()) return;
-    try {
-      FocusManager.instance.primaryFocus?.unfocus();
-    } catch (_) {}
-    try {
-      await SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
-    } catch (_) {}
-    // Let the dialog's focus scope tear down.
-    await Future<void>.delayed(const Duration(milliseconds: 16));
+    if (intent == MonacoFocusIntent.user) {
+      await ensureEditorFocus(attempts: attempts, intent: intent);
+      return;
+    }
+    if (!_maintenanceMayUseEditorInput()) return;
     await ensureNativeFocus();
     try {
       await _controller!.ensureEditorFocus(
