@@ -12,13 +12,11 @@ Context Collector is a desktop application that helps you assemble text from loc
 
 ## 2. Network Activity
 
-The Windows Store build does not perform automatic update checks. The macOS build optionally contacts GitHub to check for new versions if you enable updates. No personal data is sent—only the app version is compared against the published release feed. When you open links (documentation, release notes, GitHub issues, Buy Me a Coffee, etc.), your web browser handles those requests directly under its own privacy policy.
+The app does not perform automatic update checks. When you open links (documentation, release notes, GitHub issues, Buy Me a Coffee, etc.), your web browser handles those requests directly under its own privacy policy.
 
 ## 3. Third-Party Components
 
 - **Microsoft Edge WebView2 Runtime (Windows only).** Required to embed the Monaco editor. Microsoft may collect basic telemetry about the runtime per their own policies, but Context Collector does not receive that data.
-- **GitHub Pages (macOS auto-updates).** Provides static release metadata. The request contains no identifiable information beyond standard HTTPS metadata (IP address, user agent) handled by GitHub.
-
 We do not integrate analytics SDKs, crash reporting services, or advertising libraries.
 
 ## 4. Data Storage and Retention
@@ -33,7 +31,6 @@ The application is a productivity tool intended for general audiences and does n
 
 - Do not add files you do not want the application to process.
 - Clear the clipboard or generated documents at any time.
-- On macOS, you may disable update checks in Settings → Updates.
 
 ## 7. Changes to This Policy
 

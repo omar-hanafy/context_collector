@@ -1,7 +1,3 @@
-// lib/main.dart
-import 'dart:async';
-import 'dart:io';
-
 import 'package:context_collector/context_collector.dart';
 import 'package:context_collector/src/shared/utils/debug_logger.dart';
 import 'package:desktop_drop/desktop_drop.dart';
@@ -75,9 +71,6 @@ void main() async {
 
   DesktopDrop.instance.init();
 
-  // 🔄 INITIALIZE AUTO UPDATER
-  unawaited(_initializeAutoUpdater(rootContainer));
-
   // Run the main app normally - no loading screens!
   runApp(
     UncontrolledProviderScope(
@@ -116,27 +109,6 @@ ProviderContainer _resolveActiveSessionContainer(
 }
 
 // Monaco preloading removed; editor is created on the editor route
-
-/// Initialize auto updater for automatic updates
-Future<void> _initializeAutoUpdater(ProviderContainer container) async {
-  // Enable only on macOS. For Windows Store builds, updates are handled by the Store.
-  if (!Platform.isMacOS) {
-    debugPrint('[ContextCollector] Auto updater disabled on this platform');
-    return;
-  }
-
-  debugPrint('[ContextCollector] 🔄 Initializing auto updater...');
-
-  try {
-    await container.read(autoUpdaterServiceProvider).initialize();
-    debugPrint('[ContextCollector] ✅ Auto updater initialized successfully');
-  } catch (error, stackTrace) {
-    debugPrint(
-      '[ContextCollector] ⚠️ Auto updater initialization failed: $error',
-    );
-    debugPrintStack(stackTrace: stackTrace);
-  }
-}
 
 class ContextCollectorApp extends ConsumerWidget {
   const ContextCollectorApp({super.key});
