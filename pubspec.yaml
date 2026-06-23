@@ -26,7 +26,8 @@ dependencies:
   file_selector: ^1.1.0
   window_manager: ^0.5.1
   flutter_helper_utils: ^8.5.0
-  resizable_splitter: ^1.1.0
+  resizable_splitter:
+    path: ../resizable_splitter
   dart_helper_utils: ^5.4.1
   intl: ^0.20.2
   path: ^1.9.1

@@ -293,7 +293,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     final savedRatio = prefs.getDouble(_splitRatioKey) ?? 0.35;
     if (mounted) {
       setState(() {
-        _splitterController = SplitterController(initialRatio: savedRatio);
+        _splitterController = SplitterController(
+          initialPosition: SplitterPosition.fraction(savedRatio),
+        );
         _isSplitterInitialized = true;
       });
     }
@@ -402,9 +404,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     await prefs.setDouble(_splitRatioKey, ratio);
   }
 
-  void _handleSplitRatioChanged(double ratio) {
+  void _handleSplitRatioChanged(SplitterChangeDetails details) {
     // Persist ratio and nudge Monaco to recompute layout during resize.
-    unawaited(_saveSplitRatio(ratio));
+    unawaited(_saveSplitRatio(details.effectiveFraction));
     unawaited(
       ref.read(monacoEditorStatusProvider.notifier).layout(),
     );
@@ -538,15 +540,20 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             child: _isSplitterInitialized && _splitterController != null
                 ? ResizableSplitter(
                     controller: _splitterController,
-                    minRatio: 0.2,
-                    maxRatio: 0.6,
-                    minPanelSize: 300,
-                    onRatioChanged: _handleSplitRatioChanged,
-                    dividerThickness: 6,
+                    minStartFraction: 0.2,
+                    maxStartFraction: 0.6,
+                    startConstraints: const SplitterPaneConstraints(
+                      minExtent: 300,
+                    ),
+                    endConstraints: const SplitterPaneConstraints(
+                      minExtent: 300,
+                    ),
+                    onChanged: _handleSplitRatioChanged,
+                    divider: const SplitterDividerStyle(thickness: 6),
                     enableKeyboard: false,
                     semanticsLabel:
                         'Editor panels splitter. Drag to resize or use arrow keys.',
-                    startPanel: DecoratedBox(
+                    start: DecoratedBox(
                       decoration: BoxDecoration(
                         color: context.surfaceContainerHighest,
                         border: Border(
@@ -565,7 +572,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                         ],
                       ),
                     ),
-                    endPanel: DecoratedBox(
+                    end: DecoratedBox(
                       decoration: BoxDecoration(
                         color: context.surface,
                       ),
