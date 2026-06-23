@@ -186,6 +186,7 @@ class WorkspaceCompletionService {
     if (controller == null) return;
     final selection = ref.read(selectionProvider);
     if (selection.viewingAll) return;
+    if (!selection.editorIsBoundToActiveFile) return;
     final activeId = selection.activeFileId;
     if (activeId == null) return;
     final file = selection.fileMap[activeId];

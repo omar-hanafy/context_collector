@@ -30,6 +30,7 @@ class SelectionState {
     this.activeFileId,
     this.viewingAll = false,
     this.pendingRenameFileId,
+    this.editorBoundFileId,
   });
 
   final Map<String, ScannedFile> fileMap;
@@ -42,6 +43,7 @@ class SelectionState {
   final String? activeFileId;
   final bool viewingAll;
   final String? pendingRenameFileId;
+  final String? editorBoundFileId;
 
   // Backward compatible getters
   Set<String> get selectedFilePaths =>
@@ -72,8 +74,12 @@ class SelectionState {
     bool clearError = false,
     String? combinedContent,
     String? activeFileId,
+    bool clearActiveFileId = false,
     bool? viewingAll,
     String? pendingRenameFileId,
+    bool clearPendingRenameFileId = false,
+    String? editorBoundFileId,
+    bool clearEditorBoundFileId = false,
   }) {
     return SelectionState(
       fileMap: fileMap ?? this.fileMap,
@@ -83,14 +89,24 @@ class SelectionState {
       sessionStarted: sessionStarted ?? this.sessionStarted,
       error: clearError ? null : error ?? this.error,
       combinedContent: combinedContent ?? this.combinedContent,
-      activeFileId: activeFileId ?? this.activeFileId,
+      activeFileId: clearActiveFileId
+          ? null
+          : activeFileId ?? this.activeFileId,
       viewingAll: viewingAll ?? this.viewingAll,
-      pendingRenameFileId: pendingRenameFileId ?? this.pendingRenameFileId,
+      pendingRenameFileId: clearPendingRenameFileId
+          ? null
+          : pendingRenameFileId ?? this.pendingRenameFileId,
+      editorBoundFileId: clearEditorBoundFileId
+          ? null
+          : editorBoundFileId ?? this.editorBoundFileId,
     );
   }
 
   ScannedFile? get activeFile =>
       activeFileId == null ? null : fileMap[activeFileId];
+
+  bool get editorIsBoundToActiveFile =>
+      activeFileId != null && editorBoundFileId == activeFileId;
 }
 
 final pathParserServiceProvider = Provider<PathParserService>(
@@ -182,13 +198,19 @@ class FileListNotifier extends StateNotifier<SelectionState> {
       updatedSelection.add(file.id);
     }
 
+    final nextActiveFile = state.activeFileId == null ? files.first : null;
     state = state.copyWith(
       fileMap: newFileMap,
       selectedFileIds: updatedSelection,
       sessionStarted: true,
       // Only set active file if none exists
       activeFileId: state.activeFileId ?? files.first.id,
+      clearEditorBoundFileId: nextActiveFile != null,
     );
+
+    if (nextActiveFile != null) {
+      unawaited(_loadSingleFileContentIfNeeded(nextActiveFile));
+    }
 
     // Update tree incrementally so user sees progress
     _rebuildTreeFromState();
@@ -215,9 +237,14 @@ class FileListNotifier extends StateNotifier<SelectionState> {
 
     // Lazy Load: Check if content is missing and needs loading
     final file = state.fileMap[fileId]!;
-    if (file.content == null && !file.isVirtual && file.error == null) {
-      _loadSingleFileContent(file);
+    unawaited(_loadSingleFileContentIfNeeded(file));
+  }
+
+  Future<void> _loadSingleFileContentIfNeeded(ScannedFile file) async {
+    if (file.isVirtual || file.content != null || file.error != null) {
+      return;
     }
+    await _loadSingleFileContent(file);
   }
 
   /// Loads content for a single file safely
@@ -226,8 +253,13 @@ class FileListNotifier extends StateNotifier<SelectionState> {
       final loadedFile = await UnifiedFileService.loadFileContent(file);
 
       if (mounted && state.fileMap.containsKey(loadedFile.id)) {
+        final currentFile = state.fileMap[loadedFile.id]!;
         final newFileMap = Map<String, ScannedFile>.from(state.fileMap);
-        newFileMap[loadedFile.id] = loadedFile;
+        newFileMap[loadedFile.id] = currentFile.copyWith(
+          content: loadedFile.content,
+          error: loadedFile.error,
+          clearError: loadedFile.error == null,
+        );
         state = state.copyWith(fileMap: newFileMap);
 
         // If we are viewing all, we might need to update the combined view
@@ -240,18 +272,43 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     }
   }
 
-  void saveEditorTextFor(String fileId, String text) {
-    if (state.viewingAll) return;
+  bool saveEditorTextFor(String fileId, String text) {
+    if (state.viewingAll) return false;
+    if (state.editorBoundFileId != fileId) return false;
     final file = state.fileMap[fileId];
-    if (file == null) return;
-    if (text == file.effectiveContent) return;
+    if (file == null || !file.hasEditorContent) return false;
+    if (text == file.editorContent) return true;
+
     final newFileMap = Map<String, ScannedFile>.from(state.fileMap);
-    newFileMap[fileId] = file.copyWith(editedContent: text);
+    final baseContent = file.isVirtual
+        ? file.virtualContent ?? file.content ?? ''
+        : file.content;
+    newFileMap[fileId] = baseContent != null && text == baseContent
+        ? file.copyWith(clearEditedContent: true)
+        : file.copyWith(editedContent: text);
     state = state.copyWith(fileMap: newFileMap);
 
     if (state.viewingAll) {
       unawaited(_rebuildCombinedContent());
     }
+    return true;
+  }
+
+  void markEditorContentBoundToFile(String fileId) {
+    final file = state.fileMap[fileId];
+    if (state.viewingAll ||
+        state.activeFileId != fileId ||
+        file == null ||
+        !file.hasEditorContent) {
+      return;
+    }
+    if (state.editorBoundFileId == fileId) return;
+    state = state.copyWith(editorBoundFileId: fileId);
+  }
+
+  void clearEditorContentBinding() {
+    if (state.editorBoundFileId == null) return;
+    state = state.copyWith(clearEditorBoundFileId: true);
   }
 
   Future<void> refreshAllContents() async {
@@ -263,7 +320,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
       try {
         final reloadedFile = await UnifiedFileService.loadFileContent(file);
         newFileMap[reloadedFile.id] = reloadedFile.copyWith(
-          editedContent: null,
+          clearEditedContent: true,
         );
       } catch (_) {}
     }
@@ -351,7 +408,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
   }
 
   void setViewingAll(bool v) {
-    state = state.copyWith(viewingAll: v);
+    state = state.copyWith(viewingAll: v, clearEditorBoundFileId: v);
     if (v) {
       unawaited(_rebuildCombinedContent());
     }
@@ -360,7 +417,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
   void exitCombinedPreview() => setViewingAll(false);
 
   void clearPendingRename() {
-    state = state.copyWith(pendingRenameFileId: null);
+    state = state.copyWith(clearPendingRenameFileId: true);
   }
 
   void renameFile(String fileId, String newName) {
@@ -374,7 +431,10 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     );
     final newMap = Map<String, ScannedFile>.from(state.fileMap)
       ..[fileId] = updated;
-    state = state.copyWith(fileMap: newMap, pendingRenameFileId: null);
+    state = state.copyWith(
+      fileMap: newMap,
+      clearPendingRenameFileId: true,
+    );
     _rebuildTreeFromState(force: true);
   }
 
@@ -562,6 +622,9 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     state = state.copyWith(
       fileMap: newFileMap,
       selectedFileIds: newSelectedIds,
+      clearEditorBoundFileId:
+          state.editorBoundFileId != null &&
+          !newFileMap.containsKey(state.editorBoundFileId),
     );
     _rebuildTreeFromState(force: true);
     if (state.viewingAll) {
@@ -578,7 +641,12 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     final file = state.fileMap[fileId];
     if (file == null) return;
     final newFileMap = Map<String, ScannedFile>.from(state.fileMap);
-    newFileMap[fileId] = file.copyWith(editedContent: newContent);
+    final baseContent = file.isVirtual
+        ? file.virtualContent ?? file.content ?? ''
+        : file.content;
+    newFileMap[fileId] = baseContent != null && newContent == baseContent
+        ? file.copyWith(clearEditedContent: true)
+        : file.copyWith(editedContent: newContent);
     state = state.copyWith(fileMap: newFileMap);
 
     if (state.viewingAll) {
@@ -711,6 +779,11 @@ class FileListNotifier extends StateNotifier<SelectionState> {
       scanHistory: newScanHistory,
       sessionStarted: state.sessionStarted && !shouldResetSession,
       activeFileId: newActiveFileId,
+      clearActiveFileId: newActiveFileId == null,
+      clearEditorBoundFileId:
+          state.editorBoundFileId != null &&
+          (state.editorBoundFileId != newActiveFileId ||
+              !newFileMap.containsKey(state.editorBoundFileId)),
     );
 
     _rebuildTreeFromState(force: true);

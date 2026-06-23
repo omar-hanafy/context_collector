@@ -786,7 +786,10 @@ class _TabShellState extends ConsumerState<TabShell> {
     final selectionState = session.container.read(selectionProvider);
     final activeFileId = selectionState.activeFileId;
     final viewingAll = selectionState.viewingAll;
-    if (!viewingAll && controller != null && activeFileId != null) {
+    if (!viewingAll &&
+        selectionState.editorIsBoundToActiveFile &&
+        controller != null &&
+        activeFileId != null) {
       try {
         final text = await controller.getValue();
         session.container
@@ -1137,6 +1140,7 @@ class _TabShellState extends ConsumerState<TabShell> {
     String? liveContent;
     if (includeLive &&
         !selection.viewingAll &&
+        selection.editorIsBoundToActiveFile &&
         selection.activeFileId != null) {
       final controller = session.container.read(monacoControllerProvider);
       if (controller != null) {

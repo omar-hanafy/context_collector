@@ -176,11 +176,11 @@ class UnifiedFileService {
 
       if (_isDocx(file)) {
         final content = await _readDocxAsMarkdown(fileEntity);
-        return file.copyWith(content: content);
+        return file.copyWith(content: content, clearError: true);
       }
 
       final content = await fileEntity.readAsString();
-      return file.copyWith(content: content);
+      return file.copyWith(content: content, clearError: true);
     } on FileSystemException catch (e) {
       return file.copyWith(error: e.message);
     } catch (_) {

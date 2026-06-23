@@ -85,9 +85,21 @@ class ScannedFile {
   /// True if the file has been edited in the app.
   bool get isDirty => editedContent != null && editedContent != content;
 
+  /// Text that is safe to bind to an editable Monaco document.
+  ///
+  /// Real files return `null` until their content has actually loaded. This
+  /// keeps the lazy-loading state distinct from a legitimately empty file.
+  String? get editorContent {
+    if (editedContent != null) return editedContent;
+    if (isVirtual) return virtualContent ?? content ?? '';
+    return content;
+  }
+
+  /// True once the file has text that can safely be shown in Monaco.
+  bool get hasEditorContent => editorContent != null;
+
   /// The most up-to-date content for the file (edited, virtual, or from disk).
-  String get effectiveContent =>
-      editedContent ?? virtualContent ?? content ?? '';
+  String get effectiveContent => editorContent ?? '';
 
   /// Simplified text support check - we optimistically try to read any file.
   bool get supportsText => true;
@@ -113,6 +125,11 @@ class ScannedFile {
     String? virtualContent,
     String? error,
     String? displayPath,
+    bool clearContent = false,
+    bool clearEditedContent = false,
+    bool clearVirtualContent = false,
+    bool clearError = false,
+    bool clearDisplayPath = false,
   }) {
     return ScannedFile(
       id: id ?? this.id,
@@ -124,11 +141,15 @@ class ScannedFile {
       lastModified: lastModified ?? this.lastModified,
       source: source ?? this.source,
       isVirtual: isVirtual ?? this.isVirtual,
-      content: content ?? this.content,
-      editedContent: editedContent ?? this.editedContent,
-      virtualContent: virtualContent ?? this.virtualContent,
-      error: error ?? this.error,
-      displayPath: displayPath ?? this.displayPath,
+      content: clearContent ? null : content ?? this.content,
+      editedContent: clearEditedContent
+          ? null
+          : editedContent ?? this.editedContent,
+      virtualContent: clearVirtualContent
+          ? null
+          : virtualContent ?? this.virtualContent,
+      error: clearError ? null : error ?? this.error,
+      displayPath: clearDisplayPath ? null : displayPath ?? this.displayPath,
     );
   }
 

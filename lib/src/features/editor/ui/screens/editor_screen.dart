@@ -77,20 +77,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       final status = ref.read(monacoEditorStatusProvider);
       if (status.isReady) {
         _hasAppliedInitialSettings = true;
-        final selection = ref.read(selectionProvider);
-        String text = '';
-        String? lang;
-        final id = selection.activeFileId;
-        if (id != null) {
-          final file = selection.fileMap[id];
-          if (file != null) {
-            text = file.effectiveContent;
-            lang = FileDisplayHelper.getLanguageFromFile(file);
-          }
-        }
-        await ref
-            .read(monacoEditorStatusProvider.notifier)
-            .updateContent(text, language: lang);
+        await _applyActiveSelectionToEditor(
+          ref.read(selectionProvider),
+          ref.read(monacoEditorStatusProvider.notifier),
+        );
         unawaited(_recoverEditorFocus());
       }
     });
@@ -105,20 +95,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         if (!_hasAppliedInitialSettings && next.isReady) {
           _hasAppliedInitialSettings = true;
 
-          final selection = ref.read(selectionProvider);
-          String text = '';
-          String? lang;
-          final id = selection.activeFileId;
-          if (id != null) {
-            final file = selection.fileMap[id];
-            if (file != null) {
-              text = file.effectiveContent;
-              lang = FileDisplayHelper.getLanguageFromFile(file);
-            }
-          }
-          await ref
-              .read(monacoEditorStatusProvider.notifier)
-              .updateContent(text, language: lang);
+          await _applyActiveSelectionToEditor(
+            ref.read(selectionProvider),
+            ref.read(monacoEditorStatusProvider.notifier),
+          );
           unawaited(_recoverEditorFocus());
         }
       },
@@ -173,16 +153,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       if ((previous != null && wasViewingAll) && !isViewingAll) {
         // Cancel stale writes queued while in view-all so they don't override file view.
         _debounceTimer?.cancel();
-        String targetText = '';
-        String? language;
-        if (nextId != null) {
-          final file = next.fileMap[nextId];
-          if (file != null) {
-            targetText = file.effectiveContent;
-            language = FileDisplayHelper.getLanguageFromFile(file);
-          }
-        }
-        await editorService.updateContent(targetText, language: language);
+        await _applyActiveSelectionToEditor(next, editorService);
         return;
       }
 
@@ -212,12 +183,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         } catch (_) {}
       }
 
-      String targetText = '';
+      String? targetText;
       String? language;
       if (nextId != null) {
         final file = next.fileMap[nextId];
         if (file != null) {
-          targetText = file.effectiveContent;
+          targetText = file.editorContent;
           language = FileDisplayHelper.getLanguageFromFile(file);
         }
       }
@@ -227,13 +198,18 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           nextId != null &&
           (previous == null ||
               (previous.activeFileId == nextId &&
-                  (previous.fileMap[nextId]?.effectiveContent ?? '') !=
-                      targetText));
+                  previous.fileMap[nextId]?.editorContent != targetText));
 
       if (!isViewingAll && (activeChanged || contentChanged)) {
         _debounceTimer?.cancel();
+        if (nextId != null && targetText == null) {
+          ref.read(selectionProvider.notifier).clearEditorContentBinding();
+          return;
+        }
         // Capture the file we intend to update so we can drop stale writes.
         final scheduledActiveId = nextId;
+        final scheduledText = targetText ?? '';
+        final scheduledLanguage = language;
         _debounceTimer = Timer(const Duration(milliseconds: 80), () async {
           if (!mounted) return;
           final s = ref.read(selectionProvider);
@@ -242,10 +218,74 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
               s.activeFileId != scheduledActiveId) {
             return;
           }
-          await editorService.updateContent(targetText, language: language);
+          await editorService.updateContent(
+            scheduledText,
+            language: scheduledLanguage,
+          );
+          if (!mounted) return;
+          final latest = ref.read(selectionProvider);
+          if (scheduledActiveId != null &&
+              !latest.viewingAll &&
+              latest.activeFileId == scheduledActiveId &&
+              latest.fileMap[scheduledActiveId]?.editorContent != null) {
+            ref
+                .read(selectionProvider.notifier)
+                .markEditorContentBoundToFile(scheduledActiveId);
+          } else {
+            ref.read(selectionProvider.notifier).clearEditorContentBinding();
+          }
         });
       }
     });
+  }
+
+  Future<void> _applyActiveSelectionToEditor(
+    SelectionState selection,
+    MonacoService editorService,
+  ) async {
+    final notifier = ref.read(selectionProvider.notifier);
+    final activeId = selection.activeFileId;
+    if (activeId == null) {
+      notifier.clearEditorContentBinding();
+      await editorService.updateContent('');
+      return;
+    }
+
+    final file = selection.fileMap[activeId];
+    final text = file?.editorContent;
+    if (file == null || text == null) {
+      notifier.clearEditorContentBinding();
+      return;
+    }
+
+    await editorService.updateContent(
+      text,
+      language: FileDisplayHelper.getLanguageFromFile(file),
+    );
+    if (!mounted) return;
+
+    final latest = ref.read(selectionProvider);
+    if (!latest.viewingAll &&
+        latest.activeFileId == activeId &&
+        latest.fileMap[activeId]?.editorContent != null) {
+      notifier.markEditorContentBoundToFile(activeId);
+    }
+  }
+
+  Future<void> _flushBoundActiveEditorText() async {
+    final selection = ref.read(selectionProvider);
+    if (selection.viewingAll || !selection.editorIsBoundToActiveFile) {
+      return;
+    }
+    final controller = ref.read(monacoControllerProvider);
+    final activeId = selection.activeFileId;
+    if (controller == null || activeId == null) return;
+    try {
+      final text = await controller.getValue();
+      ref.read(selectionProvider.notifier).saveEditorTextFor(activeId, text);
+    } catch (e) {
+      debugPrint('[EditorScreen] Failed to get live content: $e');
+    }
   }
 
   Future<void> _initializeSplitter() async {
@@ -432,18 +472,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
   /// Copy the editor's current content
   Future<CopyFeedback> _copyEditorContentToClipboard() async {
-    // Flush Monaco → state for the active file so combined content has the latest edits
-    final controller = ref.read(monacoControllerProvider);
-    final activeId = ref.read(selectionProvider).activeFileId;
-    final viewingAll = ref.read(selectionProvider).viewingAll;
-    if (!viewingAll && controller != null && activeId != null) {
-      try {
-        final text = await controller.getValue();
-        ref.read(selectionProvider.notifier).saveEditorTextFor(activeId, text);
-      } catch (e) {
-        debugPrint('[EditorScreen] Failed to get live content: $e');
-      }
-    }
+    await _flushBoundActiveEditorText();
 
     try {
       final content = await ref
@@ -605,17 +634,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   }
 
   Future<void> _handleSaveSelection() async {
-    final controller = ref.read(monacoControllerProvider);
-    final activeId = ref.read(selectionProvider).activeFileId;
-    final viewingAll = ref.read(selectionProvider).viewingAll;
-
-    if (!viewingAll && controller != null && activeId != null) {
-      try {
-        final text = await controller.getValue();
-        ref.read(selectionProvider.notifier).saveEditorTextFor(activeId, text);
-      } catch (_) {}
-    }
-
+    await _flushBoundActiveEditorText();
     await ref.read(selectionProvider.notifier).saveToFile();
   }
 
@@ -639,11 +658,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       if (name == null || name.trim().isEmpty) return;
       final trimmedName = name.trim();
       ref.read(selectionProvider.notifier).createVirtualFile(trimmedName, text);
-      // Write-through so state also holds the live text for this new file.
-      final newId = ref.read(selectionProvider).activeFileId;
-      if (newId != null) {
-        ref.read(selectionProvider.notifier).saveEditorTextFor(newId, text);
-      }
       if (mounted) {
         context.showOk('Created "$trimmedName" from clipboard text.');
       }
@@ -659,15 +673,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     // Kill any pending file write so combined view stays visible.
     _debounceTimer?.cancel();
     // Flush current editor text BEFORE entering view-all mode
-    final controller = ref.read(monacoControllerProvider);
-    final activeId = ref.read(selectionProvider).activeFileId;
-    if (controller != null && activeId != null) {
-      try {
-        final live = await controller.getValue();
-        // Persist edits while not in viewingAll (guard blocks only when viewingAll==true)
-        ref.read(selectionProvider.notifier).saveEditorTextFor(activeId, live);
-      } catch (_) {}
-    }
+    await _flushBoundActiveEditorText();
 
     final status = ref.read(monacoEditorStatusProvider);
     if (!status.isReady) {
@@ -677,6 +683,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
     // Now enter combined view mode state
     ref.read(selectionProvider.notifier).setViewingAll(true);
+    ref.read(selectionProvider.notifier).clearEditorContentBinding();
 
     final combined = ref.read(selectionProvider).combinedContent;
     await ref
@@ -703,20 +710,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       } else {
         // Exit combined view: clear flag and immediately push active file content.
         ref.read(selectionProvider.notifier).setViewingAll(false);
-        final next = ref.read(selectionProvider);
-        String text = '';
-        String? language;
-        final id = next.activeFileId;
-        if (id != null) {
-          final file = next.fileMap[id];
-          if (file != null) {
-            text = file.effectiveContent;
-            language = FileDisplayHelper.getLanguageFromFile(file);
-          }
-        }
-        await ref
-            .read(monacoEditorStatusProvider.notifier)
-            .updateContent(text, language: language);
+        await _applyActiveSelectionToEditor(
+          ref.read(selectionProvider),
+          ref.read(monacoEditorStatusProvider.notifier),
+        );
         unawaited(_recoverEditorFocus());
       }
     } finally {

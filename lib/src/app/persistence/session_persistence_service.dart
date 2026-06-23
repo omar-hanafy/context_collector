@@ -176,6 +176,7 @@ class SessionPersistenceService {
       final controller = container.read(monacoControllerProvider);
       String? liveEditorText;
       if (!initialSelection.viewingAll &&
+          initialSelection.editorIsBoundToActiveFile &&
           controller != null &&
           initialSelection.activeFileId != null) {
         try {
@@ -242,6 +243,7 @@ class SessionPersistenceService {
       for (final file in selection.fileMap.values) {
         if (file.isVirtual) continue;
         if (!selection.viewingAll &&
+            selection.editorIsBoundToActiveFile &&
             liveEditorText != null &&
             file.id == currentActiveId) {
           overrides[file.fullPath] = liveEditorText;
