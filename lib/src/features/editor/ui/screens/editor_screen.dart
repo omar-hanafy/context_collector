@@ -549,7 +549,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                       minExtent: 300,
                     ),
                     onChanged: _handleSplitRatioChanged,
-                    divider: const SplitterDividerStyle(thickness: 6),
+                    divider: const SplitterDividerStyle(
+                      thickness: 6,
+                      interactiveExtent: 6,
+                    ),
                     enableKeyboard: false,
                     semanticsLabel:
                         'Editor panels splitter. Drag to resize or use arrow keys.',
