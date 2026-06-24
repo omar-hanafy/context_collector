@@ -22,11 +22,12 @@ dependencies:
   desktop_drop:
     git:
       url: https://github.com/omar-hanafy/flutter-plugins.git
+      ref: desktop-drop-upstream-squash
       path: packages/desktop_drop
   file_selector: ^1.1.0
   window_manager: ^0.5.1
   flutter_helper_utils: ^8.5.0
-  resizable_splitter: ^2.1.1
+  resizable_splitter: ^2.1.2
   dart_helper_utils: ^5.4.1
   intl: ^0.20.2
   path: ^1.9.1
