@@ -85,8 +85,23 @@ class _TabShellState extends ConsumerState<TabShell> {
   bool _isAddTabDropTarget = false;
   final Uuid _uuid = const Uuid();
 
+  void _syncKeyboardVisibleSession(
+    List<SessionEntry> sessions,
+    String? activeId,
+  ) {
+    for (final session in sessions) {
+      session.container
+          .read(monacoEditorStatusProvider.notifier)
+          .setVisibleForKeyboardInput(session.id == activeId);
+    }
+  }
+
   void _activateSession(SessionEntry session) {
     final activeId = ref.read(activeSessionIdProvider);
+    _syncKeyboardVisibleSession(
+      ref.read(sessionManagerProvider),
+      session.id,
+    );
     if (_editingSessionId != null && _editingSessionId != session.id) {
       setState(() => _editingSessionId = null);
     }
@@ -149,6 +164,14 @@ class _TabShellState extends ConsumerState<TabShell> {
         ref.read(activeSessionIdProvider.notifier).state = fallbackId;
       });
     }
+    final visibleSessionId = sessions[currentIndex].id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _syncKeyboardVisibleSession(
+        ref.read(sessionManagerProvider),
+        ref.read(activeSessionIdProvider) ?? visibleSessionId,
+      );
+    });
 
     final app_shortcuts.ShortcutRegistry shortcuts = ref.watch(
       app_shortcuts.shortcutRegistryProvider,
@@ -775,9 +798,14 @@ class _TabShellState extends ConsumerState<TabShell> {
   Future<void> _restoreSessionFocus(
     SessionEntry session, {
     MonacoFocusIntent intent = MonacoFocusIntent.maintenance,
+    bool afterNativeFocusBoundary = false,
   }) async {
     final service = session.container.read(monacoEditorStatusProvider.notifier);
     await service.layout();
+    if (afterNativeFocusBoundary) {
+      await service.recoverKeyboardFocusAfterNativeFocusBoundary();
+      return;
+    }
     await service.recoverKeyboardFocus(intent: intent);
   }
 
@@ -836,7 +864,7 @@ class _TabShellState extends ConsumerState<TabShell> {
             syncEditor: true,
           );
           if (saved == null) {
-            _showSnackBar('Close cancelled — failed to save workspace.');
+            _showSnackBar('Close cancelled - failed to save workspace.');
             return;
           }
         }
@@ -1349,7 +1377,9 @@ class _TabShellState extends ConsumerState<TabShell> {
     _activateSession(session);
     if (wasActive) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(_restoreSessionFocus(session));
+      unawaited(
+        _restoreSessionFocus(session, afterNativeFocusBoundary: true),
+      );
     });
   }
 

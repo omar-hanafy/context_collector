@@ -60,14 +60,17 @@ MonacoFocusIntent? editorPointerFocusIntent(
   PointerDownEvent event, {
   required bool editorHasFlutterFocus,
   required bool editorReportsFocused,
+  required bool nativeInputReadinessStale,
   TargetPlatform? platform,
 }) {
   final targetPlatform = platform ?? defaultTargetPlatform;
   if (!editorPointerMayClaimKeyboard(event)) return null;
   // Context Collector renders the package controller's raw WebView so it must
   // keep the same pointer-entry gate that MonacoEditor uses around it:
-  // macOS user clicks always re-run input readiness recovery, while Windows
-  // avoids replaying focus when both focus signals are already current.
+  // a stale native-input boundary always re-runs user recovery, macOS user
+  // clicks always re-run input readiness recovery, and Windows avoids replaying
+  // focus only when both focus signals are already current and fresh.
+  if (nativeInputReadinessStale) return MonacoFocusIntent.user;
   if (targetPlatform == TargetPlatform.macOS) return MonacoFocusIntent.user;
   if (!editorHasFlutterFocus || !editorReportsFocused) {
     return MonacoFocusIntent.user;
@@ -117,6 +120,22 @@ MonacoFocusIntent editorInputReadinessFocusIntent(
       : MonacoFocusIntent.maintenance;
 }
 
+@visibleForTesting
+bool editorTracksNativeInputReadinessStaleness({
+  required bool isWeb,
+  required TargetPlatform platform,
+}) {
+  if (isWeb) return false;
+  return switch (platform) {
+    TargetPlatform.macOS ||
+    TargetPlatform.windows ||
+    TargetPlatform.linux => true,
+    TargetPlatform.android ||
+    TargetPlatform.iOS ||
+    TargetPlatform.fuchsia => false,
+  };
+}
+
 /// Simplified Monaco service using the flutter_monaco package
 class MonacoService extends StateNotifier<EditorStatus> {
   MonacoService()
@@ -140,6 +159,7 @@ class MonacoService extends StateNotifier<EditorStatus> {
   bool _editorReportsFocused = false;
   bool _editorWasLastKeyboardTarget = false;
   bool _nativeInputReadinessStale = false;
+  bool _visibleForKeyboardInput = true;
   StreamSubscription<void>? _focusSub;
   StreamSubscription<void>? _blurSub;
 
@@ -186,6 +206,7 @@ class MonacoService extends StateNotifier<EditorStatus> {
           event,
           editorHasFlutterFocus: _platformViewFocus.hasFocus,
           editorReportsFocused: _editorReportsFocused,
+          nativeInputReadinessStale: _nativeInputReadinessStale,
           platform: defaultTargetPlatform,
         );
         if (intent == null) {
@@ -403,13 +424,19 @@ class MonacoService extends StateNotifier<EditorStatus> {
   /// already owns, never claim it from another surface. Clicking the editor
   /// goes through [MonacoFocusIntent.user], letting flutter_monaco perform
   /// package-owned input handoff before this wrapper aligns Flutter focus.
-  bool _editorOwnsKeyboard() => editorMayClaimKeyboard(
-    FocusManager.instance.primaryFocus,
-    _platformViewFocus,
-  );
+  bool _editorOwnsKeyboard() =>
+      _visibleForKeyboardInput &&
+      editorMayClaimKeyboard(
+        FocusManager.instance.primaryFocus,
+        _platformViewFocus,
+      );
 
-  bool get _tracksNativeInputReadinessStaleness =>
-      !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
+  bool get _tracksNativeInputReadinessStaleness {
+    return editorTracksNativeInputReadinessStaleness(
+      isWeb: kIsWeb,
+      platform: defaultTargetPlatform,
+    );
+  }
 
   bool get _editorIsFocusTargetForRestore {
     return _editorWasLastKeyboardTarget ||
@@ -417,7 +444,27 @@ class MonacoService extends StateNotifier<EditorStatus> {
         _editorReportsFocused;
   }
 
+  void setVisibleForKeyboardInput(bool visible) {
+    if (_visibleForKeyboardInput == visible) {
+      return;
+    }
+
+    final editorWasFocusTarget = _editorIsFocusTargetForRestore;
+    _visibleForKeyboardInput = visible;
+
+    if (!_tracksNativeInputReadinessStaleness) {
+      return;
+    }
+
+    if (editorWasFocusTarget) {
+      _nativeInputReadinessStale = true;
+    }
+  }
+
   bool _maintenanceMayUseEditorInput() {
+    if (!_visibleForKeyboardInput) {
+      return false;
+    }
     if (!_editorOwnsKeyboard()) {
       _editorWasLastKeyboardTarget = false;
       return false;
@@ -437,6 +484,10 @@ class MonacoService extends StateNotifier<EditorStatus> {
 
   void invalidateInputReadinessAfterNativeFocusBoundary() {
     if (!_tracksNativeInputReadinessStaleness) {
+      return;
+    }
+    if (!_visibleForKeyboardInput) {
+      _nativeInputReadinessStale = _editorIsFocusTargetForRestore;
       return;
     }
     if (!_editorOwnsKeyboard()) {

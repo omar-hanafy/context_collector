@@ -27,4 +27,15 @@ void main() {
     expect(pubspec, isNot(contains('webview_flutter_windows:')));
     expect(pubspec, isNot(contains('webview_windows:')));
   });
+
+  test('tab switching is treated as a native input-readiness boundary', () {
+    final tabShell = File('lib/src/app/tab_shell.dart').readAsStringSync();
+
+    expect(tabShell, contains('setVisibleForKeyboardInput'));
+    expect(tabShell, contains('afterNativeFocusBoundary: true'));
+    expect(
+      tabShell,
+      contains('recoverKeyboardFocusAfterNativeFocusBoundary'),
+    );
+  });
 }

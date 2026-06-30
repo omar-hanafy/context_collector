@@ -205,6 +205,7 @@ void main() {
           ),
           editorHasFlutterFocus: false,
           editorReportsFocused: false,
+          nativeInputReadinessStale: false,
           platform: TargetPlatform.windows,
         ),
         MonacoFocusIntent.user,
@@ -222,6 +223,7 @@ void main() {
             ),
             editorHasFlutterFocus: true,
             editorReportsFocused: true,
+            nativeInputReadinessStale: false,
             platform: TargetPlatform.windows,
           ),
           isNull,
@@ -238,6 +240,7 @@ void main() {
           ),
           editorHasFlutterFocus: true,
           editorReportsFocused: true,
+          nativeInputReadinessStale: false,
           platform: TargetPlatform.macOS,
         ),
         MonacoFocusIntent.user,
@@ -254,6 +257,7 @@ void main() {
           ),
           editorHasFlutterFocus: true,
           editorReportsFocused: false,
+          nativeInputReadinessStale: false,
           platform: TargetPlatform.windows,
         ),
         MonacoFocusIntent.user,
@@ -271,6 +275,26 @@ void main() {
             ),
             editorHasFlutterFocus: false,
             editorReportsFocused: true,
+            nativeInputReadinessStale: false,
+            platform: TargetPlatform.windows,
+          ),
+          MonacoFocusIntent.user,
+        );
+      },
+    );
+
+    test(
+      'replays user focus on Windows after a stale tab visibility boundary',
+      () {
+        expect(
+          editorPointerFocusIntent(
+            const PointerDownEvent(
+              kind: PointerDeviceKind.mouse,
+              buttons: kPrimaryMouseButton,
+            ),
+            editorHasFlutterFocus: true,
+            editorReportsFocused: true,
+            nativeInputReadinessStale: true,
             platform: TargetPlatform.windows,
           ),
           MonacoFocusIntent.user,
@@ -287,6 +311,7 @@ void main() {
           ),
           editorHasFlutterFocus: false,
           editorReportsFocused: false,
+          nativeInputReadinessStale: true,
           platform: TargetPlatform.macOS,
         ),
         isNull,
@@ -382,6 +407,56 @@ void main() {
       expect(
         editorInputReadinessFocusIntent(MonacoInputReadiness.noEditorTarget),
         MonacoFocusIntent.maintenance,
+      );
+    });
+  });
+
+  group('editorTracksNativeInputReadinessStaleness', () {
+    test('tracks desktop platform-view boundaries', () {
+      expect(
+        editorTracksNativeInputReadinessStaleness(
+          isWeb: false,
+          platform: TargetPlatform.macOS,
+        ),
+        isTrue,
+      );
+      expect(
+        editorTracksNativeInputReadinessStaleness(
+          isWeb: false,
+          platform: TargetPlatform.windows,
+        ),
+        isTrue,
+      );
+      expect(
+        editorTracksNativeInputReadinessStaleness(
+          isWeb: false,
+          platform: TargetPlatform.linux,
+        ),
+        isTrue,
+      );
+    });
+
+    test('does not track web or mobile as desktop native input boundaries', () {
+      expect(
+        editorTracksNativeInputReadinessStaleness(
+          isWeb: true,
+          platform: TargetPlatform.windows,
+        ),
+        isFalse,
+      );
+      expect(
+        editorTracksNativeInputReadinessStaleness(
+          isWeb: false,
+          platform: TargetPlatform.android,
+        ),
+        isFalse,
+      );
+      expect(
+        editorTracksNativeInputReadinessStaleness(
+          isWeb: false,
+          platform: TargetPlatform.iOS,
+        ),
+        isFalse,
       );
     });
   });
