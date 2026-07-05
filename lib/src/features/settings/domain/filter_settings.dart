@@ -11,7 +11,7 @@ class FilterSettings {
   factory FilterSettings.fromJson(Map<String, dynamic> json) {
     final extensions = json.tryGetList<String>('blacklistedExtensions');
     return FilterSettings(
-      blacklistedExtensions: extensions?.toSet() ?? defaultBlacklist,
+      blacklistedExtensions: _migrateBlacklist(extensions?.toSet()),
     );
   }
 
@@ -44,7 +44,6 @@ class FilterSettings {
     '.mp4', '.mov', '.mp3', '.wav',
     '.pdf',
     '.zip', '.rar', '.gz', '.7z',
-    '.svg',
 
     // Dependency Lock Files (very noisy)
     'package-lock.json',
@@ -57,6 +56,14 @@ class FilterSettings {
 
   /// The set of file extensions (e.g., '.log') to ignore.
   final Set<String> blacklistedExtensions;
+
+  static Set<String> _migrateBlacklist(Set<String>? extensions) {
+    if (extensions == null) return defaultBlacklist;
+
+    // SVG used to be grouped with binary media. It is text-based XML and is now
+    // supported by default, including for users with older saved preferences.
+    return {...extensions}..remove('.svg');
+  }
 
   Map<String, dynamic> toJson() {
     return {

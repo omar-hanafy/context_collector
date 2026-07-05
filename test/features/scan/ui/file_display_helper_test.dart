@@ -9,11 +9,28 @@ void main() {
       expect(FileDisplayHelper.getLanguageId('.md'), 'markdown');
     });
 
+    test('getLanguageId maps XML and JSON image-as-code formats', () {
+      expect(FileDisplayHelper.getLanguageId('.svg'), 'xml');
+      expect(FileDisplayHelper.getLanguageId('.drawio'), 'xml');
+      expect(FileDisplayHelper.getLanguageId('.dio'), 'xml');
+      expect(FileDisplayHelper.getLanguageId('.excalidraw'), 'json');
+    });
+
     test('getCategoryForExtension maps .docx to documentation', () {
       expect(
         FileDisplayHelper.getCategoryForExtension('.docx'),
         FileCategory.documentation,
       );
+    });
+
+    test('getCategoryForExtension maps image-as-code formats', () {
+      for (final extension
+          in FileDisplayHelper.imageAsCodeExtensionCatalog.keys) {
+        expect(
+          FileDisplayHelper.getCategoryForExtension(extension),
+          FileCategory.imageAsCode,
+        );
+      }
     });
   });
 }

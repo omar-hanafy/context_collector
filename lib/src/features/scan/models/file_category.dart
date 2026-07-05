@@ -10,6 +10,7 @@ enum FileCategory {
   documentation('Documentation', Icons.description),
   database('Database', Icons.storage),
   devops('DevOps & Build', Icons.build_circle),
+  imageAsCode('Image as Code', Icons.polyline),
   other('Other', Icons.insert_drive_file);
 
   const FileCategory(this.displayName, this.icon);

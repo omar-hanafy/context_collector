@@ -30,7 +30,8 @@ class FileDisplayHelper {
       FileCategory.web => cs.primary.setOpacity(0.90),
       FileCategory.data ||
       FileCategory.database => cs.secondary.setOpacity(0.90),
-      FileCategory.script => cs.tertiary.setOpacity(0.90),
+      FileCategory.script ||
+      FileCategory.imageAsCode => cs.tertiary.setOpacity(0.90),
       FileCategory.documentation => cs.onSurfaceVariant,
       _ => cs.onSurfaceVariant,
     };
@@ -76,6 +77,10 @@ class FileDisplayHelper {
       '.html': 'html',
       '.css': 'css',
       '.scss': 'scss',
+      '.svg': 'xml',
+      '.drawio': 'xml',
+      '.dio': 'xml',
+      '.excalidraw': 'json',
       '.json': 'json',
       '.yaml': 'yaml',
       '.yml': 'yaml',
@@ -172,6 +177,28 @@ class FileDisplayHelper {
     '.tsv': FileCategory.data,
     '.xls': FileCategory.data,
     '.xlsx': FileCategory.data,
+
+    // Text-based vector and diagram source files
+    ...imageAsCodeExtensionCatalog,
+  };
+
+  static const Map<String, FileCategory> imageAsCodeExtensionCatalog = {
+    '.svg': FileCategory.imageAsCode,
+    '.drawio': FileCategory.imageAsCode,
+    '.dio': FileCategory.imageAsCode,
+    '.excalidraw': FileCategory.imageAsCode,
+    '.dot': FileCategory.imageAsCode,
+    '.gv': FileCategory.imageAsCode,
+    '.mmd': FileCategory.imageAsCode,
+    '.mermaid': FileCategory.imageAsCode,
+    '.puml': FileCategory.imageAsCode,
+    '.plantuml': FileCategory.imageAsCode,
+    '.iuml': FileCategory.imageAsCode,
+    '.d2': FileCategory.imageAsCode,
+    '.tikz': FileCategory.imageAsCode,
+    '.pgf': FileCategory.imageAsCode,
+    '.eps': FileCategory.imageAsCode,
+    '.ps': FileCategory.imageAsCode,
   };
 
   /// Get file category for an extension
