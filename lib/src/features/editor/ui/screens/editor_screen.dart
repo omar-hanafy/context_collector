@@ -549,9 +549,18 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                       minExtent: 300,
                     ),
                     onChanged: _handleSplitRatioChanged,
+                    // interactiveExtent > thickness restores the grab slop
+                    // that HOVER_FLICKER_AUDIT.md identified as the missing
+                    // buffer at the WKWebView seam: with 6/6 the cursor,
+                    // hover, and hit zones collapse onto the knife-edge
+                    // divider and macOS arbitrates the seam pixel-by-pixel
+                    // (cursor and hover-color blink). The tree-side slop is
+                    // pure Flutter; whether the editor-side slop wins the
+                    // cursor over the WKWebView needs live validation (the
+                    // audit's open question).
                     divider: const SplitterDividerStyle(
                       thickness: 6,
-                      interactiveExtent: 6,
+                      interactiveExtent: 14,
                     ),
                     enableKeyboard: false,
                     semanticsLabel:

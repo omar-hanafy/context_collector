@@ -10,7 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_monaco: ^2.1.1
+  flutter_monaco: ^2.2.0
   flutter_directory_tree: ^1.0.0
   directory_tree: ^1.0.0
   cupertino_icons: ^1.0.8

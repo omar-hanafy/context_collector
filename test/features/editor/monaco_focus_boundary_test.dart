@@ -22,7 +22,10 @@ void main() {
   test('Context Collector does not depend directly on WebView plugins', () {
     final pubspec = File('pubspec.yaml').readAsStringSync();
 
-    expect(pubspec, contains('flutter_monaco: ^2.1.1'));
+    // 2.2.0 is the first version with the macOS native first-responder
+    // handoff; the app's per-click user intent on macOS relies on it being
+    // cheap (no focus replay when the editor already owns native focus).
+    expect(pubspec, contains('flutter_monaco: ^2.2.0'));
     expect(pubspec, isNot(contains('webview_flutter:')));
     expect(pubspec, isNot(contains('webview_flutter_windows:')));
     expect(pubspec, isNot(contains('webview_windows:')));
