@@ -93,7 +93,6 @@ class DirectoryTreeAdapter extends ChangeNotifier {
       selectNewFilesByDefault: true,
       preferDeepestRoot: true,
       sortChildrenByName: true,
-      stripPrefixes: roots,
       autoPickVisibleRoot: !keepTreeFolderVisible,
       visibleRootMaxHoistLevels: 2,
       visibleRootIgnoreVirtualFiles: true,

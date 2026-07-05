@@ -98,7 +98,7 @@ class PathParserService {
         // Restore UNC path
         final uncPath = token
             .replaceFirst('//UNC_PATH_', r'\\')
-            .replaceAll('_SLASH_', r'\\');
+            .replaceAll('_SLASH_', r'\');
         parsedPaths.add(uncPath);
       } else {
         // Normalize single backslashes in tokens to forward slashes (Windows paths)

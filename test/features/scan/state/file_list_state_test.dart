@@ -3,9 +3,12 @@ import 'dart:io';
 import 'package:context_collector/src/features/scan/models/scan_result.dart';
 import 'package:context_collector/src/features/scan/models/scanned_file.dart';
 import 'package:context_collector/src/features/scan/state/file_list_state.dart';
+import 'package:context_collector/src/features/virtual_tree/directory_tree_adapter.dart';
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter_directory_tree/flutter_directory_tree.dart' as tree;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as path;
 import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> _waitFor(
@@ -17,6 +20,12 @@ Future<void> _waitFor(
     await Future<void>.delayed(const Duration(milliseconds: 10));
   }
   fail(reason);
+}
+
+tree.TreeNode _folderNamed(DirectoryTreeAdapter adapter, String name) {
+  return adapter.data.nodes.values.singleWhere(
+    (node) => node.type == tree.NodeType.folder && node.name == name,
+  );
 }
 
 void main() {
@@ -212,5 +221,75 @@ void main() {
         );
       },
     );
+  });
+
+  group('FileListNotifier tree removal', () {
+    test('removing a scanned directory removes its empty tree root', () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'context_collector_remove_dir_test',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final diskFile = File('${directory.path}/notes.txt');
+      await diskFile.writeAsString('hello from scanned directory');
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(selectionProvider.notifier);
+      final adapter = DirectoryTreeAdapter();
+      addTearDown(adapter.dispose);
+      notifier.initializeDirectoryTree(adapter);
+
+      await notifier.processDroppedItems([XFile(directory.path)]);
+
+      final directoryName = path.basename(directory.path);
+      final folderNode = _folderNamed(adapter, directoryName);
+      expect(
+        path.normalize(folderNode.sourcePath!),
+        path.normalize(directory.path),
+      );
+
+      notifier.removeNodes({folderNode.id});
+
+      final state = container.read(selectionProvider);
+      expect(state.scanHistory, isEmpty);
+      expect(state.fileMap.values.where((file) => !file.isVirtual), isEmpty);
+      expect(
+        adapter.data.nodes.values.where((node) => node.name == directoryName),
+        isEmpty,
+      );
+    });
+
+    test('removing an empty scanned directory removes its tree root', () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'context_collector_remove_empty_dir_test',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(selectionProvider.notifier);
+      final adapter = DirectoryTreeAdapter();
+      addTearDown(adapter.dispose);
+      notifier.initializeDirectoryTree(adapter);
+
+      await notifier.processDroppedItems([XFile(directory.path)]);
+
+      final directoryName = path.basename(directory.path);
+      final folderNode = _folderNamed(adapter, directoryName);
+      expect(
+        path.normalize(folderNode.sourcePath!),
+        path.normalize(directory.path),
+      );
+
+      notifier.removeNodes({folderNode.id});
+
+      final state = container.read(selectionProvider);
+      expect(state.scanHistory, isEmpty);
+      expect(state.fileMap, isEmpty);
+      expect(
+        adapter.data.nodes.values.where((node) => node.name == directoryName),
+        isEmpty,
+      );
+    });
   });
 }

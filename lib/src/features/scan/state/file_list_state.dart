@@ -746,6 +746,12 @@ class FileListNotifier extends StateNotifier<SelectionState> {
           fileId,
     };
 
+    final filePathsToRemove = <String>{
+      for (final fileId in fileIdsToRemove)
+        if (state.fileMap[fileId] case final file? when !file.isVirtual)
+          file.fullPath,
+    };
+
     if (fileIdsToRemove.isEmpty && sourcePathsToRemove.isEmpty) return;
 
     final newFileMap = Map<String, ScannedFile>.from(state.fileMap)
@@ -754,7 +760,10 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     final newSelectedFileIds = Set<String>.from(state.selectedFileIds)
       ..removeAll(fileIdsToRemove);
 
-    final newScanHistory = _removePathsFromScanHistory(sourcePathsToRemove);
+    final newScanHistory = _removePathsFromScanHistory(
+      {...sourcePathsToRemove, ...filePathsToRemove},
+      remainingFiles: newFileMap.values,
+    );
 
     final shouldResetSession =
         newFileMap.isEmpty && state.sessionStarted && !state.hasFiles;
@@ -793,15 +802,37 @@ class FileListNotifier extends StateNotifier<SelectionState> {
   }
 
   List<ScanMetadata> _removePathsFromScanHistory(
-    Iterable<String> pathsToRemove,
-  ) {
-    final pathsToRemoveSet = pathsToRemove.toSet();
+    Iterable<String> pathsToRemove, {
+    required Iterable<ScannedFile> remainingFiles,
+  }) {
+    final pathsToRemoveSet = pathsToRemove
+        .map(_normalizeScanPath)
+        .where((p) => p.isNotEmpty)
+        .toSet();
+    final remainingRealFilePaths = remainingFiles
+        .where((file) => !file.isVirtual)
+        .map((file) => _normalizeScanPath(file.fullPath))
+        .where((p) => p.isNotEmpty)
+        .toList();
     final newScanHistory = <ScanMetadata>[];
 
     for (final scanMetadata in state.scanHistory) {
-      final remainingSourcePaths = scanMetadata.sourcePaths
-          .where((p) => !pathsToRemoveSet.contains(p))
-          .toList();
+      final remainingSourcePaths = <String>[];
+      for (final sourcePath in scanMetadata.sourcePaths) {
+        final normalizedSourcePath = _normalizeScanPath(sourcePath);
+        final affectedByRemoval = pathsToRemoveSet.any(
+          (removedPath) =>
+              _sameOrNestedPath(normalizedSourcePath, removedPath) ||
+              _sameOrNestedPath(removedPath, normalizedSourcePath),
+        );
+        final hasRemainingFiles = remainingRealFilePaths.any(
+          (filePath) => _sameOrNestedPath(normalizedSourcePath, filePath),
+        );
+
+        if (!affectedByRemoval || hasRemainingFiles) {
+          remainingSourcePaths.add(sourcePath);
+        }
+      }
 
       if (remainingSourcePaths.isNotEmpty) {
         newScanHistory.add(
@@ -814,6 +845,16 @@ class FileListNotifier extends StateNotifier<SelectionState> {
       }
     }
     return newScanHistory;
+  }
+
+  String _normalizeScanPath(String value) {
+    if (value.trim().isEmpty) return '';
+    return path.normalize(value);
+  }
+
+  bool _sameOrNestedPath(String parentPath, String childPath) {
+    if (parentPath.isEmpty || childPath.isEmpty) return false;
+    return parentPath == childPath || path.isWithin(parentPath, childPath);
   }
 
   bool _shouldRemoveFileId({
