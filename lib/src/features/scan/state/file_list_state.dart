@@ -9,6 +9,7 @@ import 'package:flutter_directory_tree/flutter_directory_tree.dart' as tree;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as path;
 
+import '../../../shared/platform/platform_caps.dart';
 import '../../settings/presentation/state/preferences_notifier.dart';
 import '../../virtual_tree/directory_tree_adapter.dart';
 import '../models/scan_result.dart';
@@ -340,6 +341,9 @@ class FileListNotifier extends StateNotifier<SelectionState> {
   }
 
   Future<void> pickDirectory(BuildContext context) async {
+    // Browsers cannot open a directory picker with readable paths; folder
+    // input on web happens through drag-and-drop (UI entry points are hidden).
+    if (!PlatformCaps.supportsDirectoryPicker) return;
     final directoryPath = await getDirectoryPath();
     if (directoryPath != null) {
       await _processNewItems(
@@ -357,6 +361,9 @@ class FileListNotifier extends StateNotifier<SelectionState> {
     String pastedText,
     BuildContext context,
   ) async {
+    // Pasted filesystem paths are unreadable in a browser (UI entry points
+    // are hidden on web).
+    if (!PlatformCaps.supportsPastePaths) return;
     state = state.copyWith(isProcessing: true, clearError: true);
     try {
       final pathParser = ref.read(pathParserServiceProvider);
@@ -392,6 +399,7 @@ class FileListNotifier extends StateNotifier<SelectionState> {
   }
 
   Future<void> pastePathsFromClipboard(BuildContext context) async {
+    if (!PlatformCaps.supportsPastePaths) return;
     try {
       final data = await Clipboard.getData(Clipboard.kTextPlain);
       final text = data?.text?.trim() ?? '';

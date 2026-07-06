@@ -17,7 +17,7 @@
 <p align="center">
   <!-- Badges will be added here -->
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-blue" alt="Platforms: macOS, Windows">
+  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Web-blue" alt="Platforms: macOS, Windows, Web">
   <img src="https://img.shields.io/badge/Dart-%3E%3D3.0.0%20%3C4.0.0-blueviolet" alt="Dart SDK: >=3.0.0 <4.0.0">
   <img src="https://img.shields.io/badge/Flutter-blue?logo=flutter" alt="Flutter">
   <a href="https://github.com/omar-hanafy/context_collector/commits/main"><img src="https://img.shields.io/github/last-commit/omar-hanafy/context_collector" alt="Last Commit"></a>
@@ -26,7 +26,7 @@
 
 > **Combine files & folders into a clean, AI-ready text bundle — powered by Flutter and Monaco Editor.**
 
-Context Collector is a lightweight desktop app (macOS • Windows) that lets you drag-and-drop source files, logs, configurations, or entire directories and outputs a neatly annotated document.
+Context Collector is a lightweight app (macOS • Windows • Web) that lets you drag-and-drop source files, logs, configurations, or entire directories and outputs a neatly annotated document.
 Every chunk includes full file paths and metadata, making it ideal for working smoothly with AIs and LLMs without the hassle of manual copying and pasting.
 
 <p align="center">
@@ -41,8 +41,11 @@ Every chunk includes full file paths and metadata, making it ideal for working s
 |-------------|-------------------|-------------------------------------------------------------------------------------------------------|
 | **macOS**   | ✅ Fully Supported | macOS 10.13 or later                                                                                  |
 | **Windows** | ✅ Fully Supported | Windows 10/11 with [WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) |
+| **Web**     | ✅ Supported       | Any modern browser (Chrome, Edge, Firefox, Safari)                                                    |
 
 > **Note for Windows users:** The app will prompt you to install WebView2 Runtime if it's not already installed. This is required for the Monaco editor integration.
+
+> **Note for Web:** Browsers expose no filesystem paths, so a few desktop-only features are hidden on web: *Browse Folder* and *Paste Paths* (drag-and-drop folders instead), and saved workspaces can only restore virtual files. Exports download as a markdown file.
 
 ---
 
@@ -99,7 +102,7 @@ flutter pub get
 flutter config --enable-macos-desktop --enable-windows-desktop
 
 # Run or build
-flutter run  # or flutter build macos / windows
+flutter run  # or flutter build macos / windows / web
 ```
 
 ---

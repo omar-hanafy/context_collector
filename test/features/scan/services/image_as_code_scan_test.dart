@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:context_collector/src/features/scan/models/scan_result.dart';
-import 'package:context_collector/src/features/scan/models/scanned_file.dart';
+import 'package:context_collector/src/features/scan/services/fs/platform_fs.dart';
 import 'package:context_collector/src/features/scan/services/unified_file_service.dart';
 import 'package:context_collector/src/features/settings/domain/filter_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -33,7 +33,7 @@ void main() {
       );
 
       final loaded = await UnifiedFileService.loadFileContent(
-        ScannedFile.fromFile(svgFile),
+        PlatformFs.scannedFileFromPathSync(svgFile.path),
       );
 
       expect(loaded.error, isNull);

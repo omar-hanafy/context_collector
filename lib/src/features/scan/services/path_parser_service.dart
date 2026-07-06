@@ -1,6 +1,7 @@
-import 'dart:io';
-
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+
+import 'fs/platform_fs.dart';
 
 /// Result of path parsing operation
 class PathParseResult {
@@ -24,6 +25,16 @@ class PathParseResult {
 
 /// Service responsible for parsing mixed path input into clean, normalized paths
 class PathParserService {
+  // Web never reaches the platform-specific branches (the paste-paths feature
+  // is desktop-only), so falling back to the browser-reported platform via
+  // defaultTargetPlatform is safe here.
+  static bool get _isWindows =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+  static bool get _isMacOS =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
+  static bool get _isLinux =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
+
   /// Parses a raw string of mixed paths into a clean, platform-neutral list.
   /// Handles various formats:
   /// - Space-delimited paths
@@ -128,8 +139,8 @@ class PathParserService {
       }
 
       // Expand tilde to home directory on Unix-like systems
-      if ((Platform.isMacOS || Platform.isLinux) && path.startsWith('~/')) {
-        final homeDir = Platform.environment['HOME'];
+      if ((_isMacOS || _isLinux) && path.startsWith('~/')) {
+        final homeDir = PlatformFs.userHomeDirectory;
         if (homeDir != null) {
           path = p.join(homeDir, path.substring(2));
         }
@@ -171,7 +182,7 @@ class PathParserService {
   /// Validates if a path is acceptable, returns error message or null if valid
   String? _validatePath(String path) {
     // Platform-specific illegal characters
-    if (Platform.isWindows) {
+    if (_isWindows) {
       // Windows illegal characters: < > : " | ? * and control characters
       // But allow : for drive letters and \\ for UNC paths
       if (path.startsWith(r'\\')) {
@@ -203,7 +214,7 @@ class PathParserService {
     }
 
     // Basic length check
-    if (Platform.isWindows) {
+    if (_isWindows) {
       // Windows has different limits for regular paths vs UNC paths
       if (path.startsWith(r'\\')) {
         if (path.length > 32767) {
@@ -229,7 +240,7 @@ class PathParserService {
     }
 
     // Lowercase for case-insensitive filesystems (Windows, macOS)
-    if (Platform.isWindows || Platform.isMacOS) {
+    if (_isWindows || _isMacOS) {
       canonical = canonical.toLowerCase();
     }
 

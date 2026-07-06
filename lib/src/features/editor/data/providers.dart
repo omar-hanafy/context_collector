@@ -1,6 +1,7 @@
 import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/modal_overlay_coordinator.dart';
 import 'monaco_service.dart';
 
 /// Main Monaco service provider
@@ -13,7 +14,9 @@ monacoEditorStatusProvider =
       // ignore: unused_local_variable
       final link = ref.keepAlive();
 
-      return MonacoService();
+      return MonacoService(
+        overlayCoordinator: ref.read(modalOverlayCoordinatorProvider),
+      );
     });
 
 /// Convenient provider for checking if editor is ready

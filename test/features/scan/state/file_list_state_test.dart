@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:context_collector/src/features/scan/models/scan_result.dart';
 import 'package:context_collector/src/features/scan/models/scanned_file.dart';
+import 'package:context_collector/src/features/scan/services/fs/platform_fs.dart';
 import 'package:context_collector/src/features/scan/state/file_list_state.dart';
 import 'package:context_collector/src/features/virtual_tree/directory_tree_adapter.dart';
 import 'package:file_selector/file_selector.dart';
@@ -44,7 +45,7 @@ void main() {
         final diskFile = File('${directory.path}/notes.txt');
         await diskFile.writeAsString('from disk');
 
-        final unloaded = ScannedFile.fromFile(diskFile);
+        final unloaded = PlatformFs.scannedFileFromPathSync(diskFile.path);
         expect(unloaded.editorContent, isNull);
         expect(unloaded.hasEditorContent, isFalse);
         expect(unloaded.effectiveContent, isEmpty);

@@ -5,7 +5,7 @@ import 'package:context_collector/context_collector.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'token_count_isolate.dart';
+import 'token_counter/token_counter.dart';
 
 class TokenCountState {
   const TokenCountState({
@@ -35,7 +35,7 @@ final tokenCountProvider =
 
 class TokenCountNotifier extends StateNotifier<TokenCountState> {
   TokenCountNotifier(this.ref) : super(const TokenCountState()) {
-    _worker = TokenCounterIsolate();
+    _worker = TokenCounter();
 
     // React to editor + selection changes.
     _selSub = ref.listen<SelectionState>(
@@ -52,7 +52,7 @@ class TokenCountNotifier extends StateNotifier<TokenCountState> {
   }
 
   final Ref ref;
-  late final TokenCounterIsolate _worker;
+  late final TokenCounter _worker;
   ProviderSubscription<SelectionState>? _selSub;
   ProviderSubscription<MonacoController?>? _ctrlSub;
 

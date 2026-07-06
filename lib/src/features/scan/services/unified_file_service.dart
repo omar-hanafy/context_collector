@@ -1,7 +1,6 @@
-import 'dart:io';
+import 'dart:convert';
 import 'dart:math';
 
-import 'package:desktop_drop/desktop_drop.dart';
 import 'package:docx_to_markdown/docx_to_markdown.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
@@ -10,123 +9,43 @@ import 'package:path/path.dart' as p;
 import '../models/scan_result.dart';
 import '../models/scanned_file.dart';
 import '../ui/file_display_helper.dart';
+import 'fs/platform_fs.dart';
 
-/// Unified service for all file operations - scanning, dropping, and file operations
-/// Consolidates FileScanner, DropHandler, and FileOperationsService
+/// Unified service for all file operations - scanning, dropping, and file
+/// operations. Platform-specific filesystem access is delegated to
+/// [PlatformFs] so this service compiles and runs on desktop and web alike.
 class UnifiedFileService {
   UnifiedFileService._();
 
   static bool _isDocx(ScannedFile file) =>
       file.extension.toLowerCase() == '.docx';
 
-  static Future<String> _readDocxAsMarkdown(File file) async {
+  static Future<String> _decodeDocx(ScannedFile file, Uint8List bytes) async {
     try {
-      final bytes = await file.readAsBytes();
       return await DocxConverter(bytes).convert();
     } on DocxPackageException catch (e) {
-      throw FileSystemException(
-        'Cannot read .docx file: ${e.message}',
-        file.path,
-      );
+      throw FormatException('Cannot read .docx file: ${e.message}');
     }
   }
 
   //============================================================================
-  // FILE SCANNING (from FileScanner)
+  // FILE SCANNING
   //============================================================================
 
   /// Scans a directory incrementally and efficiently, skipping heavy folders.
+  /// Desktop-only; on web folders arrive pre-expanded via drag-and-drop.
   static Future<void> scanDirectory({
     required String directoryPath,
     required Set<String> blacklist,
     required void Function(List<ScannedFile> files) onBatchFound,
     required ScanSource source,
-  }) async {
-    final rootDir = Directory(directoryPath);
-    if (!rootDir.existsSync()) {
-      return;
-    }
-
-    // Folders to completely ignore during traversal
-    const ignoredDirs = {
-      'build',
-      '.dart_tool',
-      '.git',
-      '.idea',
-      'ios',
-      'android',
-      'node_modules',
-      'linux',
-      'macos',
-      'windows',
-      'web',
-      'coverage',
-      '.gradle',
-      '.vscode',
-      'Pods',
-      '.symlinks',
-      'DerivedData',
-      'dist',
-      'out',
-    };
-
-    final List<Directory> stack = [rootDir];
-    final List<ScannedFile> batch = [];
-
-    while (stack.isNotEmpty) {
-      final current = stack.removeLast();
-
-      try {
-        // List non-recursively
-        final entities = current.list(recursive: false, followLinks: false);
-
-        await for (final entity in entities) {
-          final name = p.basename(entity.path);
-
-          if (entity is Directory) {
-            // Skip ignored dirs
-            if (!name.startsWith('.') && !ignoredDirs.contains(name)) {
-              stack.add(entity);
-            }
-          } else if (entity is File) {
-            // Skip hidden files
-            if (name.startsWith('.')) continue;
-
-            // Check blacklist
-            if (blacklist.any(
-              (ext) => name.toLowerCase().endsWith(ext.toLowerCase()),
-            )) {
-              continue;
-            }
-
-            try {
-              final relativePath = p.relative(entity.path, from: directoryPath);
-              batch.add(
-                ScannedFile.fromFile(
-                  entity,
-                  relativePath: relativePath,
-                  source: source,
-                ),
-              );
-
-              // Emit batch every 200 items
-              if (batch.length >= 200) {
-                onBatchFound(List.from(batch));
-                batch.clear();
-              }
-            } catch (_) {
-              // Skip problematic files
-            }
-          }
-        }
-      } catch (_) {
-        // Access denied or other fs errors
-      }
-    }
-
-    if (batch.isNotEmpty) {
-      onBatchFound(batch);
-    }
+  }) {
+    return PlatformFs.scanDirectory(
+      directoryPath: directoryPath,
+      blacklist: blacklist,
+      onBatchFound: onBatchFound,
+      source: source,
+    );
   }
 
   /// Creates a virtual file
@@ -160,29 +79,33 @@ class UnifiedFileService {
     if (file.isVirtual) return file;
 
     try {
-      final fileEntity = File(file.fullPath);
-      if (!fileEntity.existsSync()) {
+      final bytes = await PlatformFs.readFileBytes(file);
+      if (bytes == null) {
         return file.copyWith(error: 'File not found on disk');
       }
 
       // Basic size check to prevent OOM on massive files
       // 10MB limit for loading into string
-      final stat = fileEntity.statSync();
-      if (stat.size > 10 * 1024 * 1024) {
+      if (bytes.length > 10 * 1024 * 1024) {
         return file.copyWith(
-          error: 'File too large to read (>${stat.size ~/ (1024 * 1024)}MB)',
+          error: 'File too large to read (>${bytes.length ~/ (1024 * 1024)}MB)',
         );
       }
 
       if (_isDocx(file)) {
-        final content = await _readDocxAsMarkdown(fileEntity);
+        final content = await _decodeDocx(file, bytes);
         return file.copyWith(content: content, clearError: true);
       }
 
-      final content = await fileEntity.readAsString();
+      final content = utf8.decode(bytes);
       return file.copyWith(content: content, clearError: true);
-    } on FileSystemException catch (e) {
-      return file.copyWith(error: e.message);
+    } on FormatException catch (e) {
+      final message = e.message.trim();
+      return file.copyWith(
+        error: message.startsWith('Cannot read .docx')
+            ? message
+            : 'Cannot read file: Likely binary or unsupported format',
+      );
     } catch (_) {
       return file.copyWith(
         error: 'Cannot read file: Likely binary or unsupported format',
@@ -191,7 +114,7 @@ class UnifiedFileService {
   }
 
   //============================================================================
-  // DROP HANDLING (from DropHandler)
+  // DROP HANDLING
   //============================================================================
 
   /// Processes dropped items
@@ -201,129 +124,18 @@ class UnifiedFileService {
     required ScanSource source,
     required void Function(List<ScannedFile> files) onBatchFound,
     required void Function(List<String> sourcePaths) onScanComplete,
-  }) async {
-    final processedPaths = <String>{};
-    final sourcePaths = <String>{};
-
-    // Remove duplicates
-    final uniquePaths = <String>{};
-    final uniqueItems = <XFile>[];
-    for (final item in items) {
-      if (!uniquePaths.contains(item.path)) {
-        uniquePaths.add(item.path);
-        uniqueItems.add(item);
-      }
-    }
-
-    final filesByDirectory = <String, List<String>>{};
-    final directories = <String>[];
-
-    for (final item in uniqueItems) {
-      final itemPath = item.path;
-
-      // Check for VS Code directory drop
-      if (await _isVSCodeDirectoryDrop(itemPath)) {
-        final dirPath = await _extractVSCodeDirectory(itemPath);
-        if (dirPath != null) directories.add(dirPath);
-        continue;
-      }
-
-      if (item is DropItemDirectory) {
-        directories.add(itemPath);
-      } else {
-        final entityType = FileSystemEntity.typeSync(itemPath);
-        if (entityType == FileSystemEntityType.directory) {
-          directories.add(itemPath);
-        } else if (entityType == FileSystemEntityType.file) {
-          final parentDir = p.dirname(itemPath);
-          filesByDirectory.putIfAbsent(parentDir, () => []).add(itemPath);
-        }
-      }
-    }
-
-    // Process directories
-    for (final dirPath in directories) {
-      sourcePaths.add(dirPath);
-      await scanDirectory(
-        directoryPath: dirPath,
-        blacklist: blacklist,
-        source: source,
-        onBatchFound: (batch) {
-          final newFiles = <ScannedFile>[];
-          for (final file in batch) {
-            if (processedPaths.add(file.fullPath)) {
-              newFiles.add(file);
-            }
-          }
-          if (newFiles.isNotEmpty) {
-            onBatchFound(newFiles);
-          }
-        },
-      );
-    }
-
-    // Process individual files
-    // We treat these as a batch per directory
-    for (final entry in filesByDirectory.entries) {
-      sourcePaths.add(entry.key);
-      final batch = <ScannedFile>[];
-
-      for (final filePath in entry.value) {
-        if (!processedPaths.add(filePath)) {
-          continue;
-        }
-
-        final fileName = p.basename(filePath);
-        if (blacklist.any(
-          (pattern) => fileName.toLowerCase().endsWith(pattern.toLowerCase()),
-        )) {
-          continue;
-        }
-
-        try {
-          final file = ScannedFile.fromFile(
-            File(filePath),
-            relativePath: fileName,
-            source: source,
-          );
-          batch.add(file);
-        } catch (_) {}
-      }
-
-      if (batch.isNotEmpty) {
-        onBatchFound(batch);
-      }
-    }
-
-    onScanComplete(sourcePaths.toList());
-  }
-
-  static Future<bool> _isVSCodeDirectoryDrop(String filePath) async {
-    if (!filePath.contains('/tmp/Drops/')) return false;
-    try {
-      final content = await File(filePath).readAsString();
-      return content.contains('<script>start("') && content.contains('addRow(');
-    } catch (_) {
-      return false;
-    }
-  }
-
-  static Future<String?> _extractVSCodeDirectory(String filePath) async {
-    try {
-      final content = await File(filePath).readAsString();
-      final match = RegExp(
-        r'<script>start\("([^\"]+)"\);</script>',
-      ).firstMatch(content);
-      final dirPath = match?.group(1);
-      if (dirPath != null && Directory(dirPath).existsSync()) {
-        return dirPath;
-      }
-    } catch (_) {}
-    return null;
+  }) {
+    return PlatformFs.expandDroppedItems(
+      items: items,
+      blacklist: blacklist,
+      source: source,
+      onBatchFound: onBatchFound,
+      onScanComplete: onScanComplete,
+    );
   }
 
   //============================================================================
-  // FILE OPERATIONS (from FileOperationsService)
+  // FILE OPERATIONS
   //============================================================================
 
   /// Saves content to file (Legacy string based)
@@ -334,14 +146,11 @@ class UnifiedFileService {
 
     final fileName =
         'context_collection_${DateTime.now().millisecondsSinceEpoch}.md';
-    final filePath = await getSaveLocation(suggestedName: fileName);
-    if (filePath != null) {
-      await File(filePath.path).writeAsString(content);
-    }
+    await PlatformFs.saveTextFile(suggestedName: fileName, content: content);
   }
 
   /// Builds the combined markdown content for "View All" mode.
-  /// Reads files from disk if their content is not currently loaded in memory.
+  /// Reads files from their backing store when content is not in memory.
   static Future<String> buildCombinedContent(
     List<ScannedFile> selectedFiles,
   ) async {
@@ -394,26 +203,26 @@ class UnifiedFileService {
         content = file.effectiveContent;
         isLoaded = true;
       } else {
-        // Try reading from disk
+        // Try reading from the backing store
         try {
-          final f = File(file.fullPath);
-          if (f.existsSync()) {
-            final len = await f.length();
-            if (len < 5 * 1024 * 1024) {
-              // 5MB limit per file for view all
-              if (_isDocx(file)) {
-                content = await _readDocxAsMarkdown(f);
-                isLoaded = true;
-              } else {
-                content = await f.readAsString();
-                isLoaded = true;
-              }
-            } else {
-              error =
-                  'File too large to preview (${(len / 1024 / 1024).toStringAsFixed(1)} MB)';
-            }
-          } else {
+          final len = await PlatformFs.fileSizeOf(file);
+          if (len == null) {
             error = 'File not found on disk';
+          } else if (len >= 5 * 1024 * 1024) {
+            // 5MB limit per file for view all
+            error =
+                'File too large to preview (${(len / 1024 / 1024).toStringAsFixed(1)} MB)';
+          } else {
+            final bytes = await PlatformFs.readFileBytes(file);
+            if (bytes == null) {
+              error = 'File not found on disk';
+            } else if (_isDocx(file)) {
+              content = await _decodeDocx(file, bytes);
+              isLoaded = true;
+            } else {
+              content = utf8.decode(bytes);
+              isLoaded = true;
+            }
           }
         } catch (e) {
           error = 'Error reading file: $e';
@@ -456,88 +265,21 @@ class UnifiedFileService {
     return output.toString();
   }
 
-  /// Safe export that streams content from disk to disk.
-  /// Handles large projects without using RAM for the whole content.
+  /// Exports the selected files.
+  ///
+  /// On desktop this streams content from disk to disk so huge projects never
+  /// live in RAM; on web the content is assembled in memory (where the files
+  /// already live) and downloaded as a single markdown file.
   static Future<void> streamSaveToFile(List<ScannedFile> files) async {
+    if (PlatformFs.supportsStreamingExport) {
+      await PlatformFs.exportCollectionStreaming(files);
+      return;
+    }
+
+    final content = await buildCombinedContent(files);
     final fileName =
         'context_collection_${DateTime.now().millisecondsSinceEpoch}.md';
-    final savePath = await getSaveLocation(suggestedName: fileName);
-    if (savePath == null) return;
-
-    // Open a write stream directly to the file
-    final sink = File(savePath.path).openWrite();
-
-    try {
-      // --- Header ---
-      final headerFile = files
-          .where((f) => f.isVirtual && f.name == 'Header')
-          .firstOrNull;
-      if (headerFile != null) {
-        sink
-          ..writeln(headerFile.effectiveContent)
-          ..writeln();
-      }
-
-      sink.writeln('# Context Collection\n');
-
-      final contextFiles =
-          files
-              .where(
-                (f) =>
-                    !(f.isVirtual &&
-                        (f.name == 'Header' || f.name == 'Footer')),
-              )
-              .toList()
-            ..sort((a, b) => a.fullPath.compareTo(b.fullPath));
-
-      for (final file in contextFiles) {
-        sink
-          ..writeln('## ${file.name}')
-          ..writeln('> **Path:** ${file.fullPath}\n');
-
-        final fenceLanguage = _isDocx(file)
-            ? 'markdown'
-            : file.extension.replaceAll('.', '');
-        sink.writeln('```$fenceLanguage');
-
-        if (file.isVirtual) {
-          sink.write(file.effectiveContent);
-        } else {
-          // REAL FILES: Stream directly from disk!
-          final f = File(file.fullPath);
-          if (f.existsSync()) {
-            if (_isDocx(file)) {
-              try {
-                sink.write(await _readDocxAsMarkdown(f));
-              } catch (e) {
-                sink.writeln('// Error converting .docx to text: $e');
-              }
-            } else {
-              await sink.addStream(f.openRead());
-            }
-          } else {
-            sink.writeln('// Error: File not found');
-          }
-        }
-
-        sink
-          ..writeln('\n```\n')
-          ..writeln('---\n');
-      }
-
-      // --- Footer ---
-      final footerFile = files
-          .where((f) => f.isVirtual && f.name == 'Footer')
-          .firstOrNull;
-      if (footerFile != null) {
-        sink
-          ..writeln()
-          ..writeln(footerFile.effectiveContent);
-      }
-    } finally {
-      await sink.flush();
-      await sink.close();
-    }
+    await PlatformFs.saveTextFile(suggestedName: fileName, content: content);
   }
 
   /// Copies text to clipboard
@@ -617,8 +359,7 @@ class UnifiedFileService {
           return;
         }
         try {
-          final type = FileSystemEntity.typeSync(path);
-          if (type != FileSystemEntityType.notFound) {
+          if (PlatformFs.pathExists(path)) {
             validFiles.add(XFile(path));
           } else {
             errorPaths.add(path);

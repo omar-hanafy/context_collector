@@ -10,6 +10,7 @@ import '../features/editor/data/providers.dart';
 import '../features/scan/state/file_list_state.dart';
 import '../features/virtual_tree/directory_tree_adapter.dart';
 import '../features/virtual_tree/providers/virtual_tree_provider.dart';
+import 'modal_overlay_coordinator.dart';
 import 'persistence/session_persistence_service.dart';
 import 'route_observers.dart';
 
@@ -47,6 +48,17 @@ class SessionManager extends StateNotifier<List<SessionEntry>> {
         routeObserverProvider.overrideWithValue(
           RouteObserver<PageRoute<dynamic>>(),
         ),
+        // Fresh observer per session navigator (an observer instance can only
+        // attach to one navigator); it reports into the app-wide coordinator
+        // resolved from the parent container, and detaches on session close
+        // so an overlay open at close time cannot strand editors inert.
+        modalOverlayObserverProvider.overrideWith((overrideRef) {
+          final observer = ModalOverlayObserver(
+            overrideRef.read(modalOverlayCoordinatorProvider),
+          );
+          overrideRef.onDispose(observer.detach);
+          return observer;
+        }),
         selectionProvider.overrideWith((overrideRef) {
           return FileListNotifier(
             ref: overrideRef,
@@ -61,7 +73,11 @@ class SessionManager extends StateNotifier<List<SessionEntry>> {
           // Keep Monaco alive across route swaps inside a tab.
           // ignore: unused_local_variable
           final link = overrideRef.keepAlive();
-          return MonacoService();
+          return MonacoService(
+            overlayCoordinator: overrideRef.read(
+              modalOverlayCoordinatorProvider,
+            ),
+          );
         }),
 
         sessionTitleProvider.overrideWith((_) => defaultTitle),

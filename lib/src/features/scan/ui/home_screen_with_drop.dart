@@ -11,6 +11,7 @@ import '../../../app/persistence/saved_session.dart';
 import '../../../app/persistence/session_persistence_service.dart';
 import '../../../shared/consts.dart';
 import '../../../shared/dialogs/name_prompt.dart';
+import '../../../shared/platform/platform_caps.dart';
 import '../../../shared/widgets/app_bar_title.dart';
 import '../../editor/ui/widgets/info_bar/copy_feedback.dart';
 import '../../editor/ui/widgets/prewarm_monaco.dart';
@@ -189,25 +190,29 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
                             label: const Text('Paste'),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        OutlinedButton.icon(
-                          onPressed: () =>
-                              selection.pastePathsFromClipboard(context),
-                          icon: const Icon(Icons.content_paste_go_rounded),
-                          label: const Text('Paste Paths'),
-                        ),
+                        if (PlatformCaps.supportsPastePaths) ...[
+                          const SizedBox(width: 12),
+                          OutlinedButton.icon(
+                            onPressed: () =>
+                                selection.pastePathsFromClipboard(context),
+                            icon: const Icon(Icons.content_paste_go_rounded),
+                            label: const Text('Paste Paths'),
+                          ),
+                        ],
                         const SizedBox(width: 12),
                         OutlinedButton.icon(
                           onPressed: () => selection.pickFiles(context),
                           icon: const Icon(Icons.file_open_rounded),
                           label: const Text('Browse Files'),
                         ),
-                        const SizedBox(width: 12),
-                        OutlinedButton.icon(
-                          onPressed: () => selection.pickDirectory(context),
-                          icon: const Icon(Icons.folder_open_rounded),
-                          label: const Text('Browse Folder'),
-                        ),
+                        if (PlatformCaps.supportsDirectoryPicker) ...[
+                          const SizedBox(width: 12),
+                          OutlinedButton.icon(
+                            onPressed: () => selection.pickDirectory(context),
+                            icon: const Icon(Icons.folder_open_rounded),
+                            label: const Text('Browse Folder'),
+                          ),
+                        ],
                       ],
                     ),
 
@@ -223,7 +228,9 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'Drop files or directories anywhere. Use Paste or Paste Paths above.',
+                          PlatformCaps.supportsPastePaths
+                              ? 'Drop files or directories anywhere. Use Paste or Paste Paths above.'
+                              : 'Drop files or folders anywhere, or use Paste and Browse Files above.',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: cs.onSurface.setOpacity(0.65),
                           ),

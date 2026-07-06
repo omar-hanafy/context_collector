@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../shared/platform/platform_caps.dart';
+
 class EditorTopBar extends StatelessWidget {
   const EditorTopBar({
     super.key,
@@ -75,24 +77,26 @@ class EditorTopBar extends StatelessWidget {
                     label: 'Paste',
                     onPressed: () => unawaited(onPasteClipboardContent()),
                   ),
-                  _toolbarButton(
-                    context,
-                    icon: Icons.content_paste_go_rounded,
-                    label: 'Paste paths',
-                    onPressed: () => unawaited(onPastePaths(context)),
-                  ),
+                  if (PlatformCaps.supportsPastePaths)
+                    _toolbarButton(
+                      context,
+                      icon: Icons.content_paste_go_rounded,
+                      label: 'Paste paths',
+                      onPressed: () => unawaited(onPastePaths(context)),
+                    ),
                   _toolbarButton(
                     context,
                     icon: Icons.file_open_outlined,
                     label: 'Add files',
                     onPressed: () => unawaited(onAddFiles(context)),
                   ),
-                  _toolbarButton(
-                    context,
-                    icon: Icons.folder_open_outlined,
-                    label: 'Add folder',
-                    onPressed: () => unawaited(onAddFolder(context)),
-                  ),
+                  if (PlatformCaps.supportsDirectoryPicker)
+                    _toolbarButton(
+                      context,
+                      icon: Icons.folder_open_outlined,
+                      label: 'Add folder',
+                      onPressed: () => unawaited(onAddFolder(context)),
+                    ),
                 ],
               ),
             ),

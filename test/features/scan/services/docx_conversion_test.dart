@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:context_collector/src/features/scan/models/scan_result.dart';
-import 'package:context_collector/src/features/scan/models/scanned_file.dart';
+import 'package:context_collector/src/features/scan/services/fs/platform_fs.dart';
 import 'package:context_collector/src/features/scan/services/unified_file_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -15,8 +15,8 @@ void main() {
       final docxFile = File('${directory.path}/sample.docx');
       await docxFile.writeAsBytes(_minimalDocxBytes('Hello from docx'));
 
-      final scannedFile = ScannedFile.fromFile(
-        docxFile,
+      final scannedFile = PlatformFs.scannedFileFromPathSync(
+        docxFile.path,
         source: ScanSource.browse,
       );
 
@@ -35,8 +35,8 @@ void main() {
         final docxFile = File('${directory.path}/broken.docx');
         await docxFile.writeAsString('not a zip package');
 
-        final scannedFile = ScannedFile.fromFile(
-          docxFile,
+        final scannedFile = PlatformFs.scannedFileFromPathSync(
+          docxFile.path,
           source: ScanSource.browse,
         );
 

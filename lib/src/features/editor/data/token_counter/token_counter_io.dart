@@ -1,10 +1,9 @@
-// Path: lib/src/features/editor/data/token_count_isolate.dart
 import 'dart:async';
 import 'dart:isolate';
 
 import 'package:context_collector/src/features/editor/data/token_utils.dart';
 
-/// Messages sent to the worker are simple Maps to stay isolate‑safe.
+/// Messages sent to the worker are simple Maps to stay isolate-safe.
 /// `{type: 'compute', id: int, model: String, chunks: List<String>}`
 void tokenCountWorker(SendPort mainPort) {
   final commandPort = ReceivePort();
@@ -12,7 +11,7 @@ void tokenCountWorker(SendPort mainPort) {
   mainPort.send(commandPort.sendPort);
 
   // Warm the encoder once to reduce first-use latency.
-  // (Safe to ignore — it's just priming caches)
+  // (Safe to ignore - it's just priming caches)
   unawaited(
     Future(() {
       // A small call so _encodingForModel() runs in this isolate
@@ -52,9 +51,9 @@ void tokenCountWorker(SendPort mainPort) {
   });
 }
 
-/// Simple client wrapper that manages the worker lifecycle and requests.
-class TokenCounterIsolate {
-  TokenCounterIsolate();
+/// Isolate-backed token counter: manages the worker lifecycle and requests.
+class TokenCounter {
+  TokenCounter();
 
   Isolate? _isolate;
   ReceivePort? _receive;

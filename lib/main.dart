@@ -1,29 +1,18 @@
 import 'package:context_collector/context_collector.dart';
+import 'package:context_collector/src/shared/platform/app_window/app_window.dart';
+import 'package:context_collector/src/shared/platform/platform_caps.dart';
 import 'package:context_collector/src/shared/utils/debug_logger.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:window_manager/window_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Configure window for desktop
-  await windowManager.ensureInitialized();
-
-  const windowOptions = WindowOptions(
-    size: Size(1400, 850),
-    center: true,
-    backgroundColor: Colors.transparent,
-    skipTaskbar: false,
-    titleBarStyle: TitleBarStyle.normal,
-    title: 'Context Collector',
-  );
-
-  await windowManager.waitUntilReadyToShow(windowOptions, () async {
-    await windowManager.show();
-    await windowManager.focus();
-  });
+  // Configure window for desktop (no-op on web)
+  if (PlatformCaps.supportsWindowManager) {
+    await configureDesktopWindow();
+  }
 
   // Create ProviderScope container for early access
   final rootContainer = ProviderContainer();
@@ -114,12 +103,18 @@ class ContextCollectorApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeProvider);
+    // Root-navigator instance: showDialog defaults to useRootNavigator: true,
+    // so app dialogs land here. It reports into the app-wide
+    // ModalOverlayCoordinator so Monaco iframes go inert on web while any
+    // dialog floats above them (no-op on desktop).
+    final modalOverlayObserver = ref.watch(modalOverlayObserverProvider);
 
     return MaterialApp(
       title: 'Context Collector',
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
+      navigatorObservers: [modalOverlayObserver],
       home: const TabShell(),
       debugShowCheckedModeBanner: false,
     );

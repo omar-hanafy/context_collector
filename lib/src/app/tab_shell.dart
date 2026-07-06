@@ -3,6 +3,7 @@ import 'dart:ui' show PointerDeviceKind;
 
 import 'package:context_collector/src/app/shortcuts/shortcut_defaults.dart';
 import 'package:desktop_drop/desktop_drop.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart' show kMiddleMouseButton;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,6 +16,7 @@ import '../features/editor/data/settings_service.dart';
 import '../features/editor/ui/dialogs/settings_dialog.dart';
 import '../features/scan/state/file_list_state.dart';
 import '../features/settings/presentation/state/theme_notifier.dart';
+import '../shared/platform/platform_caps.dart';
 import '../shared/services/drop_payload_splitter.dart';
 import '../shared/utils/debug_logger.dart';
 import 'global_hotkeys.dart';
@@ -176,7 +178,9 @@ class _TabShellState extends ConsumerState<TabShell> {
     final app_shortcuts.ShortcutRegistry shortcuts = ref.watch(
       app_shortcuts.shortcutRegistryProvider,
     );
-    final isMac = Theme.of(context).platform == TargetPlatform.macOS;
+    // PlatformMenuBar needs a native menu delegate; never treat a macOS
+    // browser as macOS.
+    final isMac = !kIsWeb && Theme.of(context).platform == TargetPlatform.macOS;
 
     Widget body = GlobalHotkeys(
       registry: shortcuts,
@@ -351,12 +355,13 @@ class _TabShellState extends ConsumerState<TabShell> {
                 onSelected: () =>
                     unawaited(_handleShortcut(TabShortcutCommand.addFiles)),
               ),
-              PlatformMenuItem(
-                label: 'Add Folder…',
-                shortcut: s(TabShortcutCommand.addFolder),
-                onSelected: () =>
-                    unawaited(_handleShortcut(TabShortcutCommand.addFolder)),
-              ),
+              if (PlatformCaps.supportsDirectoryPicker)
+                PlatformMenuItem(
+                  label: 'Add Folder…',
+                  shortcut: s(TabShortcutCommand.addFolder),
+                  onSelected: () =>
+                      unawaited(_handleShortcut(TabShortcutCommand.addFolder)),
+                ),
               PlatformMenuItem(
                 label: 'Save Workspace…',
                 shortcut: s(TabShortcutCommand.saveWorkspace),
@@ -493,12 +498,14 @@ class _TabShellState extends ConsumerState<TabShell> {
                 onSelected: () =>
                     unawaited(_handleShortcut(TabShortcutCommand.paste)),
               ),
-              PlatformMenuItem(
-                label: 'Paste Paths',
-                shortcut: s(TabShortcutCommand.pastePaths),
-                onSelected: () =>
-                    unawaited(_handleShortcut(TabShortcutCommand.pastePaths)),
-              ),
+              if (PlatformCaps.supportsPastePaths)
+                PlatformMenuItem(
+                  label: 'Paste Paths',
+                  shortcut: s(TabShortcutCommand.pastePaths),
+                  onSelected: () => unawaited(
+                    _handleShortcut(TabShortcutCommand.pastePaths),
+                  ),
+                ),
               PlatformMenuItem(
                 label: 'Copy Combined',
                 shortcut: s(TabShortcutCommand.copyCombined),
@@ -538,7 +545,7 @@ class _TabShellState extends ConsumerState<TabShell> {
   }
 
   Future<void> _performMacEditCommand(_MacEditCommand command) async {
-    if (Theme.of(context).platform != TargetPlatform.macOS) {
+    if (kIsWeb || Theme.of(context).platform != TargetPlatform.macOS) {
       return;
     }
 
@@ -929,24 +936,26 @@ class _TabShellState extends ConsumerState<TabShell> {
         Icons.content_paste,
         command: TabShortcutCommand.paste,
       ),
-      _MenuItem(
-        _TabMenuAction.pastePaths,
-        'Paste paths',
-        Icons.file_copy,
-        command: TabShortcutCommand.pastePaths,
-      ),
+      if (PlatformCaps.supportsPastePaths)
+        _MenuItem(
+          _TabMenuAction.pastePaths,
+          'Paste paths',
+          Icons.file_copy,
+          command: TabShortcutCommand.pastePaths,
+        ),
       _MenuItem(
         _TabMenuAction.addFiles,
         'Add files',
         Icons.file_open_outlined,
         command: TabShortcutCommand.addFiles,
       ),
-      _MenuItem(
-        _TabMenuAction.addFolder,
-        'Add folder',
-        Icons.create_new_folder_outlined,
-        command: TabShortcutCommand.addFolder,
-      ),
+      if (PlatformCaps.supportsDirectoryPicker)
+        _MenuItem(
+          _TabMenuAction.addFolder,
+          'Add folder',
+          Icons.create_new_folder_outlined,
+          command: TabShortcutCommand.addFolder,
+        ),
       _MenuItem(
         _TabMenuAction.saveWorkspace,
         'Save workspace…',

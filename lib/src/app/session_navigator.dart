@@ -30,11 +30,15 @@ class SessionNavigator extends ConsumerWidget {
     ];
 
     final routeObserver = ref.watch(routeObserverProvider);
+    // Session-scoped instance: reports this navigator's floating overlays
+    // (menus, dropdowns - showMenu defaults to the NEAREST navigator) into
+    // the app-wide ModalOverlayCoordinator so Monaco iframes go inert on web.
+    final modalOverlayObserver = ref.watch(modalOverlayObserverProvider);
 
     return Navigator(
       key: navigatorKey,
       pages: pages,
-      observers: [routeObserver],
+      observers: [routeObserver, modalOverlayObserver],
       onDidRemovePage: (page) {
         if (page.key != const ValueKey('editor')) {
           return;

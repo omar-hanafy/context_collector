@@ -1,4 +1,5 @@
 export '../main.dart';
+export 'app/modal_overlay_coordinator.dart';
 export 'app/persistence/saved_session.dart';
 export 'app/persistence/session_persistence_service.dart';
 export 'app/session_manager.dart';

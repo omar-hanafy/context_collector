@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/modal_overlay_coordinator.dart';
 import 'settings_service.dart';
 
 /// Whether the Monaco editor may claim the OS keyboard, given Flutter's
@@ -62,7 +63,15 @@ MonacoFocusIntent? editorPointerFocusIntent(
   required bool editorReportsFocused,
   required bool nativeInputReadinessStale,
   TargetPlatform? platform,
+  bool isWeb = kIsWeb,
 }) {
+  // Web: the browser owns click-to-focus entirely. Pointer events over the
+  // Monaco iframe dispatch inside the iframe's document and never reach this
+  // Flutter Listener at all (browser DOM hit-testing runs before Flutter's),
+  // so no Flutter-side focus work belongs to a web click. Without this
+  // branch, web-on-macOS would fall into the host-OS macOS branch below by
+  // accident (defaultTargetPlatform reports the host OS on web).
+  if (isWeb) return null;
   final targetPlatform = platform ?? defaultTargetPlatform;
   if (!editorPointerMayClaimKeyboard(event)) return null;
   // Context Collector renders the package controller's raw WebView so it must
@@ -138,12 +147,21 @@ bool editorTracksNativeInputReadinessStaleness({
 
 /// Simplified Monaco service using the flutter_monaco package
 class MonacoService extends StateNotifier<EditorStatus> {
-  MonacoService()
-    : super(const EditorStatus(lifecycle: EditorLifecycle.initial));
+  MonacoService({this._overlayCoordinator})
+    : super(const EditorStatus(lifecycle: EditorLifecycle.initial)) {
+    _overlayCoordinator?.addListener(_onOverlayDepthChanged);
+  }
 
   MonacoController? _controller;
   String? _queuedContent;
   String? _queuedLanguage;
+
+  // App-wide floating-overlay tracking (dialogs, menus, sheets on any
+  // navigator). On web the editor iframe must go pointer- and keyboard-inert
+  // while one is open, or the overlay is visible but unreachable (browser DOM
+  // hit-testing runs before Flutter's - see ModalOverlayCoordinator).
+  final ModalOverlayCoordinator? _overlayCoordinator;
+  bool _overlayLockApplied = false;
 
   // Ensures Flutter gives keyboard focus to the platform view (WebView)
   final FocusNode _platformViewFocus = FocusNode(
@@ -322,6 +340,10 @@ class MonacoService extends StateNotifier<EditorStatus> {
       );
 
       debugPrint('[MonacoService] Initialization successful');
+      // An overlay may already be open while the editor finishes creating
+      // (its depth change fired before the controller existed) - apply the
+      // current overlay state before any focus nudging.
+      await _applyOverlayInteraction();
       // Nudge both platform and DOM focus now that we're ready.
       unawaited(ensureEditorFocus(attempts: 3));
       _initCompleter?.complete();
@@ -404,6 +426,7 @@ class MonacoService extends StateNotifier<EditorStatus> {
 
   @override
   void dispose() {
+    _overlayCoordinator?.removeListener(_onOverlayDepthChanged);
     _focusSub?.cancel();
     _blurSub?.cancel();
     _platformViewFocus.dispose();
@@ -458,6 +481,71 @@ class MonacoService extends StateNotifier<EditorStatus> {
 
     if (editorWasFocusTarget) {
       _nativeInputReadinessStale = true;
+    }
+  }
+
+  void _onOverlayDepthChanged() {
+    unawaited(_applyOverlayInteraction());
+  }
+
+  /// Keeps the editor's interaction state in sync with floating overlays.
+  ///
+  /// While any dialog/menu/sheet is open above ANY navigator, the editor is
+  /// made inert (`setInteractionEnabled(false)`): on web that applies
+  /// `pointer-events: none` to the Monaco iframe AND hands the browser's
+  /// document focus back to Flutter, so the overlay receives both clicks and
+  /// keys. On native platforms `setInteractionEnabled` is a no-op, so desktop
+  /// behavior is unchanged by design (desktop recovery stays click-driven).
+  ///
+  /// When the last overlay closes, web additionally runs the ownership-gated
+  /// maintenance recovery: there is no Flutter pointer path over the iframe
+  /// to recover from a click (the browser routes those clicks natively), so
+  /// this is the web analog of the desktop didPopNext recovery - and like all
+  /// maintenance it stands down if another surface owns the keyboard.
+  Future<void> _applyOverlayInteraction({bool force = false}) async {
+    final coordinator = _overlayCoordinator;
+    final controller = _controller;
+    if (coordinator == null || controller == null || !mounted) return;
+
+    final shouldLock = coordinator.anyOverlayOpen;
+    if (!force && shouldLock == _overlayLockApplied) return;
+    _overlayLockApplied = shouldLock;
+
+    try {
+      await controller.setInteractionEnabled(!shouldLock);
+    } catch (_) {}
+
+    if (!shouldLock && kIsWeb) {
+      // Let the pop finish tearing down the overlay's focus before the
+      // ownership gate reads it (mirrors EditorScreen.didPopNext).
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        // Another overlay may have opened during the frame; stay inert then.
+        if (_overlayCoordinator?.anyOverlayOpen ?? false) return;
+        unawaited(recoverKeyboardFocus());
+      });
+    }
+  }
+
+  /// Runs [action] with the editor inert, for transient overlays that are
+  /// not routes (snackbars with action buttons, toasts).
+  ///
+  /// Prefer this over calling `controller.runWithInteractionDisabled`
+  /// directly: that helper restores the interaction state it captured at its
+  /// START, which would re-enable the editor even if a dialog opened while
+  /// the transient overlay was up. This wrapper re-asserts the overlay
+  /// coordinator's current requirement when the action completes.
+  Future<T> runWithEditorInteractionDisabled<T>(
+    FutureOr<T> Function() action,
+  ) async {
+    final controller = _controller;
+    if (controller == null || !state.isReady) {
+      return Future<T>.value(action());
+    }
+    try {
+      return await controller.runWithInteractionDisabled(action);
+    } finally {
+      await _applyOverlayInteraction(force: true);
     }
   }
 

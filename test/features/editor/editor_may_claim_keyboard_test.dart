@@ -317,6 +317,34 @@ void main() {
         isNull,
       );
     });
+
+    test('never creates focus intent on web - the browser owns '
+        'click-to-focus and iframe clicks never reach Flutter anyway', () {
+      // Regardless of host OS (defaultTargetPlatform reports the host OS on
+      // web, which used to route web-on-macOS into the per-click user-intent
+      // branch by accident) and regardless of focus-signal state.
+      for (final platform in [
+        TargetPlatform.macOS,
+        TargetPlatform.windows,
+        TargetPlatform.linux,
+      ]) {
+        expect(
+          editorPointerFocusIntent(
+            const PointerDownEvent(
+              kind: PointerDeviceKind.mouse,
+              buttons: kPrimaryMouseButton,
+            ),
+            editorHasFlutterFocus: false,
+            editorReportsFocused: false,
+            nativeInputReadinessStale: true,
+            platform: platform,
+            isWeb: true,
+          ),
+          isNull,
+          reason: 'web click on $platform host must not nudge focus',
+        );
+      }
+    });
   });
 
   group('editorInputReadinessForFocusSignals', () {

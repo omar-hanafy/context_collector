@@ -1,7 +1,4 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
-import 'package:path/path.dart' as path;
 
 import 'scan_result.dart';
 
@@ -26,41 +23,6 @@ class ScannedFile {
     this.error,
     this.displayPath,
   });
-
-  /// SYNC factory to create a ScannedFile from a File object.
-  /// This provides instant performance without async overhead.
-  factory ScannedFile.fromFile(
-    File file, {
-    String? relativePath,
-    ScanSource source = ScanSource.browse,
-  }) {
-    final filePath = file.path;
-    final fileName = path.basename(filePath);
-
-    // SYNC stat call - instant performance!
-    final stat = file.statSync();
-
-    // Handle temporary files from VS Code drag-and-drop.
-    final displayPath = filePath.contains('/tmp/Drops/') ? fileName : null;
-
-    // Generate a deterministic ID based on the normalized full path and size.
-    // This ensures the same file always gets the same ID.
-    final normalizedPath = path.normalize(filePath);
-    final id =
-        'file_${normalizedPath.hashCode.toUnsigned(32).toRadixString(16)}_${stat.size}';
-
-    return ScannedFile(
-      id: id,
-      name: fileName,
-      fullPath: filePath,
-      relativePath: relativePath ?? fileName,
-      extension: path.extension(fileName).toLowerCase(),
-      size: stat.size,
-      lastModified: stat.modified,
-      source: source,
-      displayPath: displayPath,
-    );
-  }
 
   /// Unique identifier for the file (based on path and size)
   final String id;

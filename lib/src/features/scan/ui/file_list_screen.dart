@@ -1,6 +1,10 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../editor/data/providers.dart';
 import '../../virtual_tree/widgets/collector_tree_view.dart';
 import '../state/file_list_state.dart';
 
@@ -26,16 +30,29 @@ class _FileListScreenState extends ConsumerState<FileListScreen> {
     // Listen for errors
     ref.listen<SelectionState>(selectionProvider, (previous, next) {
       if (next.error != null && next.error != previous?.error) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(next.error!),
-            backgroundColor: Theme.of(context).colorScheme.error,
-            action: SnackBarAction(
-              label: 'Dismiss',
-              onPressed: selectionNotifier.clearError,
-            ),
+        final messenger = ScaffoldMessenger.of(context);
+        final snackBar = SnackBar(
+          content: Text(next.error!),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          action: SnackBarAction(
+            label: 'Dismiss',
+            onPressed: selectionNotifier.clearError,
           ),
         );
+        if (kIsWeb) {
+          // The action button can float over the Monaco iframe, which
+          // swallows its clicks (browser DOM hit-testing runs before
+          // Flutter's). Keep the editor inert for the snackbar's lifetime.
+          unawaited(
+            ref
+                .read(monacoEditorStatusProvider.notifier)
+                .runWithEditorInteractionDisabled(
+                  () => messenger.showSnackBar(snackBar).closed,
+                ),
+          );
+        } else {
+          messenger.showSnackBar(snackBar);
+        }
       }
     });
 

@@ -1,19 +1,18 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:collection/collection.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import '../../features/editor/data/providers.dart';
 import '../../features/scan/models/scanned_file.dart';
+import '../../features/scan/services/fs/platform_fs.dart';
 import '../../features/scan/state/file_list_state.dart';
 import '../session_manager.dart';
 import 'saved_session.dart';
+import 'session_store/session_store.dart';
 
 final sessionPersistenceProvider = Provider<SessionPersistenceService>((ref) {
   return SessionPersistenceService();
@@ -21,35 +20,17 @@ final sessionPersistenceProvider = Provider<SessionPersistenceService>((ref) {
 
 class SessionPersistenceService {
   static const int _recentlyClosedLimit = 20;
+  final SessionStore _store = SessionStore();
   final List<String> _recentlyClosedIds = <String>[];
   Future<void> _writeQueue = Future<void>.value();
 
-  Future<Directory> _baseDir() async {
-    final supportDir = await getApplicationSupportDirectory();
-    final target = Directory(p.join(supportDir.path, 'workspaces'));
-    if (!target.existsSync()) {
-      target.createSync(recursive: true);
-    }
-    return target;
-  }
-
-  Future<File> _indexFile() async {
-    final dir = await _baseDir();
-    return File(p.join(dir.path, 'index.json'));
-  }
-
-  Future<File> _sessionFile(String sessionId) async {
-    final dir = await _baseDir();
-    return File(p.join(dir.path, '$sessionId.json'));
-  }
-
   Future<List<SavedSessionIndexItem>> list({bool includeActive = true}) async {
-    final file = await _indexFile();
-    if (!file.existsSync()) {
+    final payload = await _store.readIndex();
+    if (payload == null) {
       return const <SavedSessionIndexItem>[];
     }
     try {
-      final raw = jsonDecode(await file.readAsString()) as List<dynamic>;
+      final raw = jsonDecode(payload) as List<dynamic>;
       final items = raw
           .map(
             (dynamic item) => SavedSessionIndexItem.fromJson(
@@ -93,29 +74,18 @@ class SessionPersistenceService {
     return completer.future;
   }
 
-  Future<void> _atomicWrite(File file, String contents) async {
-    final tmp = File('${file.path}.tmp');
-    await tmp.writeAsString(contents, flush: true);
-    if (await file.exists()) {
-      await file.delete();
-    }
-    await tmp.rename(file.path);
-  }
-
   Future<void> _writeIndex(List<SavedSessionIndexItem> items) async {
-    final file = await _indexFile();
     final payload = jsonEncode(
       items.map((e) => e.toJson()).toList(growable: false),
     );
-    await _atomicWrite(file, payload);
+    await _store.writeIndex(payload);
   }
 
   Future<SavedSession?> load(String sessionId) async {
-    final file = await _sessionFile(sessionId);
-    if (!file.existsSync()) return null;
+    final payload = await _store.readSession(sessionId);
+    if (payload == null) return null;
     try {
-      final raw =
-          jsonDecode(await file.readAsString()) as Map<dynamic, dynamic>;
+      final raw = jsonDecode(payload) as Map<dynamic, dynamic>;
       return SavedSession.fromJson(raw.cast<String, dynamic>());
     } catch (error, stackTrace) {
       debugPrint(
@@ -128,10 +98,7 @@ class SessionPersistenceService {
 
   Future<void> delete(String sessionId) {
     return _enqueueWrite(() async {
-      final file = await _sessionFile(sessionId);
-      if (file.existsSync()) {
-        await file.delete();
-      }
+      await _store.deleteSession(sessionId);
       final items = await list();
       await _writeIndex(
         items.where((item) => item.sessionId != sessionId).toList(),
@@ -270,8 +237,7 @@ class SessionPersistenceService {
       );
 
       final payload = jsonEncode(saved.toJson());
-      final sessionFile = await _sessionFile(saved.sessionId);
-      await _atomicWrite(sessionFile, payload);
+      await _store.writeSession(saved.sessionId, payload);
 
       final currentIndex = await list();
       final filtered =
@@ -335,9 +301,8 @@ class SessionPersistenceService {
       final missing = <String>[];
       for (final path in saved.filePaths) {
         if (path.isEmpty) continue;
-        final file = File(path);
-        if (file.existsSync()) {
-          files.add(XFile(file.path));
+        if (PlatformFs.pathExists(path)) {
+          files.add(XFile(path));
         } else {
           missing.add(path);
         }

@@ -6,11 +6,11 @@ import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resizable_splitter/resizable_splitter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:window_manager/window_manager.dart';
 
 import '../../../../app/route_observers.dart';
 import '../../../../context_collector.dart';
 import '../../../../shared/dialogs/name_prompt.dart';
+import '../../../../shared/platform/app_window/app_window.dart';
 import '../../../scan/ui/file_display_helper.dart';
 import '../../data/workspace_completion_provider.dart';
 import '../widgets/editor_top_bar.dart';
@@ -26,11 +26,7 @@ class EditorScreen extends ConsumerStatefulWidget {
 }
 
 class _EditorScreenState extends ConsumerState<EditorScreen>
-    with
-        SingleTickerProviderStateMixin,
-        WindowListener,
-        WidgetsBindingObserver,
-        RouteAware {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver, RouteAware {
   RouteObserver<PageRoute<dynamic>>? _routeObserver;
   PageRoute<dynamic>? _subscribedRoute;
   Timer? _debounceTimer;
@@ -52,11 +48,15 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   static const String _splitRatioKey = 'editor_split_ratio';
   ProviderSubscription<EditorStatus>? _editorStatusSub;
   ProviderSubscription<SelectionState>? _selectionSub;
+  WindowFocusSubscription? _windowFocusSub;
 
   @override
   void initState() {
     super.initState();
-    windowManager.addListener(this);
+    _windowFocusSub = addWindowFocusListener(
+      onFocus: _onWindowFocusGained,
+      onBlur: _onWindowFocusLost,
+    );
     WidgetsBinding.instance.addObserver(this);
 
     // Create Monaco for this route instance
@@ -303,7 +303,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
   @override
   void dispose() {
-    windowManager.removeListener(this);
+    _windowFocusSub?.cancel();
+    _windowFocusSub = null;
     WidgetsBinding.instance.removeObserver(this);
     if (_subscribedRoute != null) {
       _routeObserver?.unsubscribe(this);
@@ -345,14 +346,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     }
   }
 
-  // WindowListener: regain focus when window is focused
-  @override
-  void onWindowFocus() {
+  // Window focus: regain editor focus when the window is focused again
+  void _onWindowFocusGained() {
     unawaited(_recoverEditorFocusAfterNativeFocusBoundary());
   }
 
-  @override
-  void onWindowBlur() {
+  void _onWindowFocusLost() {
     _invalidateEditorInputReadinessAfterNativeFocusBoundary();
   }
 
