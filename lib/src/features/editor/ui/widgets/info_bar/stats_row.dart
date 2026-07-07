@@ -14,7 +14,7 @@ class StatsRow extends ConsumerStatefulWidget {
     super.key,
   });
 
-  final LiveStats stats;
+  final MonacoLiveStats stats;
   final MonacoController controller;
 
   @override
@@ -39,8 +39,8 @@ class _StatsRowState extends ConsumerState<StatsRow> {
   void didUpdateWidget(covariant StatsRow oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    final charCount = widget.stats.charCount.value;
-    final lineCount = widget.stats.lineCount.value;
+    final charCount = widget.stats.charCount;
+    final lineCount = widget.stats.lineCount;
 
     final charChanged = charCount != _lastCharCount;
     final lineChanged = lineCount != _lastLineCount;
@@ -61,7 +61,7 @@ class _StatsRowState extends ConsumerState<StatsRow> {
     return [
       '- GPT 5 Instant: 128k total.',
       '- GPT 5 Thinking/mini/Pro: 196k total.',
-      'Input and output share the window—leave a safety margin.',
+      'Input and output share the window - leave a safety margin.',
     ].join('\n');
   }
 
@@ -70,7 +70,7 @@ class _StatsRowState extends ConsumerState<StatsRow> {
     final svc = ref.watch(tokenCountProvider);
     final tokens = svc.totalTokens;
     final tokenDisplay = tokens == null
-        ? '—'
+        ? '-'
         : prettyTokens(tokens, includeUnit: false);
 
     final stats = widget.stats;
@@ -78,20 +78,20 @@ class _StatsRowState extends ConsumerState<StatsRow> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        StatItem(label: 'Ln', value: stats.lineCount.value),
-        StatItem(label: 'Ch', value: stats.charCount.value),
+        StatItem(label: 'Ln', value: stats.lineCount),
+        StatItem(label: 'Ch', value: stats.charCount),
         StatItem(
           label: 'Tokens',
           value: tokens,
           formattedValue: tokenDisplay,
           tooltip: _tokenTooltipMessage(tokens),
         ),
-        if (stats.selectedCharacters.value > 0) ...[
-          StatItem(label: 'Sel Ln', value: stats.selectedLines.value),
-          StatItem(label: 'Sel Ch', value: stats.selectedCharacters.value),
+        if (stats.selectedCharacters > 0) ...[
+          StatItem(label: 'Sel Ln', value: stats.selectedLines),
+          StatItem(label: 'Sel Ch', value: stats.selectedCharacters),
         ],
-        if (stats.caretCount.value > 1)
-          StatItem(label: 'Cursors', value: stats.caretCount.value),
+        if (stats.caretCount > 1)
+          StatItem(label: 'Cursors', value: stats.caretCount),
       ],
     );
   }
@@ -114,7 +114,7 @@ class StatItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final display = formattedValue ?? value?.toString() ?? '—';
+    final display = formattedValue ?? value?.toString() ?? '-';
 
     Widget child = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6),

@@ -306,7 +306,7 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
                 overflow: TextOverflow.ellipsis,
               ),
               subtitle: Text(
-                '${item.fileCount} items — '
+                '${item.fileCount} items - '
                 '${_savedWorkspaceDateFormat.format(item.savedAt.toLocal())}',
               ),
             ),
@@ -404,7 +404,7 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
     return CopyFeedback.success;
   }
 
-  // Prompt action removed — Prompt file is auto-created when a session starts.
+  // Prompt action removed - Prompt file is auto-created when a session starts.
 
   void _showQuickInfo(BuildContext context) {
     final theme = Theme.of(context);
@@ -422,7 +422,7 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Context Collector — Quick Guide'),
+        title: const Text('Context Collector - Quick Guide'),
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -430,7 +430,7 @@ class _HomeScreenWithDropState extends ConsumerState<HomeScreenWithDrop> {
             children: [
               Text(
                 'Context Collector is a safe, temporary workspace. It never edits your files on disk. '
-                'Use it to gather and prepare content for AI prompts — also handy for bug reports, docs, and sharing snippets.',
+                'Use it to gather and prepare content for AI prompts - also handy for bug reports, docs, and sharing snippets.',
                 style: theme.textTheme.bodyMedium,
               ),
               const SizedBox(height: 12),

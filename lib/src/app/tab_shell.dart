@@ -16,6 +16,7 @@ import '../features/editor/data/settings_service.dart';
 import '../features/editor/ui/dialogs/settings_dialog.dart';
 import '../features/scan/state/file_list_state.dart';
 import '../features/settings/presentation/state/theme_notifier.dart';
+import '../shared/dialogs/name_prompt.dart';
 import '../shared/platform/platform_caps.dart';
 import '../shared/services/drop_payload_splitter.dart';
 import '../shared/utils/debug_logger.dart';
@@ -826,7 +827,7 @@ class _TabShellState extends ConsumerState<TabShell> {
         controller != null &&
         activeFileId != null) {
       try {
-        final text = await controller.getValue();
+        final text = await controller.document.getText();
         session.container
             .read(selectionProvider.notifier)
             .saveEditorTextFor(activeFileId, text);
@@ -1182,7 +1183,7 @@ class _TabShellState extends ConsumerState<TabShell> {
       final controller = session.container.read(monacoControllerProvider);
       if (controller != null) {
         try {
-          liveContent = await controller.getValue();
+          liveContent = await controller.document.getText();
         } catch (_) {}
       }
     }
@@ -1285,7 +1286,9 @@ class _TabShellState extends ConsumerState<TabShell> {
     }
 
     await EditorSettingsService.save(updated);
-    await ref.read(themeProvider.notifier).setThemeFromMonaco(updated.theme);
+    await ref
+        .read(themeProvider.notifier)
+        .setThemeFromMonaco(EditorSettingsService.effectiveTheme(updated));
 
     final sessions = ref.read(sessionManagerProvider);
     final updateFutures = <Future<void>>[];
@@ -1345,39 +1348,13 @@ class _TabShellState extends ConsumerState<TabShell> {
     BuildContext context, {
     required String initial,
     String label = 'Name',
-  }) async {
-    final controller = TextEditingController(text: initial);
-    try {
-      final result = await showDialog<String>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(label),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: InputDecoration(
-              labelText: label,
-              border: const OutlineInputBorder(),
-              isDense: true,
-            ),
-            onSubmitted: (value) => Navigator.of(ctx).pop(value),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(controller.text),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
-      return result?.trim();
-    } finally {
-      controller.dispose();
-    }
+  }) {
+    return promptForName(
+      context,
+      title: label,
+      initialName: initial,
+      labelText: label,
+    );
   }
 
   void _handleSelectTab(SessionEntry session) {

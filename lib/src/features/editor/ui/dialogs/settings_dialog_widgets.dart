@@ -59,7 +59,7 @@ class DropdownTile extends StatelessWidget {
                   value: items.contains(value) ? value : items.first,
                   items: items.map((item) {
                     final displayName = label == 'Theme'
-                        ? MonacoTheme.fromId(item).label
+                        ? MonacoTheme(item).label ?? item
                         : item;
                     return DropdownMenuItem(
                       value: item,

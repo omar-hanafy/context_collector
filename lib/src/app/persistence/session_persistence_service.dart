@@ -147,7 +147,7 @@ class SessionPersistenceService {
           controller != null &&
           initialSelection.activeFileId != null) {
         try {
-          liveEditorText = await controller.getValue();
+          liveEditorText = await controller.document.getText();
         } catch (error, stackTrace) {
           debugPrint(
             '[SessionPersistence] Failed to read editor value: $error',

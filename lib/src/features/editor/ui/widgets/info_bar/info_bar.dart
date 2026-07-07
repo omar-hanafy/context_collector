@@ -49,7 +49,9 @@ class _MonacoEditorInfoBarState extends ConsumerState<MonacoEditorInfoBar> {
 
   Future<void> _loadWordWrap() async {
     final opts = await EditorSettingsService.load();
-    if (mounted) setState(() => _wordWrap = opts.wordWrap);
+    if (mounted) {
+      setState(() => _wordWrap = EditorSettingsService.wordWrapEnabled(opts));
+    }
   }
 
   Future<void> _toggleWordWrap() async {
@@ -57,10 +59,15 @@ class _MonacoEditorInfoBarState extends ConsumerState<MonacoEditorInfoBar> {
     if (controller == null) return;
     final service = ref.read(monacoEditorStatusProvider.notifier);
     final current = await EditorSettingsService.load();
-    final next = current.copyWith(wordWrap: !current.wordWrap);
+    final enabled = EditorSettingsService.wordWrapEnabled(current);
+    final next = current.copyWith(
+      wordWrap: enabled ? MonacoWordWrap.off : MonacoWordWrap.on,
+    );
     await EditorSettingsService.save(next);
-    await service.updateOptions(next);
-    if (mounted) setState(() => _wordWrap = next.wordWrap);
+    await service.updateOptions(EditorOptions(wordWrap: next.wordWrap));
+    if (mounted) {
+      setState(() => _wordWrap = EditorSettingsService.wordWrapEnabled(next));
+    }
   }
 
   @override
@@ -85,8 +92,8 @@ class _MonacoEditorInfoBarState extends ConsumerState<MonacoEditorInfoBar> {
       child: Row(
         children: [
           // Stats Display
-          ValueListenableBuilder<LiveStats>(
-            valueListenable: controller.liveStats,
+          ValueListenableBuilder<MonacoLiveStats>(
+            valueListenable: controller.stats,
             builder: (context, stats, _) {
               return StatsRow(
                 stats: stats,
@@ -97,13 +104,13 @@ class _MonacoEditorInfoBarState extends ConsumerState<MonacoEditorInfoBar> {
           const SizedBox(width: 12),
 
           // Language Selector
-          ValueListenableBuilder<LiveStats>(
-            valueListenable: controller.liveStats,
+          ValueListenableBuilder<MonacoLiveStats>(
+            valueListenable: controller.stats,
             builder: (context, stats, _) {
               return LanguageSelector(
-                currentLanguage: stats.language ?? 'plaintext',
-                onLanguageChanged: (langId) => controller.setLanguage(
-                  MonacoLanguage.fromId(langId),
+                currentLanguage: stats.language?.id ?? 'plaintext',
+                onLanguageChanged: (langId) => unawaited(
+                  controller.document.setLanguage(MonacoLanguage(langId)),
                 ),
               );
             },

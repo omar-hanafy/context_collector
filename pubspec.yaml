@@ -5,12 +5,13 @@ version: 3.3.0+8
 
 environment:
   sdk: '>=3.12.0 <4.0.0'
-  flutter: '>=3.32.1'
+  flutter: '>=3.44.0'
 
 dependencies:
   flutter:
     sdk: flutter
-  flutter_monaco: ^2.2.2
+  flutter_monaco:
+    path: ../flutter-monaco-v3/flutter_monaco
   flutter_directory_tree: ^1.0.0
   directory_tree: ^1.0.0
   cupertino_icons: ^1.0.8

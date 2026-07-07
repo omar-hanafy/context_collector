@@ -65,37 +65,56 @@ class _EditorSettingsDialogState extends State<EditorSettingsDialog> {
   static final List<_ToggleSetting> _featureToggles = [
     _ToggleSetting(
       title: 'Show Minimap',
-      getValue: (o) => o.minimap,
-      onChanged: (o, v) => o.copyWith(minimap: v),
+      getValue: EditorSettingsService.minimapEnabled,
+      onChanged: (o, v) => o.copyWith(
+        minimap: MonacoMinimapOptions(enabled: v),
+      ),
     ),
     _ToggleSetting(
       title: 'Show Line Numbers',
-      getValue: (o) => o.lineNumbers,
-      onChanged: (o, v) => o.copyWith(lineNumbers: v),
+      getValue: EditorSettingsService.lineNumbersEnabled,
+      onChanged: (o, v) => o.copyWith(
+        lineNumbers: v ? MonacoLineNumbers.on : MonacoLineNumbers.off,
+      ),
     ),
     _ToggleSetting(
       title: 'Bracket Pair Colorization',
-      getValue: (o) => o.bracketPairColorization,
+      getValue: (o) => EditorSettingsService.boolValue(
+        o,
+        (options) => options.bracketPairColorization,
+      ),
       onChanged: (o, v) => o.copyWith(bracketPairColorization: v),
     ),
     _ToggleSetting(
       title: 'Format on Paste',
-      getValue: (o) => o.formatOnPaste,
+      getValue: (o) => EditorSettingsService.boolValue(
+        o,
+        (options) => options.formatOnPaste,
+      ),
       onChanged: (o, v) => o.copyWith(formatOnPaste: v),
     ),
     _ToggleSetting(
       title: 'Format on Type',
-      getValue: (o) => o.formatOnType,
+      getValue: (o) => EditorSettingsService.boolValue(
+        o,
+        (options) => options.formatOnType,
+      ),
       onChanged: (o, v) => o.copyWith(formatOnType: v),
     ),
     _ToggleSetting(
       title: 'Mouse Wheel Zoom',
-      getValue: (o) => o.mouseWheelZoom,
+      getValue: (o) => EditorSettingsService.boolValue(
+        o,
+        (options) => options.mouseWheelZoom,
+      ),
       onChanged: (o, v) => o.copyWith(mouseWheelZoom: v),
     ),
     _ToggleSetting(
       title: 'Read Only',
-      getValue: (o) => o.readOnly,
+      getValue: (o) => EditorSettingsService.boolValue(
+        o,
+        (options) => options.readOnly,
+      ),
       onChanged: (o, v) => o.copyWith(readOnly: v),
     ),
   ];
@@ -105,10 +124,10 @@ class _EditorSettingsDialogState extends State<EditorSettingsDialog> {
     super.initState();
     _options = widget.options;
     _fontSizeController = TextEditingController(
-      text: _options.fontSize.toString(),
+      text: EditorSettingsService.fontSize(_options).toString(),
     );
     _tabSizeController = TextEditingController(
-      text: _options.tabSize.toString(),
+      text: EditorSettingsService.tabSize(_options).toString(),
     );
     _scrollController = ScrollController();
 
@@ -160,11 +179,11 @@ class _EditorSettingsDialogState extends State<EditorSettingsDialog> {
               const SizedBox(height: 8),
               DropdownTile(
                 label: 'Theme',
-                value: _options.theme.id,
-                items: MonacoTheme.values.map((t) => t.id).toList(),
+                value: EditorSettingsService.effectiveTheme(_options).id,
+                items: MonacoTheme.builtIn.map((t) => t.id).toList(),
                 onChanged: (value) => setState(() {
                   _options = _options.copyWith(
-                    theme: MonacoTheme.fromId(value),
+                    theme: MonacoTheme(value),
                   );
                 }),
               ),
@@ -197,8 +216,8 @@ class _EditorSettingsDialogState extends State<EditorSettingsDialog> {
               const SizedBox(height: 8),
               DropdownTile(
                 label: 'Font Family',
-                value: _options.fontFamily,
-                items: MonacoFont.all,
+                value: EditorSettingsService.fontFamily(_options),
+                items: MonacoFontStacks.all,
                 onChanged: (value) => setState(() {
                   _options = _options.copyWith(fontFamily: value);
                 }),
@@ -224,9 +243,11 @@ class _EditorSettingsDialogState extends State<EditorSettingsDialog> {
               const SizedBox(height: 8),
               SwitchListTile(
                 title: const Text('Word Wrap'),
-                value: _options.wordWrap,
+                value: EditorSettingsService.wordWrapEnabled(_options),
                 onChanged: (value) => setState(() {
-                  _options = _options.copyWith(wordWrap: value);
+                  _options = _options.copyWith(
+                    wordWrap: value ? MonacoWordWrap.on : MonacoWordWrap.off,
+                  );
                 }),
                 dense: true,
               ),
@@ -263,7 +284,7 @@ class _EditorSettingsDialogState extends State<EditorSettingsDialog> {
                 onPressed: () {
                   // Reset to defaults
                   setState(() {
-                    _options = const EditorOptions();
+                    _options = EditorSettingsService.defaultOptions;
                     _fontSizeController.text = '14';
                     _tabSizeController.text = '4';
                   });

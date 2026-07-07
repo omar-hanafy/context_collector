@@ -178,19 +178,15 @@ class MonacoService extends StateNotifier<EditorStatus> {
   bool _editorWasLastKeyboardTarget = false;
   bool _nativeInputReadinessStale = false;
   bool _visibleForKeyboardInput = true;
-  StreamSubscription<void>? _focusSub;
-  StreamSubscription<void>? _blurSub;
+  StreamSubscription<bool>? _focusSub;
 
   // Ensures only the latest updateContent() call wins.
   int _setEpoch = 0;
 
   MonacoLanguage? _safeLangFromId(String? id) {
     if (id == null) return null;
-    try {
-      return MonacoLanguage.fromId(id);
-    } catch (_) {
-      return null;
-    }
+    final trimmed = id.trim();
+    return trimmed.isEmpty ? null : MonacoLanguage(trimmed);
   }
 
   /// Re-verify and re-apply value across frames; abort if a newer write arrived.
@@ -200,11 +196,11 @@ class MonacoService extends StateNotifier<EditorStatus> {
       await Future<void>.delayed(const Duration(milliseconds: 16));
       if (epoch != _setEpoch || _controller == null || !state.isReady) return;
       try {
-        final got = await _controller!.getValue();
+        final got = await _controller!.document.getText();
         if (got == content) return; // content held
       } catch (_) {}
       try {
-        await _controller!.setValue(content);
+        await _controller!.document.setText(content);
       } catch (_) {}
     }
   }
@@ -232,7 +228,7 @@ class MonacoService extends StateNotifier<EditorStatus> {
         }
         _editorWasLastKeyboardTarget = true;
         unawaited(
-          ensureEditorFocus(
+          requestEditorFocus(
             attempts: 1,
             intent: intent,
           ),
@@ -297,38 +293,40 @@ class MonacoService extends StateNotifier<EditorStatus> {
     try {
       // Load saved settings
       final options = await EditorSettingsService.load();
+      final queuedLanguage = _safeLangFromId(_queuedLanguage);
+      final bootOptions = queuedLanguage == null
+          ? options
+          : options.copyWith(language: queuedLanguage);
 
-      // Create controller with settings
+      // Create controller with settings. v3 create returns before the page is
+      // ready, so state is not promoted until whenReady completes below.
       _controller = await MonacoController.create(
-        options: options,
+        options: bootOptions,
+        initialText: _queuedContent,
       );
 
       // Track Monaco's own focus state so a pointer-down only re-asserts focus
       // when the editor actually needs it (see editorPointerFocusIntent).
-      _focusSub = _controller!.onFocus.listen((_) {
-        _editorReportsFocused = true;
-        _editorWasLastKeyboardTarget = true;
-      });
-      _blurSub = _controller!.onBlur.listen((_) {
-        _editorReportsFocused = false;
-        if (!_editorOwnsKeyboard()) {
+      _focusSub = _controller!.onFocusChanged.listen((focused) {
+        _editorReportsFocused = focused;
+        if (focused) {
+          _editorWasLastKeyboardTarget = true;
+        } else if (!_editorOwnsKeyboard()) {
           _editorWasLastKeyboardTarget = false;
         }
       });
+
+      await _controller!.whenReady;
 
       // Apply queued content if any (language first; then sticky commit)
       if (_queuedContent != null) {
         final epoch = ++_setEpoch;
         final lang = _safeLangFromId(_queuedLanguage);
         if (lang != null) {
-          try {
-            await _controller!.setLanguage(lang);
-          } catch (_) {}
+          await _controller!.document.setLanguage(lang);
           await Future<void>.delayed(const Duration(milliseconds: 16));
         }
-        try {
-          await _controller!.setValue(_queuedContent!);
-        } catch (_) {}
+        await _controller!.document.setText(_queuedContent!);
         unawaited(_stickValue(_queuedContent!, epoch, retries: 8));
         _queuedContent = null;
         _queuedLanguage = null;
@@ -345,7 +343,7 @@ class MonacoService extends StateNotifier<EditorStatus> {
       // current overlay state before any focus nudging.
       await _applyOverlayInteraction();
       // Nudge both platform and DOM focus now that we're ready.
-      unawaited(ensureEditorFocus(attempts: 3));
+      unawaited(requestEditorFocus(attempts: 3));
       _initCompleter?.complete();
     } catch (e, st) {
       state = state.copyWith(
@@ -353,7 +351,12 @@ class MonacoService extends StateNotifier<EditorStatus> {
         error: e.toString(),
       );
       debugPrint('[MonacoService] Error: $e\n$st');
+      await _focusSub?.cancel();
+      _focusSub = null;
+      _controller?.dispose();
+      _controller = null;
       _initCompleter?.completeError(e, st);
+      _initCompleter = null;
     } finally {
       // Allow re-init only after a full dispose or explicit error handling
       // Keep the completer for awaiting callers but don't reset lifecycle here.
@@ -370,15 +373,13 @@ class MonacoService extends StateNotifier<EditorStatus> {
     // Apply language first (if requested). This does not disturb caret/scroll.
     final lang = _safeLangFromId(language);
     if (lang != null) {
-      try {
-        await _controller!.setLanguage(lang);
-      } catch (_) {}
+      await _controller!.document.setLanguage(lang);
       await Future<void>.delayed(const Duration(milliseconds: 16));
     }
 
     String? current;
     try {
-      current = await _controller!.getValue();
+      current = await _controller!.document.getText();
     } catch (_) {}
     if (current == content) {
       if (mounted && state.hasContent != content.isNotEmpty) {
@@ -388,13 +389,10 @@ class MonacoService extends StateNotifier<EditorStatus> {
     }
 
     final epoch = ++_setEpoch;
-    try {
-      await _controller!.setValue(content);
-    } catch (_) {}
+    await _controller!.document.setText(content);
 
-    await ensureNativeFocus();
     // Ensure the hidden textarea owns DOM focus after updates.
-    unawaited(ensureEditorFocus(attempts: 3));
+    unawaited(requestEditorFocus(attempts: 3));
     unawaited(_stickValue(content, epoch, retries: 8));
 
     if (mounted) {
@@ -405,30 +403,21 @@ class MonacoService extends StateNotifier<EditorStatus> {
   Future<void> updateOptions(EditorOptions options) async {
     if (_controller == null || !state.isReady) return;
 
-    String? before;
-    try {
-      before = await _controller!.getValue();
-    } catch (_) {}
-
     await _controller!.updateOptions(options);
-    await _controller!.setTheme(options.theme);
-
-    if (before != null) {
-      try {
-        await _controller!.setValue(before);
-      } catch (_) {}
+    final theme = options.theme;
+    if (theme != null) {
+      await _controller!.setTheme(theme);
     }
 
     // Re-layout and re-focus after option changes (theme/font/etc.).
     await layout();
-    await ensureEditorFocus(attempts: 2);
+    await requestEditorFocus(attempts: 2);
   }
 
   @override
   void dispose() {
     _overlayCoordinator?.removeListener(_onOverlayDepthChanged);
     _focusSub?.cancel();
-    _blurSub?.cancel();
     _platformViewFocus.dispose();
     _controller?.dispose();
     super.dispose();
@@ -602,24 +591,12 @@ class MonacoService extends StateNotifier<EditorStatus> {
     await Future<void>.delayed(Duration.zero);
   }
 
-  /// Ensures the native WebView grabs platform focus (first responder),
-  /// then the JS Monaco instance can accept keyboard input.
+  /// Runs one cooperative v3 focus request.
   ///
   /// Stands down unless the editor already owns the keyboard (or nobody
   /// does); see [_editorOwnsKeyboard].
   Future<void> ensureNativeFocus() async {
-    if (_controller == null || !state.isReady) return;
-    // Let a focus request from this same event (e.g. the editor's own
-    // pointer-down handler) apply before deciding ownership.
-    await Future<void>.delayed(Duration.zero);
-    if (!_maintenanceMayUseEditorInput()) return;
-    // Ask Flutter to focus the platform view's FocusNode.
-    await _ensureFlutterPlatformFocus();
-    // Also nudge the native view to become first responder.
-    try {
-      await _controller!.focus();
-    } catch (_) {}
-    // Allow a full frame for focus to settle through both layers.
+    await requestEditorFocus(attempts: 1);
     await Future<void>.delayed(const Duration(milliseconds: 16));
   }
 
@@ -628,7 +605,7 @@ class MonacoService extends StateNotifier<EditorStatus> {
   ///
   /// Stands down unless the editor already owns the keyboard (or nobody
   /// does); see [_editorOwnsKeyboard].
-  Future<void> ensureEditorFocus({
+  Future<void> requestEditorFocus({
     int attempts = 3,
     MonacoFocusIntent intent = MonacoFocusIntent.maintenance,
   }) async {
@@ -636,31 +613,24 @@ class MonacoService extends StateNotifier<EditorStatus> {
     await Future<void>.delayed(Duration.zero);
     if (intent == MonacoFocusIntent.user) {
       _editorWasLastKeyboardTarget = true;
-      await _ensureEditorFocusWithPackageIntent(attempts, intent);
       await _ensureFlutterPlatformFocus();
+      await _requestPackageFocus(attempts, intent);
       _nativeInputReadinessStale = false;
       return;
     }
     if (!_maintenanceMayUseEditorInput()) return;
     await _ensureFlutterPlatformFocus();
-    await _ensureEditorFocusWithPackageIntent(attempts, intent);
+    await _requestPackageFocus(attempts, intent);
   }
 
-  Future<void> _ensureEditorFocusWithPackageIntent(
+  Future<void> _requestPackageFocus(
     int attempts,
     MonacoFocusIntent intent,
   ) async {
-    try {
-      await _controller!.ensureEditorFocus(
-        attempts: attempts,
-        intent: intent,
-      );
-    } catch (_) {
-      // Fallback for older builds: best-effort focus.
-      try {
-        await _controller!.focus();
-      } catch (_) {}
-    }
+    await _controller!.requestFocus(
+      attempts: attempts,
+      intent: intent,
+    );
   }
 
   /// Explicitly triggers Monaco layout (useful after resizes or panel changes).
@@ -685,22 +655,7 @@ class MonacoService extends StateNotifier<EditorStatus> {
   }) async {
     if (_controller == null || !state.isReady) return;
     await Future<void>.delayed(Duration.zero);
-    if (intent == MonacoFocusIntent.user) {
-      await ensureEditorFocus(attempts: attempts, intent: intent);
-      return;
-    }
-    if (!_maintenanceMayUseEditorInput()) return;
-    await ensureNativeFocus();
-    try {
-      await _controller!.ensureEditorFocus(
-        attempts: attempts,
-        intent: MonacoFocusIntent.maintenance,
-      );
-    } catch (_) {
-      try {
-        await _controller!.focus();
-      } catch (_) {}
-    }
+    await requestEditorFocus(attempts: attempts, intent: intent);
   }
 }
 

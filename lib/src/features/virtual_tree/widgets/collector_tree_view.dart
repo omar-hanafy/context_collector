@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_directory_tree/flutter_directory_tree.dart' as tree;
 import 'package:flutter_helper_utils/flutter_helper_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../shared/dialogs/name_prompt.dart';
 import '../../scan/state/file_list_state.dart';
 import '../directory_tree_adapter.dart';
 import '../providers/virtual_tree_provider.dart';
@@ -151,16 +154,31 @@ class CollectorTreeView extends ConsumerWidget {
   static void showCreateVirtualFileFlow(BuildContext context, WidgetRef ref) {
     final selection = ref.read(selectionProvider);
     final existingNames = selection.fileMap.values.map((f) => f.name).toSet();
+    final notifier = ref.read(selectionProvider.notifier);
 
-    _showNameDialog(
-      context: context,
-      title: 'New Virtual File',
-      hint: 'Enter file name (e.g., notes.md)',
-      existingNames: existingNames,
-      onConfirm: (name) {
-        ref.read(selectionProvider.notifier).createVirtualFile(name, '');
-      },
+    unawaited(
+      _promptAndCreateVirtualFile(
+        context: context,
+        existingNames: existingNames,
+        notifier: notifier,
+      ),
     );
+  }
+
+  static Future<void> _promptAndCreateVirtualFile({
+    required BuildContext context,
+    required Set<String> existingNames,
+    required FileListNotifier notifier,
+  }) async {
+    final name = await promptForName(
+      context,
+      title: 'New Virtual File',
+      hintText: 'Enter file name (e.g., notes.md)',
+      confirmText: 'Create',
+      existingNames: existingNames,
+    );
+    if (!context.mounted || name == null || name.trim().isEmpty) return;
+    notifier.createVirtualFile(name.trim(), '');
   }
 
   tree.ContextMenuDelegate _buildContextMenuDelegate(
@@ -218,69 +236,6 @@ class CollectorTreeView extends ConsumerWidget {
 
         return items;
       },
-    );
-  }
-
-  static void _showNameDialog({
-    required BuildContext context,
-    required String title,
-    required String hint,
-    required Set<String> existingNames,
-    required ValueChanged<String> onConfirm,
-  }) {
-    final controller = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Form(
-          key: formKey,
-          child: TextFormField(
-            controller: controller,
-            autofocus: true,
-            decoration: InputDecoration(
-              hintText: hint,
-              border: const OutlineInputBorder(),
-            ),
-            validator: (value) {
-              final trimmed = value?.trim() ?? '';
-              if (trimmed.isEmpty) {
-                return 'Name cannot be empty';
-              }
-              if (existingNames.contains(trimmed)) {
-                return 'A file or folder with this name already exists';
-              }
-              if (RegExp(r'[\\/:*?"<>|]').hasMatch(trimmed)) {
-                return 'Name contains invalid characters';
-              }
-              return null;
-            },
-            onFieldSubmitted: (_) {
-              if (formKey.currentState!.validate()) {
-                Navigator.of(ctx).pop();
-                onConfirm(controller.text.trim());
-              }
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                Navigator.of(ctx).pop();
-                onConfirm(controller.text.trim());
-              }
-            },
-            child: const Text('Create'),
-          ),
-        ],
-      ),
     );
   }
 }

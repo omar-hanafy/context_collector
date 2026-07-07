@@ -40,7 +40,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   bool _hasAppliedInitialSettings = false;
   bool _requestedInitialFocus = false;
 
-  // Sidebar removed — editor uses full right panel
+  // Sidebar removed - editor uses full right panel
 
   // Splitter controller
   SplitterController? _splitterController;
@@ -176,7 +176,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           prevId != nextId &&
           controller != null) {
         try {
-          final currentText = await controller.getValue();
+          final currentText = await controller.document.getText();
           ref
               .read(selectionProvider.notifier)
               .saveEditorTextFor(prevId, currentText);
@@ -281,7 +281,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     final activeId = selection.activeFileId;
     if (controller == null || activeId == null) return;
     try {
-      final text = await controller.getValue();
+      final text = await controller.document.getText();
       ref.read(selectionProvider.notifier).saveEditorTextFor(activeId, text);
     } catch (e) {
       debugPrint('[EditorScreen] Failed to get live content: $e');
@@ -432,7 +432,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     await EditorSettingsService.save(newOptions);
     await _applySettingsToEditor();
     // Sync app ThemeMode to Monaco theme selection
-    await ref.read(themeProvider.notifier).setThemeFromMonaco(newOptions.theme);
+    await ref
+        .read(themeProvider.notifier)
+        .setThemeFromMonaco(EditorSettingsService.effectiveTheme(newOptions));
   }
 
   // Removed quick toggles; font size and word wrap can be adjusted via Settings dialog

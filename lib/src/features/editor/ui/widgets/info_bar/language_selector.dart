@@ -19,7 +19,7 @@ class LanguageSelector extends StatelessWidget {
       tooltip: 'Select Language',
       onSelected: onLanguageChanged,
       offset: const Offset(0, -300),
-      itemBuilder: (_) => MonacoLanguage.values.map((lang) {
+      itemBuilder: (_) => MonacoLanguage.builtIn.map((lang) {
         final isSelected = currentLanguage == lang.id;
         return PopupMenuItem<String>(
           value: lang.id,
@@ -31,7 +31,7 @@ class LanguageSelector extends StatelessWidget {
                 color: isSelected ? context.primary : Colors.transparent,
               ),
               const SizedBox(width: 8),
-              Text(lang.label),
+              Text(lang.label ?? lang.id),
             ],
           ),
         );
@@ -51,7 +51,7 @@ class LanguageSelector extends StatelessWidget {
             Icon(Icons.translate, size: 16, color: context.primary),
             const SizedBox(width: 6),
             Text(
-              MonacoLanguage.fromId(currentLanguage).label,
+              MonacoLanguage(currentLanguage).label ?? currentLanguage,
               style: context.labelSmall?.copyWith(
                 fontWeight: FontWeight.w500,
               ),

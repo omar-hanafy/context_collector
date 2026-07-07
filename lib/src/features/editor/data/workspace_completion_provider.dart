@@ -47,13 +47,12 @@ class WorkspaceCompletionService {
   final Map<String, String> _fileSignatures = {};
 
   MonacoController? _controller;
-  String? _completionId;
-  VoidCallback? _liveStatsDispose;
+  MonacoCompletionRegistration? _completionRegistration;
+  VoidCallback? _statsDispose;
   Timer? _typingDebounce;
   bool _isDisposed = false;
 
-  static final List<String> _allLanguages = MonacoLanguage.values
-      .map((lang) => lang.id)
+  static final List<MonacoLanguage> _allLanguages = MonacoLanguage.builtIn
       .toList(growable: false);
   static final List<String> _triggerCharacters = const [
     46,
@@ -75,8 +74,8 @@ class WorkspaceCompletionService {
     _controllerSub = null;
     _typingDebounce?.cancel();
     _typingDebounce = null;
-    _liveStatsDispose?.call();
-    _liveStatsDispose = null;
+    _statsDispose?.call();
+    _statsDispose = null;
     unawaited(_detachFromController(_controller));
   }
 
@@ -135,13 +134,13 @@ class WorkspaceCompletionService {
     if (identical(controller, _controller)) {
       _controller = null;
     }
-    final id = _completionId;
-    _completionId = null;
-    _liveStatsDispose?.call();
-    _liveStatsDispose = null;
-    if (id != null) {
+    final registration = _completionRegistration;
+    _completionRegistration = null;
+    _statsDispose?.call();
+    _statsDispose = null;
+    if (registration != null) {
       try {
-        await controller.unregisterCompletionSource(id);
+        await registration.dispose();
       } catch (err) {
         debugPrint('workspace completions: detach failed ($err)');
       }
@@ -150,24 +149,23 @@ class WorkspaceCompletionService {
 
   Future<void> _attachToController(MonacoController controller) async {
     _controller = controller;
-    _liveStatsDispose?.call();
-    controller.liveStats.addListener(_handleLiveStatsEvent);
-    _liveStatsDispose = () =>
-        controller.liveStats.removeListener(_handleLiveStatsEvent);
+    _statsDispose?.call();
+    controller.stats.addListener(_handleStatsEvent);
+    _statsDispose = () => controller.stats.removeListener(_handleStatsEvent);
 
     try {
-      _completionId = await controller.registerCompletionSource(
+      _completionRegistration = await controller.registerCompletions(
         languages: _allLanguages,
         triggerCharacters: _triggerCharacters,
         provider: _provideCompletions,
       );
     } catch (err) {
       debugPrint('workspace completions: registration failed ($err)');
-      _completionId = null;
+      _completionRegistration = null;
     }
   }
 
-  void _handleLiveStatsEvent() {
+  void _handleStatsEvent() {
     _scheduleLiveReindex();
   }
 
@@ -192,7 +190,7 @@ class WorkspaceCompletionService {
     final file = selection.fileMap[activeId];
     if (file == null) return;
     try {
-      final text = await controller.getValue();
+      final text = await controller.document.getText();
       _indexFileIfNeeded(file, overrideText: text, force: true);
     } catch (_) {
       // Ignore transient webview read failures.

@@ -22,11 +22,13 @@ void main() {
   test('Context Collector does not depend directly on WebView plugins', () {
     final pubspec = File('pubspec.yaml').readAsStringSync();
 
-    // 2.2.0 added the macOS native first-responder handoff (per-click user
-    // intent stays cheap); 2.2.2 added the web two-sided focus handoff in
+    // 3.0.0 keeps the macOS native first-responder handoff (per-click user
+    // intent stays cheap), the web two-sided focus handoff in
     // setInteractionEnabled(false) that the modal overlay coordination
-    // depends on (keyboard returns to Flutter when the iframe goes inert).
-    expect(pubspec, contains('flutter_monaco: ^2.2.2'));
+    // depends on (keyboard returns to Flutter when the iframe goes inert),
+    // and exposes the v3 document/requestFocus API used by the app.
+    expect(pubspec, contains('flutter_monaco:'));
+    expect(pubspec, contains('path: ../flutter-monaco-v3/flutter_monaco'));
     expect(pubspec, isNot(contains('webview_flutter:')));
     expect(pubspec, isNot(contains('webview_flutter_windows:')));
     expect(pubspec, isNot(contains('webview_windows:')));

@@ -151,7 +151,7 @@ class TokenCountNotifier extends StateNotifier<TokenCountState> {
     if (!viewingAll && controller != null && s.activeFileId != null) {
       try {
         // Grabbing editor text is async but cheap compared to tokenization.
-        final text = await controller.getValue();
+        final text = await controller.document.getText();
         live = await _worker.computeTotal([text], model: _model);
       } catch (_) {
         // If webview read fails, fall back to stale (no live adjustment).

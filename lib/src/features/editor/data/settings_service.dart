@@ -1,303 +1,354 @@
 import 'dart:convert';
 
-import 'package:dart_helper_utils/dart_helper_utils.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Simple service for persisting EditorOptions
+/// Persists the app's editor preferences in flutter_monaco v3's native shape.
 class EditorSettingsService {
   static const String _storageKey = 'editor_options';
 
-  /// Build canonical JSON expected by EditorOptions.fromJson
-  static Map<String, dynamic> _toStorageJson(EditorOptions o) {
-    return <String, dynamic>{
-      'language': o.language.id,
-      'theme': o.theme.id,
-      'fontSize': o.fontSize,
-      'fontFamily': o.fontFamily,
-      'lineHeight': o.lineHeight,
-      'wordWrap': o.wordWrap,
-      'minimap': o.minimap,
-      'lineNumbers': o.lineNumbers,
-      'rulers': o.rulers,
-      'tabSize': o.tabSize,
-      'insertSpaces': o.insertSpaces,
-      'readOnly': o.readOnly,
-      'automaticLayout': o.automaticLayout,
-      if (o.padding != null) 'padding': o.padding,
-      'scrollBeyondLastLine': o.scrollBeyondLastLine,
-      'smoothScrolling': o.smoothScrolling,
-      'cursorBlinking': o.cursorBlinking.id,
-      'cursorStyle': o.cursorStyle.id,
-      'renderWhitespace': o.renderWhitespace.id,
-      'bracketPairColorization': o.bracketPairColorization,
-      'autoClosingBrackets': o.autoClosingBrackets.id,
-      'autoClosingQuotes': o.autoClosingQuotes.id,
-      'formatOnPaste': o.formatOnPaste,
-      'formatOnType': o.formatOnType,
-      'quickSuggestions': o.quickSuggestions,
-      'fontLigatures': o.fontLigatures,
-      'parameterHints': o.parameterHints,
-      'hover': o.hover,
-      'contextMenu': o.contextMenu,
-      'mouseWheelZoom': o.mouseWheelZoom,
-      'roundedSelection': o.roundedSelection,
-      'selectionHighlight': o.selectionHighlight,
-      'overviewRulerBorder': o.overviewRulerBorder,
-      'renderControlCharacters': o.renderControlCharacters,
-      'disableLayerHinting': o.disableLayerHinting,
-      'disableMonospaceOptimizations': o.disableMonospaceOptimizations,
-    };
+  /// Fully materialized app defaults for settings UI and persistence.
+  ///
+  /// flutter_monaco v3 keeps [EditorOptions] sparse by design. The app still
+  /// needs concrete values for controls, so defaults live here and saved user
+  /// values are merged over them.
+  static const EditorOptions defaultOptions = EditorOptions(
+    language: MonacoDefaults.language,
+    theme: MonacoDefaults.darkTheme,
+    fontSize: 14,
+    fontFamily: MonacoFontStacks.cascadiaCodePrimary,
+    fontLigatures: false,
+    wordWrap: MonacoWordWrap.on,
+    minimap: MonacoMinimapOptions(enabled: false),
+    lineNumbers: MonacoLineNumbers.on,
+    rulers: [],
+    tabSize: 4,
+    insertSpaces: true,
+    readOnly: false,
+    automaticLayout: true,
+    padding: MonacoPadding(top: 10),
+    scrollBeyondLastLine: true,
+    smoothScrolling: true,
+    mouseWheelZoom: true,
+    cursorBlinking: CursorBlinking.blink,
+    cursorStyle: CursorStyle.line,
+    renderWhitespace: RenderWhitespace.selection,
+    bracketPairColorization: true,
+    autoClosingBrackets: AutoClosingBehavior.languageDefined,
+    autoClosingQuotes: AutoClosingBehavior.languageDefined,
+    formatOnPaste: false,
+    formatOnType: false,
+    quickSuggestions: true,
+    parameterHints: true,
+    hover: true,
+    contextMenu: true,
+    roundedSelection: true,
+    selectionHighlight: true,
+    overviewRulerBorder: true,
+    renderControlCharacters: false,
+    disableLayerHinting: false,
+    disableMonospaceOptimizations: false,
+  );
+
+  static MonacoTheme effectiveTheme(EditorOptions options) {
+    return options.theme ?? defaultOptions.theme ?? MonacoDefaults.darkTheme;
   }
 
-  static bool _needsMigration(Map<String, dynamic> json) {
-    if (json['lineNumbers'] is String) return true;
-    if (json['wordWrap'] is String) return true;
-    if (json['minimap'] is Map) return true;
-    if (json['bracketPairColorization'] is Map) return true;
-    if (json.containsKey('contextmenu')) return true;
-    if (json['hover'] is Map) return true;
-    if (json['parameterHints'] is Map) return true;
-    // If canonical keys are missing but Monaco options present, migrate
-    if (!json.containsKey('theme') && json.containsKey('fontSize')) return true;
-    return false;
+  static MonacoWordWrap effectiveWordWrap(EditorOptions options) {
+    return options.wordWrap ?? defaultOptions.wordWrap ?? MonacoWordWrap.on;
   }
 
-  static Map<String, dynamic> _migrateToCanonical(
-    Map<String, dynamic> legacy,
+  static bool wordWrapEnabled(EditorOptions options) {
+    return effectiveWordWrap(options) != MonacoWordWrap.off;
+  }
+
+  static bool minimapEnabled(EditorOptions options) {
+    return options.minimap?.enabled ?? defaultOptions.minimap?.enabled ?? false;
+  }
+
+  static bool lineNumbersEnabled(EditorOptions options) {
+    return (options.lineNumbers ??
+            defaultOptions.lineNumbers ??
+            MonacoLineNumbers.on) !=
+        MonacoLineNumbers.off;
+  }
+
+  static double fontSize(EditorOptions options) {
+    return options.fontSize ?? defaultOptions.fontSize ?? 14;
+  }
+
+  static String fontFamily(EditorOptions options) {
+    return options.fontFamily ??
+        defaultOptions.fontFamily ??
+        MonacoFontStacks.cascadiaCodePrimary;
+  }
+
+  static int tabSize(EditorOptions options) {
+    return options.tabSize ?? defaultOptions.tabSize ?? 4;
+  }
+
+  static bool boolValue(
+    EditorOptions options,
+    bool? Function(EditorOptions options) read,
   ) {
-    final out = <String, dynamic>{};
-
-    // Defaults for any missing values
-    const def = MonacoConstants.defaultOptions;
-
-    bool parseBool(dynamic value, bool defBool) => ConvertObject.toBool(
-      value,
-      defaultValue: defBool,
-      converter: (obj) {
-        if (obj is Map) {
-          final v = obj['enabled'];
-          return ConvertObject.toBool(
-            v,
-            defaultValue: defBool,
-            converter: (inner) {
-              if (inner is String) {
-                final s = inner.toLowerCase();
-                if (s == 'on') return true;
-                if (s == 'off') return false;
-              }
-              if (inner is num) return inner > 0;
-              if (inner is bool) return inner;
-              return defBool;
-            },
-          );
-        }
-        if (obj is String) {
-          final s = obj.toLowerCase();
-          if (s == 'on') return true;
-          if (s == 'off') return false;
-        }
-        if (obj is num) return obj > 0;
-        if (obj is bool) return obj;
-        return defBool;
-      },
-    );
-
-    out['language'] = ConvertObject.toString1(
-      legacy,
-      mapKey: 'language',
-      defaultValue: def.language.id,
-    );
-    out['theme'] = ConvertObject.toString1(
-      legacy,
-      mapKey: 'theme',
-      defaultValue: def.theme.id,
-    );
-    out['fontSize'] = ConvertObject.toDouble(
-      legacy,
-      mapKey: 'fontSize',
-      defaultValue: def.fontSize,
-    );
-    out['fontFamily'] = ConvertObject.toString1(
-      legacy,
-      mapKey: 'fontFamily',
-      defaultValue: def.fontFamily,
-    );
-    out['lineHeight'] = ConvertObject.toDouble(
-      legacy,
-      mapKey: 'lineHeight',
-      defaultValue: def.lineHeight,
-    );
-    out['wordWrap'] = parseBool(legacy['wordWrap'], def.wordWrap);
-    out['minimap'] = parseBool(legacy['minimap'], def.minimap);
-    out['lineNumbers'] = parseBool(legacy['lineNumbers'], def.lineNumbers);
-
-    final rulers = ConvertObject.tryToList<int>(
-      legacy,
-      mapKey: 'rulers',
-      elementConverter: ConvertObject.toInt,
-    );
-    out['rulers'] = rulers ?? def.rulers;
-
-    out['tabSize'] = ConvertObject.toInt(
-      legacy,
-      mapKey: 'tabSize',
-      defaultValue: def.tabSize,
-    );
-    out['insertSpaces'] = parseBool(legacy['insertSpaces'], def.insertSpaces);
-    out['readOnly'] = parseBool(legacy['readOnly'], def.readOnly);
-    out['automaticLayout'] = parseBool(
-      legacy['automaticLayout'],
-      def.automaticLayout,
-    );
-
-    final padding = legacy['padding'];
-    if (padding is Map) {
-      final m = toMap<String, dynamic>(padding);
-      if (m.isNotEmpty) {
-        out['padding'] = m.map(
-          (k, v) => MapEntry(k, ConvertObject.toInt(v, defaultValue: 0)),
-        );
-      }
-    }
-
-    out['scrollBeyondLastLine'] = parseBool(
-      legacy['scrollBeyondLastLine'],
-      def.scrollBeyondLastLine,
-    );
-    out['smoothScrolling'] = parseBool(
-      legacy['smoothScrolling'],
-      def.smoothScrolling,
-    );
-    out['cursorBlinking'] = ConvertObject.toString1(
-      legacy,
-      mapKey: 'cursorBlinking',
-      defaultValue: def.cursorBlinking.id,
-    );
-    out['cursorStyle'] = ConvertObject.toString1(
-      legacy,
-      mapKey: 'cursorStyle',
-      defaultValue: def.cursorStyle.id,
-    );
-    out['renderWhitespace'] = ConvertObject.toString1(
-      legacy,
-      mapKey: 'renderWhitespace',
-      defaultValue: def.renderWhitespace.id,
-    );
-    out['bracketPairColorization'] = parseBool(
-      legacy['bracketPairColorization'],
-      def.bracketPairColorization,
-    );
-    out['autoClosingBrackets'] = ConvertObject.toString1(
-      legacy,
-      mapKey: 'autoClosingBrackets',
-      defaultValue: def.autoClosingBrackets.id,
-    );
-    out['autoClosingQuotes'] = ConvertObject.toString1(
-      legacy,
-      mapKey: 'autoClosingQuotes',
-      defaultValue: def.autoClosingQuotes.id,
-    );
-    out['formatOnPaste'] = parseBool(
-      legacy['formatOnPaste'],
-      def.formatOnPaste,
-    );
-    out['formatOnType'] = parseBool(legacy['formatOnType'], def.formatOnType);
-    out['quickSuggestions'] = parseBool(
-      legacy['quickSuggestions'],
-      def.quickSuggestions,
-    );
-    out['fontLigatures'] = parseBool(
-      legacy['fontLigatures'],
-      def.fontLigatures,
-    );
-    out['parameterHints'] = parseBool(
-      legacy['parameterHints'],
-      def.parameterHints,
-    );
-    out['hover'] = parseBool(legacy['hover'], def.hover);
-
-    final cm =
-        ConvertObject.tryToBool(legacy, mapKey: 'contextMenu') ??
-        ConvertObject.tryToBool(legacy, mapKey: 'contextmenu') ??
-        def.contextMenu;
-    out['contextMenu'] = cm;
-
-    out['mouseWheelZoom'] = parseBool(
-      legacy['mouseWheelZoom'],
-      def.mouseWheelZoom,
-    );
-    out['roundedSelection'] = parseBool(
-      legacy['roundedSelection'],
-      def.roundedSelection,
-    );
-    out['selectionHighlight'] = parseBool(
-      legacy['selectionHighlight'],
-      def.selectionHighlight,
-    );
-    out['overviewRulerBorder'] = parseBool(
-      legacy['overviewRulerBorder'],
-      def.overviewRulerBorder,
-    );
-    out['renderControlCharacters'] = parseBool(
-      legacy['renderControlCharacters'],
-      def.renderControlCharacters,
-    );
-    out['disableLayerHinting'] = parseBool(
-      legacy['disableLayerHinting'],
-      def.disableLayerHinting,
-    );
-    out['disableMonospaceOptimizations'] = parseBool(
-      legacy['disableMonospaceOptimizations'],
-      def.disableMonospaceOptimizations,
-    );
-
-    return out;
+    return read(options) ?? read(defaultOptions) ?? false;
   }
 
-  /// Save EditorOptions to SharedPreferences
+  /// Save EditorOptions to SharedPreferences.
   static Future<void> save(EditorOptions options) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_storageKey, jsonEncode(_toStorageJson(options)));
+    final materialized = defaultOptions.merge(options);
+    await prefs.setString(_storageKey, jsonEncode(materialized.toJson()));
   }
 
-  /// Load EditorOptions from SharedPreferences
+  /// Load EditorOptions from SharedPreferences.
   static Future<EditorOptions> load() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonString = prefs.getString(_storageKey);
 
     if (jsonString == null) {
-      // Return default options from MonacoConstants
-      return MonacoConstants.defaultOptions;
+      return defaultOptions;
     }
 
     try {
       final raw = jsonDecode(jsonString);
       if (raw is! Map<String, dynamic>) {
-        return MonacoConstants.defaultOptions;
+        return defaultOptions;
       }
 
-      Map<String, dynamic> json = raw;
-      if (_needsMigration(json)) {
-        final canonical = _migrateToCanonical(json);
-        await prefs.setString(_storageKey, jsonEncode(canonical));
-        json = canonical;
+      final parsed = _parseStoredOptions(raw);
+      final materialized = defaultOptions.merge(parsed);
+      if (parsed.toJson().toString() != raw.toString()) {
+        await prefs.setString(_storageKey, jsonEncode(materialized.toJson()));
       }
-
-      return EditorOptions.fromJson(json);
-    } catch (e) {
-      // Return defaults on error
-      return MonacoConstants.defaultOptions;
+      return materialized;
+    } catch (_) {
+      return defaultOptions;
     }
   }
 
-  /// Clear saved settings
+  static EditorOptions _parseStoredOptions(Map<String, dynamic> raw) {
+    try {
+      return EditorOptions.fromJson(raw);
+    } on FormatException {
+      return _migrateLegacyOptions(raw);
+    }
+  }
+
+  static EditorOptions _migrateLegacyOptions(Map<String, dynamic> legacy) {
+    var migrated = defaultOptions;
+
+    final language = _string(legacy['language']);
+    if (language != null && language.trim().isNotEmpty) {
+      migrated = migrated.copyWith(language: MonacoLanguage(language));
+    }
+
+    final theme = _string(legacy['theme']) ?? _string(legacy['themeId']);
+    if (theme != null && theme.trim().isNotEmpty) {
+      migrated = migrated.copyWith(theme: MonacoTheme(theme));
+    }
+
+    return migrated.copyWith(
+      fontSize: _double(legacy['fontSize']) ?? migrated.fontSize,
+      fontFamily: _string(legacy['fontFamily']) ?? migrated.fontFamily,
+      fontLigatures: _bool(legacy['fontLigatures']) ?? migrated.fontLigatures,
+      lineHeight:
+          _legacyLineHeight(legacy['lineHeight']) ?? migrated.lineHeight,
+      wordWrap: _wordWrap(legacy['wordWrap']) ?? migrated.wordWrap,
+      minimap: _minimap(legacy['minimap']) ?? migrated.minimap,
+      lineNumbers: _lineNumbers(legacy['lineNumbers']) ?? migrated.lineNumbers,
+      rulers: _intList(legacy['rulers']) ?? migrated.rulers,
+      tabSize: _int(legacy['tabSize']) ?? migrated.tabSize,
+      insertSpaces: _bool(legacy['insertSpaces']) ?? migrated.insertSpaces,
+      readOnly: _bool(legacy['readOnly']) ?? migrated.readOnly,
+      automaticLayout:
+          _bool(legacy['automaticLayout']) ?? migrated.automaticLayout,
+      padding: _padding(legacy['padding']) ?? migrated.padding,
+      scrollBeyondLastLine:
+          _bool(legacy['scrollBeyondLastLine']) ??
+          migrated.scrollBeyondLastLine,
+      smoothScrolling:
+          _bool(legacy['smoothScrolling']) ?? migrated.smoothScrolling,
+      mouseWheelZoom:
+          _bool(legacy['mouseWheelZoom']) ?? migrated.mouseWheelZoom,
+      cursorBlinking:
+          _enumById(
+            legacy['cursorBlinking'],
+            CursorBlinking.values,
+            (value) => value.id,
+          ) ??
+          migrated.cursorBlinking,
+      cursorStyle:
+          _enumById(
+            legacy['cursorStyle'],
+            CursorStyle.values,
+            (value) => value.id,
+          ) ??
+          migrated.cursorStyle,
+      renderWhitespace:
+          _enumById(
+            legacy['renderWhitespace'],
+            RenderWhitespace.values,
+            (value) => value.id,
+          ) ??
+          migrated.renderWhitespace,
+      bracketPairColorization:
+          _bool(legacy['bracketPairColorization']) ??
+          migrated.bracketPairColorization,
+      autoClosingBrackets:
+          _enumById(
+            legacy['autoClosingBrackets'],
+            AutoClosingBehavior.values,
+            (value) => value.id,
+          ) ??
+          migrated.autoClosingBrackets,
+      autoClosingQuotes:
+          _enumById(
+            legacy['autoClosingQuotes'],
+            AutoClosingBehavior.values,
+            (value) => value.id,
+          ) ??
+          migrated.autoClosingQuotes,
+      formatOnPaste: _bool(legacy['formatOnPaste']) ?? migrated.formatOnPaste,
+      formatOnType: _bool(legacy['formatOnType']) ?? migrated.formatOnType,
+      quickSuggestions:
+          _bool(legacy['quickSuggestions']) ?? migrated.quickSuggestions,
+      parameterHints:
+          _bool(legacy['parameterHints']) ?? migrated.parameterHints,
+      hover: _bool(legacy['hover']) ?? migrated.hover,
+      contextMenu:
+          _bool(legacy['contextMenu']) ??
+          _bool(legacy['contextmenu']) ??
+          migrated.contextMenu,
+      roundedSelection:
+          _bool(legacy['roundedSelection']) ?? migrated.roundedSelection,
+      selectionHighlight:
+          _bool(legacy['selectionHighlight']) ?? migrated.selectionHighlight,
+      overviewRulerBorder:
+          _bool(legacy['overviewRulerBorder']) ?? migrated.overviewRulerBorder,
+      renderControlCharacters:
+          _bool(legacy['renderControlCharacters']) ??
+          migrated.renderControlCharacters,
+      disableLayerHinting:
+          _bool(legacy['disableLayerHinting']) ?? migrated.disableLayerHinting,
+      disableMonospaceOptimizations:
+          _bool(legacy['disableMonospaceOptimizations']) ??
+          migrated.disableMonospaceOptimizations,
+    );
+  }
+
+  static String? _string(Object? value) {
+    if (value is String) return value;
+    return null;
+  }
+
+  static int? _int(Object? value) {
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  static double? _double(Object? value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  static double? _legacyLineHeight(Object? value) {
+    final parsed = _double(value);
+    if (parsed == null || parsed <= 0) return null;
+    return parsed < 8 ? defaultOptions.fontSize! * parsed : parsed;
+  }
+
+  static bool? _bool(Object? value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    if (value is String) {
+      final normalized = value.toLowerCase();
+      if (normalized == 'true' || normalized == 'on') return true;
+      if (normalized == 'false' || normalized == 'off') return false;
+    }
+    if (value is Map) {
+      return _bool(value['enabled']);
+    }
+    return null;
+  }
+
+  static List<int>? _intList(Object? value) {
+    if (value is! List) return null;
+    final result = <int>[];
+    for (final entry in value) {
+      final parsed = _int(entry);
+      if (parsed == null) return null;
+      result.add(parsed);
+    }
+    return result;
+  }
+
+  static T? _enumById<T>(
+    Object? value,
+    List<T> values,
+    String Function(T value) idOf,
+  ) {
+    final id = _string(value);
+    if (id == null) return null;
+    for (final candidate in values) {
+      if (idOf(candidate) == id) return candidate;
+    }
+    return null;
+  }
+
+  static MonacoWordWrap? _wordWrap(Object? value) {
+    return _enumById(value, MonacoWordWrap.values, (value) => value.id) ??
+        switch (_bool(value)) {
+          true => MonacoWordWrap.on,
+          false => MonacoWordWrap.off,
+          null => null,
+        };
+  }
+
+  static MonacoLineNumbers? _lineNumbers(Object? value) {
+    return _enumById(value, MonacoLineNumbers.values, (value) => value.id) ??
+        switch (_bool(value)) {
+          true => MonacoLineNumbers.on,
+          false => MonacoLineNumbers.off,
+          null => null,
+        };
+  }
+
+  static MonacoMinimapOptions? _minimap(Object? value) {
+    if (value is Map) {
+      return MonacoMinimapOptions(
+        enabled: _bool(value['enabled']),
+        side: _enumById(
+          value['side'],
+          MonacoMinimapSide.values,
+          (value) => value.id,
+        ),
+        renderCharacters: _bool(value['renderCharacters']),
+        maxColumn: _int(value['maxColumn']),
+        scale: _int(value['scale']),
+      );
+    }
+    final enabled = _bool(value);
+    return enabled == null ? null : MonacoMinimapOptions(enabled: enabled);
+  }
+
+  static MonacoPadding? _padding(Object? value) {
+    if (value is! Map) return null;
+    return MonacoPadding(
+      top: _int(value['top']),
+      bottom: _int(value['bottom']),
+    );
+  }
+
+  /// Clear saved settings.
   static Future<bool> clear() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.remove(_storageKey);
   }
 
-  /// True if there are persisted editor options (used to detect first run)
+  /// True if there are persisted editor options.
   static Future<bool> hasSavedOptions() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.containsKey(_storageKey);

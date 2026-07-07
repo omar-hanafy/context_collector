@@ -20,7 +20,9 @@ class ThemeNotifier extends StateNotifier<ThemeMode> {
     try {
       if (await EditorSettingsService.hasSavedOptions()) {
         final options = await EditorSettingsService.load();
-        state = themeModeFromMonaco(options.theme);
+        state = themeModeFromMonaco(
+          EditorSettingsService.effectiveTheme(options),
+        );
       } else {
         state = ThemeMode.system; // default on fresh install
       }
