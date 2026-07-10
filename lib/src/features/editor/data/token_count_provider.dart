@@ -142,6 +142,7 @@ class TokenCountNotifier extends StateNotifier<TokenCountState> {
   Future<void> _recomputeDeltaImmediate() async {
     final s = ref.read(selectionProvider);
     final controller = ref.read(monacoControllerProvider);
+    final service = ref.read(monacoEditorStatusProvider.notifier);
     final viewingAll = s.viewingAll;
 
     final base = _combinedTokens ?? 0;
@@ -151,7 +152,9 @@ class TokenCountNotifier extends StateNotifier<TokenCountState> {
     if (!viewingAll && controller != null && s.activeFileId != null) {
       try {
         // Grabbing editor text is async but cheap compared to tokenization.
-        final text = await controller.document.getText();
+        final text =
+            await service.readFileDocumentText(s.activeFileId!) ??
+            await controller.document.getText();
         live = await _worker.computeTotal([text], model: _model);
       } catch (_) {
         // If webview read fails, fall back to stale (no live adjustment).

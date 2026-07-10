@@ -110,7 +110,9 @@ class _MonacoEditorInfoBarState extends ConsumerState<MonacoEditorInfoBar> {
               return LanguageSelector(
                 currentLanguage: stats.language?.id ?? 'plaintext',
                 onLanguageChanged: (langId) => unawaited(
-                  controller.document.setLanguage(MonacoLanguage(langId)),
+                  ref
+                      .read(monacoEditorStatusProvider.notifier)
+                      .setActiveDocumentLanguage(MonacoLanguage(langId)),
                 ),
               );
             },

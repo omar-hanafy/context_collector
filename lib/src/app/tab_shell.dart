@@ -818,19 +818,20 @@ class _TabShellState extends ConsumerState<TabShell> {
   }
 
   Future<void> _syncActiveEditorContent(SessionEntry session) async {
-    final controller = session.container.read(monacoControllerProvider);
+    final service = session.container.read(monacoEditorStatusProvider.notifier);
     final selectionState = session.container.read(selectionProvider);
     final activeFileId = selectionState.activeFileId;
     final viewingAll = selectionState.viewingAll;
     if (!viewingAll &&
         selectionState.editorIsBoundToActiveFile &&
-        controller != null &&
         activeFileId != null) {
       try {
-        final text = await controller.document.getText();
-        session.container
-            .read(selectionProvider.notifier)
-            .saveEditorTextFor(activeFileId, text);
+        final text = await service.readFileDocumentText(activeFileId);
+        if (text != null) {
+          session.container
+              .read(selectionProvider.notifier)
+              .saveEditorTextFor(activeFileId, text);
+        }
       } catch (_) {}
     }
   }
@@ -1180,12 +1181,14 @@ class _TabShellState extends ConsumerState<TabShell> {
         !selection.viewingAll &&
         selection.editorIsBoundToActiveFile &&
         selection.activeFileId != null) {
-      final controller = session.container.read(monacoControllerProvider);
-      if (controller != null) {
-        try {
-          liveContent = await controller.document.getText();
-        } catch (_) {}
-      }
+      final service = session.container.read(
+        monacoEditorStatusProvider.notifier,
+      );
+      try {
+        liveContent = await service.readFileDocumentText(
+          selection.activeFileId!,
+        );
+      } catch (_) {}
     }
     final persistence = ref.read(sessionPersistenceProvider);
     return persistence.hasPersistableContent(

@@ -10,6 +10,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/modal_overlay_coordinator.dart';
 import 'settings_service.dart';
 
+@visibleForTesting
+Uri monacoDocumentUriForFileId(String fileId) {
+  return Uri(
+    scheme: 'context-collector',
+    host: 'file',
+    pathSegments: <String>[fileId],
+  );
+}
+
+final Uri _viewAllDocumentUri = Uri(
+  scheme: 'context-collector',
+  host: 'preview',
+  pathSegments: const <String>['view-all'],
+);
+
 /// Whether the Monaco editor may claim the OS keyboard, given Flutter's
 /// current [primary] focus and the editor's own [platformView] focus node.
 ///
@@ -155,6 +170,13 @@ class MonacoService extends StateNotifier<EditorStatus> {
   MonacoController? _controller;
   String? _queuedContent;
   String? _queuedLanguage;
+  String? _queuedFileDocumentId;
+  bool _queuedViewAllDocument = false;
+  final Map<String, _MonacoDocumentEntry> _fileDocuments = {};
+  final Map<String, Future<_MonacoDocumentEntry>> _openingFileDocuments = {};
+  _MonacoDocumentEntry? _viewAllDocument;
+  Future<_MonacoDocumentEntry>? _openingViewAllDocument;
+  String? _activeFileDocumentId;
 
   // App-wide floating-overlay tracking (dialogs, menus, sheets on any
   // navigator). On web the editor iframe must go pointer- and keyboard-inert
@@ -179,6 +201,7 @@ class MonacoService extends StateNotifier<EditorStatus> {
   bool _nativeInputReadinessStale = false;
   bool _visibleForKeyboardInput = true;
   StreamSubscription<bool>? _focusSub;
+  StreamSubscription<void>? _reloadSub;
 
   // Ensures only the latest updateContent() call wins.
   int _setEpoch = 0;
@@ -316,26 +339,27 @@ class MonacoService extends StateNotifier<EditorStatus> {
         }
       });
 
-      await _controller!.whenReady;
+      // The page document can reload under us (Flutter web re-inserts the
+      // iframe during platform-view churn; a native WebView process can
+      // recover). The package re-boots the editor and re-registers its own
+      // state before this fires; the service then drops its dead document
+      // handles, restores the CURRENT settings, and bumps
+      // EditorStatus.reloadCount so EditorScreen re-drives content.
+      _reloadSub = _controller!.onPageReloaded.listen(
+        (_) => unawaited(_onEditorPageReloaded()),
+        onError: (Object error, StackTrace stackTrace) {
+          unawaited(_onEditorReloadRecoveryFailed(error, stackTrace));
+        },
+      );
 
-      // Apply queued content if any (language first; then sticky commit)
-      if (_queuedContent != null) {
-        final epoch = ++_setEpoch;
-        final lang = _safeLangFromId(_queuedLanguage);
-        if (lang != null) {
-          await _controller!.document.setLanguage(lang);
-          await Future<void>.delayed(const Duration(milliseconds: 16));
-        }
-        await _controller!.document.setText(_queuedContent!);
-        unawaited(_stickValue(_queuedContent!, epoch, retries: 8));
-        _queuedContent = null;
-        _queuedLanguage = null;
-      }
+      await _controller!.whenReady;
 
       state = state.copyWith(
         lifecycle: EditorLifecycle.ready,
         message: 'Editor is ready',
       );
+
+      await _replayQueuedDocumentActivation();
 
       debugPrint('[MonacoService] Initialization successful');
       // An overlay may already be open while the editor finishes creating
@@ -355,6 +379,11 @@ class MonacoService extends StateNotifier<EditorStatus> {
       _focusSub = null;
       _controller?.dispose();
       _controller = null;
+      _fileDocuments.clear();
+      _openingFileDocuments.clear();
+      _viewAllDocument = null;
+      _openingViewAllDocument = null;
+      _activeFileDocumentId = null;
       _initCompleter?.completeError(e, st);
       _initCompleter = null;
     } finally {
@@ -364,6 +393,8 @@ class MonacoService extends StateNotifier<EditorStatus> {
   }
 
   Future<void> updateContent(String content, {String? language}) async {
+    _queuedFileDocumentId = null;
+    _queuedViewAllDocument = false;
     if (_controller == null || !state.isReady) {
       _queuedContent = content;
       _queuedLanguage = language;
@@ -400,6 +431,320 @@ class MonacoService extends StateNotifier<EditorStatus> {
     }
   }
 
+  Future<void> activateFileDocument({
+    required String fileId,
+    required String text,
+    String? language,
+  }) async {
+    _queuedFileDocumentId = null;
+    _queuedViewAllDocument = false;
+
+    final lang = _safeLangFromId(language) ?? MonacoLanguage.plaintext;
+    final epoch = ++_setEpoch;
+    if (_controller == null || !state.isReady) {
+      _queuedFileDocumentId = fileId;
+      _queuedContent = text;
+      _queuedLanguage = lang.id;
+      return;
+    }
+
+    final entry = await _ensureFileDocument(fileId, text, lang);
+    if (epoch != _setEpoch || _controller == null || !state.isReady) return;
+
+    await _syncDocument(entry, text, lang);
+    if (epoch != _setEpoch || _controller == null || !state.isReady) return;
+
+    await _controller!.activateDocument(entry.document);
+    _activeFileDocumentId = fileId;
+
+    // Ensure the hidden textarea owns DOM focus after document activation.
+    unawaited(requestEditorFocus(attempts: 3));
+
+    if (mounted) {
+      state = state.copyWith(hasContent: text.isNotEmpty);
+    }
+  }
+
+  Future<void> activateViewAllDocument({
+    required String text,
+    String language = 'markdown',
+  }) async {
+    _queuedFileDocumentId = null;
+    _queuedViewAllDocument = false;
+
+    final lang = _safeLangFromId(language) ?? MonacoLanguage.markdown;
+    final epoch = ++_setEpoch;
+    if (_controller == null || !state.isReady) {
+      _queuedViewAllDocument = true;
+      _queuedContent = text;
+      _queuedLanguage = lang.id;
+      return;
+    }
+
+    final entry = await _ensureViewAllDocument(text, lang);
+    if (epoch != _setEpoch || _controller == null || !state.isReady) return;
+
+    await _syncDocument(entry, text, lang);
+    if (epoch != _setEpoch || _controller == null || !state.isReady) return;
+
+    await _controller!.activateDocument(entry.document);
+    _activeFileDocumentId = null;
+
+    unawaited(requestEditorFocus(attempts: 3));
+
+    if (mounted) {
+      state = state.copyWith(hasContent: text.isNotEmpty);
+    }
+  }
+
+  Future<String?> readFileDocumentText(String fileId) async {
+    final entry = _fileDocuments[fileId];
+    if (entry != null) {
+      return entry.document.getText();
+    }
+    if (_activeFileDocumentId == fileId && _controller != null) {
+      return _controller!.document.getText();
+    }
+    return null;
+  }
+
+  Future<void> setActiveDocumentLanguage(MonacoLanguage language) async {
+    if (_controller == null || !state.isReady) {
+      _queuedLanguage = language.id;
+      return;
+    }
+    await _controller!.document.setLanguage(language);
+    final activeFileId = _activeFileDocumentId;
+    if (activeFileId != null) {
+      _fileDocuments[activeFileId]?.language = language;
+    } else {
+      _viewAllDocument?.language = language;
+    }
+  }
+
+  Future<void> closeFileDocumentsExcept(Iterable<String> liveFileIds) async {
+    final keep = liveFileIds.toSet();
+    final removedIds = _fileDocuments.keys
+        .where((fileId) => !keep.contains(fileId))
+        .toList(growable: false);
+    if (removedIds.isEmpty) return;
+
+    final closing = <Future<void>>[];
+    for (final fileId in removedIds) {
+      final entry = _fileDocuments.remove(fileId);
+      final pending = _openingFileDocuments.remove(fileId);
+      if (_activeFileDocumentId == fileId) {
+        _activeFileDocumentId = null;
+      }
+      if (entry != null) {
+        closing.add(_closeDocument(entry));
+      }
+      if (pending != null) {
+        closing.add(
+          pending
+              .then((entry) {
+                if (identical(_fileDocuments[fileId], entry)) {
+                  _fileDocuments.remove(fileId);
+                }
+                return _closeDocument(entry);
+              })
+              .catchError((_) {}),
+        );
+      }
+    }
+    await Future.wait(closing);
+  }
+
+  Future<void> _closeDocument(_MonacoDocumentEntry entry) async {
+    try {
+      await entry.document.close();
+    } catch (_) {}
+  }
+
+  Future<void> _replayQueuedDocumentActivation() async {
+    final content = _queuedContent;
+    if (content == null) return;
+
+    final fileId = _queuedFileDocumentId;
+    final viewAll = _queuedViewAllDocument;
+    final language = _queuedLanguage;
+    _queuedContent = null;
+    _queuedLanguage = null;
+    _queuedFileDocumentId = null;
+    _queuedViewAllDocument = false;
+
+    if (fileId != null) {
+      await activateFileDocument(
+        fileId: fileId,
+        text: content,
+        language: language,
+      );
+      return;
+    }
+    if (viewAll) {
+      await activateViewAllDocument(text: content, language: language ?? '');
+      return;
+    }
+    await updateContent(content, language: language);
+  }
+
+  /// Converges service state after the package recovered from a page
+  /// reload (see `MonacoController.onPageReloaded`).
+  ///
+  /// The reloaded page has none of the old models, so every cached document
+  /// entry is dead; the re-boot also replayed the ORIGINAL boot options, so
+  /// the currently persisted settings are re-applied. Content restore is
+  /// EditorScreen's job (it owns selection state) - it reacts to the
+  /// [EditorStatus.reloadCount] bump.
+  Future<void> _onEditorPageReloaded() async {
+    if (!mounted || _controller == null || !state.isReady) return;
+
+    // Invalidate in-flight sticky writes and dead document handles.
+    _setEpoch++;
+    _fileDocuments.clear();
+    _openingFileDocuments.clear();
+    _viewAllDocument = null;
+    _openingViewAllDocument = null;
+    _activeFileDocumentId = null;
+
+    try {
+      final options = await EditorSettingsService.load();
+      await updateOptions(options);
+    } catch (e) {
+      debugPrint('[MonacoService] settings re-apply after reload failed: $e');
+    }
+    await _applyOverlayInteraction(force: true);
+
+    if (!mounted) return;
+    state = state.copyWith(
+      reloadCount: state.reloadCount + 1,
+      hasContent: false,
+      message: 'Editor recovered from a page reload',
+    );
+  }
+
+  /// The package could not re-boot the reloaded page: the editor is dead.
+  ///
+  /// Mirrors the initialize() failure path so the error surface renders and
+  /// its Retry button can build a fresh controller.
+  Future<void> _onEditorReloadRecoveryFailed(
+    Object error,
+    StackTrace stackTrace,
+  ) async {
+    debugPrint(
+      '[MonacoService] page reload recovery failed: $error\n$stackTrace',
+    );
+    if (!mounted) return;
+    state = state.copyWith(
+      lifecycle: EditorLifecycle.error,
+      error: 'The editor page reloaded and could not recover: $error',
+    );
+    await _focusSub?.cancel();
+    _focusSub = null;
+    await _reloadSub?.cancel();
+    _reloadSub = null;
+    _controller?.dispose();
+    _controller = null;
+    _fileDocuments.clear();
+    _openingFileDocuments.clear();
+    _viewAllDocument = null;
+    _openingViewAllDocument = null;
+    _activeFileDocumentId = null;
+    // Allow initialize() to run again from the Retry button.
+    _initCompleter = null;
+  }
+
+  Future<_MonacoDocumentEntry> _ensureFileDocument(
+    String fileId,
+    String text,
+    MonacoLanguage language,
+  ) {
+    final existing = _fileDocuments[fileId];
+    if (existing != null) return Future.value(existing);
+
+    final pending = _openingFileDocuments[fileId];
+    if (pending != null) return pending;
+
+    final future = () async {
+      final uri = monacoDocumentUriForFileId(fileId);
+      final document = await _controller!.openDocument(
+        text: text,
+        language: language,
+        uri: uri,
+      );
+      final entry = _MonacoDocumentEntry(
+        document: document,
+        loadedText: text,
+        language: language,
+      );
+      _fileDocuments[fileId] = entry;
+      return entry;
+    }();
+
+    _openingFileDocuments[fileId] = future;
+    return future.whenComplete(() {
+      if (identical(_openingFileDocuments[fileId], future)) {
+        _openingFileDocuments.remove(fileId);
+      }
+    });
+  }
+
+  Future<_MonacoDocumentEntry> _ensureViewAllDocument(
+    String text,
+    MonacoLanguage language,
+  ) {
+    final existing = _viewAllDocument;
+    if (existing != null) return Future.value(existing);
+
+    final pending = _openingViewAllDocument;
+    if (pending != null) return pending;
+
+    final future = () async {
+      final document = await _controller!.openDocument(
+        text: text,
+        language: language,
+        uri: _viewAllDocumentUri,
+      );
+      final entry = _MonacoDocumentEntry(
+        document: document,
+        loadedText: text,
+        language: language,
+      );
+      _viewAllDocument = entry;
+      return entry;
+    }();
+
+    _openingViewAllDocument = future;
+    return future.whenComplete(() {
+      if (identical(_openingViewAllDocument, future)) {
+        _openingViewAllDocument = null;
+      }
+    });
+  }
+
+  Future<void> _syncDocument(
+    _MonacoDocumentEntry entry,
+    String text,
+    MonacoLanguage language,
+  ) async {
+    if (entry.language?.id != language.id) {
+      await entry.document.setLanguage(language);
+      entry.language = language;
+    }
+
+    if (entry.loadedText == text) return;
+
+    String? liveText;
+    try {
+      liveText = await entry.document.getText();
+    } catch (_) {}
+
+    if (liveText != text) {
+      await entry.document.setText(text);
+    }
+    entry.loadedText = text;
+  }
+
   Future<void> updateOptions(EditorOptions options) async {
     if (_controller == null || !state.isReady) return;
 
@@ -418,8 +763,13 @@ class MonacoService extends StateNotifier<EditorStatus> {
   void dispose() {
     _overlayCoordinator?.removeListener(_onOverlayDepthChanged);
     _focusSub?.cancel();
+    _reloadSub?.cancel();
     _platformViewFocus.dispose();
     _controller?.dispose();
+    _fileDocuments.clear();
+    _openingFileDocuments.clear();
+    _viewAllDocument = null;
+    _openingViewAllDocument = null;
     super.dispose();
   }
 
@@ -659,6 +1009,18 @@ class MonacoService extends StateNotifier<EditorStatus> {
   }
 }
 
+class _MonacoDocumentEntry {
+  _MonacoDocumentEntry({
+    required this.document,
+    required this.loadedText,
+    required this.language,
+  });
+
+  final MonacoDocument document;
+  String loadedText;
+  MonacoLanguage? language;
+}
+
 enum EditorLifecycle {
   initial,
   ready,
@@ -672,6 +1034,7 @@ class EditorStatus {
     this.message = 'Initializing...',
     this.error,
     this.hasContent = false,
+    this.reloadCount = 0,
   });
 
   final EditorLifecycle lifecycle;
@@ -679,17 +1042,24 @@ class EditorStatus {
   final String? error;
   final bool hasContent;
 
+  /// Bumped each time the editor page reloaded and recovered (the reloaded
+  /// page holds only boot-time content until EditorScreen re-drives the
+  /// active selection).
+  final int reloadCount;
+
   EditorStatus copyWith({
     EditorLifecycle? lifecycle,
     String? message,
     String? error,
     bool? hasContent,
+    int? reloadCount,
   }) {
     return EditorStatus(
       lifecycle: lifecycle ?? this.lifecycle,
       message: message ?? this.message,
       error: error ?? this.error,
       hasContent: hasContent ?? this.hasContent,
+      reloadCount: reloadCount ?? this.reloadCount,
     );
   }
 

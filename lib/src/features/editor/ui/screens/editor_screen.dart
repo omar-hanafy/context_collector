@@ -100,6 +100,15 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             ref.read(monacoEditorStatusProvider.notifier),
           );
           unawaited(_recoverEditorFocus());
+          return;
+        }
+        // The editor page reloaded and recovered (see
+        // MonacoService._onEditorPageReloaded): the re-booted page holds
+        // only boot-time content, so push the current selection again.
+        if (previous != null &&
+            next.reloadCount != previous.reloadCount &&
+            next.isReady) {
+          await _reapplySelectionAfterEditorReload();
         }
       },
     );
@@ -149,6 +158,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       final wasViewingAll = previous?.viewingAll ?? false;
       final isViewingAll = next.viewingAll;
       final combinedChanged = previous?.combinedContent != next.combinedContent;
+      unawaited(editorService.closeFileDocumentsExcept(next.fileMap.keys));
 
       if ((previous != null && wasViewingAll) && !isViewingAll) {
         // Cancel stale writes queued while in view-all so they don't override file view.
@@ -162,8 +172,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         _debounceTimer?.cancel();
         if (!wasViewingAll || combinedChanged) {
           final content = next.combinedContent;
-          await editorService.updateContent(
-            content.isEmpty ? '# (Nothing selected)' : content,
+          await editorService.activateViewAllDocument(
+            text: content.isEmpty ? '# (Nothing selected)' : content,
             language: 'markdown',
           );
         }
@@ -176,10 +186,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           prevId != nextId &&
           controller != null) {
         try {
-          final currentText = await controller.document.getText();
-          ref
-              .read(selectionProvider.notifier)
-              .saveEditorTextFor(prevId, currentText);
+          final currentText = await editorService.readFileDocumentText(prevId);
+          if (currentText != null) {
+            ref
+                .read(selectionProvider.notifier)
+                .saveEditorTextFor(prevId, currentText);
+          }
         } catch (_) {}
       }
 
@@ -202,30 +214,32 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
       if (!isViewingAll && (activeChanged || contentChanged)) {
         _debounceTimer?.cancel();
-        if (nextId != null && targetText == null) {
+        if (nextId == null) {
+          ref.read(selectionProvider.notifier).clearEditorContentBinding();
+          await editorService.updateContent('');
+          return;
+        }
+        if (targetText == null) {
           ref.read(selectionProvider.notifier).clearEditorContentBinding();
           return;
         }
         // Capture the file we intend to update so we can drop stale writes.
         final scheduledActiveId = nextId;
-        final scheduledText = targetText ?? '';
+        final scheduledText = targetText;
         final scheduledLanguage = language;
         _debounceTimer = Timer(const Duration(milliseconds: 80), () async {
           if (!mounted) return;
           final s = ref.read(selectionProvider);
           if (s.viewingAll) return;
-          if (scheduledActiveId != null &&
-              s.activeFileId != scheduledActiveId) {
-            return;
-          }
-          await editorService.updateContent(
-            scheduledText,
+          if (s.activeFileId != scheduledActiveId) return;
+          await editorService.activateFileDocument(
+            fileId: scheduledActiveId,
+            text: scheduledText,
             language: scheduledLanguage,
           );
           if (!mounted) return;
           final latest = ref.read(selectionProvider);
-          if (scheduledActiveId != null &&
-              !latest.viewingAll &&
+          if (!latest.viewingAll &&
               latest.activeFileId == scheduledActiveId &&
               latest.fileMap[scheduledActiveId]?.editorContent != null) {
             ref
@@ -237,6 +251,23 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         });
       }
     });
+  }
+
+  /// Pushes the current selection into the freshly re-booted editor after a
+  /// page reload, mirroring the two live content paths of the selection
+  /// listener: the combined view-all document, or the active file document.
+  Future<void> _reapplySelectionAfterEditorReload() async {
+    final editorService = ref.read(monacoEditorStatusProvider.notifier);
+    final selection = ref.read(selectionProvider);
+    if (selection.viewingAll) {
+      final content = selection.combinedContent;
+      await editorService.activateViewAllDocument(
+        text: content.isEmpty ? '# (Nothing selected)' : content,
+        language: 'markdown',
+      );
+      return;
+    }
+    await _applyActiveSelectionToEditor(selection, editorService);
   }
 
   Future<void> _applyActiveSelectionToEditor(
@@ -258,8 +289,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       return;
     }
 
-    await editorService.updateContent(
-      text,
+    await editorService.activateFileDocument(
+      fileId: activeId,
+      text: text,
       language: FileDisplayHelper.getLanguageFromFile(file),
     );
     if (!mounted) return;
@@ -281,8 +313,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     final activeId = selection.activeFileId;
     if (controller == null || activeId == null) return;
     try {
-      final text = await controller.document.getText();
-      ref.read(selectionProvider.notifier).saveEditorTextFor(activeId, text);
+      final text = await ref
+          .read(monacoEditorStatusProvider.notifier)
+          .readFileDocumentText(activeId);
+      if (text != null) {
+        ref.read(selectionProvider.notifier).saveEditorTextFor(activeId, text);
+      }
     } catch (e) {
       debugPrint('[EditorScreen] Failed to get live content: $e');
     }
@@ -708,8 +744,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     final combined = ref.read(selectionProvider).combinedContent;
     await ref
         .read(monacoEditorStatusProvider.notifier)
-        .updateContent(
-          combined.isEmpty ? '# (Nothing selected)' : combined,
+        .activateViewAllDocument(
+          text: combined.isEmpty ? '# (Nothing selected)' : combined,
           language: 'markdown',
         );
     unawaited(_recoverEditorFocus());

@@ -140,14 +140,15 @@ class SessionPersistenceService {
     return _enqueueWrite(() async {
       final container = entry.container;
       final initialSelection = container.read(selectionProvider);
-      final controller = container.read(monacoControllerProvider);
+      final editorService = container.read(monacoEditorStatusProvider.notifier);
       String? liveEditorText;
       if (!initialSelection.viewingAll &&
           initialSelection.editorIsBoundToActiveFile &&
-          controller != null &&
           initialSelection.activeFileId != null) {
         try {
-          liveEditorText = await controller.document.getText();
+          liveEditorText = await editorService.readFileDocumentText(
+            initialSelection.activeFileId!,
+          );
         } catch (error, stackTrace) {
           debugPrint(
             '[SessionPersistence] Failed to read editor value: $error',

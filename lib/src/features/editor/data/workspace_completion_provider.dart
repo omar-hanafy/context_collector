@@ -190,7 +190,11 @@ class WorkspaceCompletionService {
     final file = selection.fileMap[activeId];
     if (file == null) return;
     try {
-      final text = await controller.document.getText();
+      final text =
+          await ref
+              .read(monacoEditorStatusProvider.notifier)
+              .readFileDocumentText(activeId) ??
+          await controller.document.getText();
       _indexFileIfNeeded(file, overrideText: text, force: true);
     } catch (_) {
       // Ignore transient webview read failures.

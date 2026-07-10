@@ -27,8 +27,7 @@ void main() {
     // setInteractionEnabled(false) that the modal overlay coordination
     // depends on (keyboard returns to Flutter when the iframe goes inert),
     // and exposes the v3 document/requestFocus API used by the app.
-    expect(pubspec, contains('flutter_monaco:'));
-    expect(pubspec, contains('path: ../flutter-monaco-v3/flutter_monaco'));
+    expect(pubspec, contains('flutter_monaco: ^'));
     expect(pubspec, isNot(contains('webview_flutter:')));
     expect(pubspec, isNot(contains('webview_flutter_windows:')));
     expect(pubspec, isNot(contains('webview_windows:')));
