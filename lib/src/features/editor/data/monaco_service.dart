@@ -230,8 +230,15 @@ class MonacoService extends StateNotifier<EditorStatus> {
 
   MonacoController? get controller => _controller;
 
+  /// The embeddable editor view.
+  ///
+  /// Available as soon as the controller exists - BEFORE readiness. On web
+  /// the editor iframe only loads while this widget is mounted and painted,
+  /// so initialize() can only finish if the UI keeps it in the tree
+  /// (underneath the opaque loading overlay) for the whole boot. Gating it
+  /// on `state.isReady` deadlocks the web boot into a silent timeout.
   Widget get webviewWidget {
-    if (_controller == null || !state.isReady) {
+    if (_controller == null) {
       return const Center(child: CircularProgressIndicator());
     }
     // Ensure platform focus on pointer down, then DOM focus via controller.
@@ -316,6 +323,16 @@ class MonacoService extends StateNotifier<EditorStatus> {
     try {
       // Load saved settings
       final options = await EditorSettingsService.load();
+
+      // Entering (or re-entering via Retry) flips the UI back to the loading
+      // panel; without this the error chrome stays frozen on screen for the
+      // whole boot and Retry looks dead. Emitted after the first await:
+      // initialize() is invoked from widget mount paths, and a synchronous
+      // emission there would modify the provider mid-build.
+      state = state.copyWith(
+        lifecycle: EditorLifecycle.initial,
+        message: 'Initializing...',
+      );
       final queuedLanguage = _safeLangFromId(_queuedLanguage);
       final bootOptions = queuedLanguage == null
           ? options
@@ -352,6 +369,12 @@ class MonacoService extends StateNotifier<EditorStatus> {
         },
       );
 
+      // Publish the controller before awaiting readiness: the UI mounts
+      // webviewWidget in response to this emission, and on web the page can
+      // only load - so whenReady can only complete - while that platform
+      // view is painted in the tree.
+      state = state.copyWith(message: 'Starting the editor page...');
+
       await _controller!.whenReady;
 
       state = state.copyWith(
@@ -377,6 +400,8 @@ class MonacoService extends StateNotifier<EditorStatus> {
       debugPrint('[MonacoService] Error: $e\n$st');
       await _focusSub?.cancel();
       _focusSub = null;
+      await _reloadSub?.cancel();
+      _reloadSub = null;
       _controller?.dispose();
       _controller = null;
       _fileDocuments.clear();

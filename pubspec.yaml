@@ -1,7 +1,7 @@
 name: context_collector
 description: A desktop and web app for collecting and combining text from multiple files.
 publish_to: 'none'
-version: 3.3.0+8
+version: 3.3.1+9
 
 environment:
   sdk: '>=3.12.0 <4.0.0'
@@ -10,7 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_monaco: ^3.4.0
+  flutter_monaco: ^3.4.1
   flutter_directory_tree: ^1.0.0
   directory_tree: ^1.0.0
   cupertino_icons: ^1.0.8

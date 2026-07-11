@@ -17,30 +17,29 @@ class MonacoEditorIntegrated extends ConsumerWidget {
     final editorStatus = ref.watch(monacoEditorStatusProvider);
     final service = ref.read(monacoEditorStatusProvider.notifier);
 
-    // The entire UI is built declaratively based on the service's state.
+    // The webview stays painted underneath the loading/error chrome: on web
+    // the editor iframe only loads while its platform view is composited,
+    // so hiding it during boot (Offstage, or swapping it in at ready) would
+    // deadlock initialization - readiness needs the widget in the tree, and
+    // the widget would be waiting for readiness. The chrome views are
+    // opaque overlays instead.
     return Stack(
+      fit: StackFit.expand,
       children: [
-        Offstage(
-          offstage: editorStatus.lifecycle != EditorLifecycle.ready,
-          child: SizedBox.expand(
-            child: service.webviewWidget,
+        service.webviewWidget,
+        if (editorStatus.lifecycle == EditorLifecycle.error)
+          Positioned.fill(
+            child: _ErrorView(
+              error: editorStatus.error,
+              onRetry: service.initialize,
+            ),
+          )
+        else if (editorStatus.lifecycle != EditorLifecycle.ready)
+          Positioned.fill(
+            child: _LoadingView(
+              message: editorStatus.message,
+            ),
           ),
-        ),
-        Offstage(
-          offstage: editorStatus.lifecycle != EditorLifecycle.error,
-          child: _ErrorView(
-            error: editorStatus.error,
-            onRetry: service.initialize,
-          ),
-        ),
-        Offstage(
-          offstage:
-              editorStatus.lifecycle == EditorLifecycle.ready ||
-              editorStatus.lifecycle == EditorLifecycle.error,
-          child: _LoadingView(
-            message: editorStatus.message,
-          ),
-        ),
       ],
     );
   }
@@ -91,7 +90,9 @@ class _ErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Opaque: this paints over the (still-mounted) webview layer.
     return Container(
+      color: Theme.of(context).colorScheme.surface,
       padding: const EdgeInsets.all(32),
       child: Center(
         child: Column(
